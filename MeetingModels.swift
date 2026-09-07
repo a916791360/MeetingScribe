@@ -28,6 +28,10 @@ enum CaptureMode: String, Codable, CaseIterable, Identifiable {
             return "square.and.arrow.down.fill"
         }
     }
+
+    static var recordingModes: [CaptureMode] {
+        [.microphone, .mixed]
+    }
 }
 
 enum MeetingStatus: String, Codable {

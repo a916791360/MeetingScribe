@@ -20,6 +20,8 @@ let package = Package(
             sources: [
                 "MeetingScribeApp.swift",
                 "ContentView.swift",
+                "AppTheme.swift",
+                "WorkbenchView.swift",
                 "MeetingModels.swift",
                 "MeetingStore.swift",
                 "WhisperPipeline.swift"

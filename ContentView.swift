@@ -36,7 +36,7 @@ enum SessionDetailSection: String, CaseIterable, Identifiable {
     }
 }
 
-struct ContentView: View {
+struct LegacyContentView: View {
     @EnvironmentObject private var store: MeetingStore
 
     @State private var selectedSection: SessionDetailSection = .overview

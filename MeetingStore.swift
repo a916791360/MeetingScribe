@@ -39,6 +39,13 @@ final class MeetingStore: ObservableObject {
         return sessions.first { $0.id == selectedSessionID }
     }
 
+    var workspaceSession: MeetingSession? {
+        if let selectedSession, selectedSession.status != .failed {
+            return selectedSession
+        }
+        return sessions.first { $0.status != .failed }
+    }
+
     func reloadSessions() {
         sessions = storage.loadSessions()
         if selectedSessionID == nil {
@@ -248,12 +255,12 @@ final class MeetingStore: ObservableObject {
 
     private func failSession(_ sessionID: UUID, message: String) {
         do {
-            var session = try storage.session(with: sessionID)
-            session.status = .failed
-            session.errorMessage = message
-            session.updatedAt = Date()
-            try storage.save(session)
-            replaceSession(session)
+            let session = try storage.session(with: sessionID)
+            try storage.delete(session)
+            sessions.removeAll { $0.id == session.id }
+            if selectedSessionID == session.id {
+                selectedSessionID = sessions.first?.id
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
