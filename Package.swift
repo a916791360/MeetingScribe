@@ -15,7 +15,9 @@ let package = Package(
             path: ".",
             exclude: [
                 "README.md",
-                ".gitignore"
+                ".gitignore",
+                "AppIcon.svg",
+                "AppIcon.iconset"
             ],
             sources: [
                 "MeetingScribeApp.swift",
@@ -25,6 +27,9 @@ let package = Package(
                 "MeetingModels.swift",
                 "MeetingStore.swift",
                 "WhisperPipeline.swift"
+            ],
+            resources: [
+                .process("Resources")
             ]
         )
     ]
