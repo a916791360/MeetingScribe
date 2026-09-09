@@ -65,11 +65,7 @@ struct WorkbenchSidebarView: View {
                             .font(.system(size: 22, weight: .semibold, design: .default))
                             .foregroundStyle(AppTheme.ink)
 
-                        Text("本地保存 · 录音结束后生成结果")
-                            .font(.callout)
-                            .foregroundStyle(AppTheme.muted)
-
-                        Text("录音、转写和会议要点都在这台 Mac 上完成。")
+                        Text("会议录音，自动整理成逐字稿、速览、决策点和待办。")
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
