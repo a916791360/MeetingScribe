@@ -1,22 +1,17 @@
 import SwiftUI
-import AppKit
 
 @main
 struct MeetingScribeApp: App {
     @StateObject private var store = MeetingStore()
 
-    init() {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
-            NSApplication.shared.applicationIconImage = image
-        }
-    }
-
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("MeetingScribe") {
             ContentView()
                 .environmentObject(store)
+                .background(WindowConfigurationView())
         }
+        .defaultSize(width: 1360, height: 820)
+        .windowResizability(.contentMinSize)
         .windowStyle(.automatic)
     }
 }

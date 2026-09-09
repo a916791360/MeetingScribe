@@ -40,8 +40,8 @@
     </filter>
   </defs>
 
-  <rect x="28" y="28" width="968" height="968" rx="228" fill="url(#bg)"/>
-  <rect x="28" y="28" width="968" height="968" rx="228" fill="url(#bgGlow)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bgGlow)"/>
   <path d="M 170 146 C 330 78, 640 82, 854 220 C 732 190, 566 194, 410 224 C 294 246, 210 234, 170 146 Z" fill="#ffffff" fill-opacity="0.05"/>
   <path d="M 132 822 C 302 746, 618 716, 894 780 C 744 866, 474 898, 256 882 C 182 876, 144 862, 132 822 Z" fill="url(#bgShade)"/>
 

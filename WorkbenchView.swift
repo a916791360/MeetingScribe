@@ -11,7 +11,7 @@ struct ContentView: View {
             WorkbenchDetailView()
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1240, minHeight: 840)
+        .frame(minWidth: 1060, minHeight: 660)
         .background(AppTheme.paper)
         .fileImporter(
             isPresented: $store.importAudioPresented,

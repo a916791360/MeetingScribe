@@ -18,6 +18,22 @@ swift build
 swift run
 ```
 
+## 打包与安装
+
+生成标准 macOS `.app` 包：
+
+```bash
+./Scripts/package_app.sh
+```
+
+安装到 `/Applications` 并启动：
+
+```bash
+./Scripts/install_app.sh
+```
+
+应用包使用标准 `Info.plist`、`.icns` 图标和可调整大小的主窗口，最低支持 macOS 15。
+
 ## 默认依赖
 
 - `whisper-cli`：`~/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp/build/bin/whisper-cli`
