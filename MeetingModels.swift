@@ -10,12 +10,38 @@ enum CaptureMode: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .microphone:
-            return "麦克风"
+            return "线下会议"
         case .mixed:
-            return "混录"
+            return "线上会议"
+        case .imported:
+            return "导入音频"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .microphone:
+            return "线下"
+        case .mixed:
+            return "线上"
         case .imported:
             return "导入"
         }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .microphone:
+            return "Mac 麦克风"
+        case .mixed:
+            return "钉钉混录"
+        case .imported:
+            return "已有音频"
+        }
+    }
+
+    var selectionLabel: String {
+        "\(title) · \(subtitle)"
     }
 
     var icon: String {

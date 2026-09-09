@@ -5,7 +5,12 @@ import Foundation
 final class MeetingStore: ObservableObject {
     @Published var sessions: [MeetingSession] = []
     @Published var selectedSessionID: UUID?
-    @Published var captureMode: CaptureMode = .mixed
+    @Published var captureMode: CaptureMode {
+        didSet {
+            guard oldValue != captureMode else { return }
+            UserDefaults.standard.set(captureMode.rawValue, forKey: Preferences.captureMode)
+        }
+    }
     @Published var whisperCLIPath: String
     @Published var whisperModelPath: String
     @Published var statusText: String = "准备就绪"
@@ -23,12 +28,16 @@ final class MeetingStore: ObservableObject {
     private var activeSessionID: UUID?
 
     private enum Preferences {
+        static let captureMode = "meetingScribe.captureMode"
         static let whisperCLIPath = "meetingScribe.whisperCLIPath"
         static let whisperModelPath = "meetingScribe.whisperModelPath"
     }
 
     init() {
         let defaults = Self.defaultRuntimePaths()
+        captureMode = CaptureMode(
+            rawValue: UserDefaults.standard.string(forKey: Preferences.captureMode) ?? ""
+        ) ?? .mixed
         whisperCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath) ?? defaults.cliURL.path
         whisperModelPath = UserDefaults.standard.string(forKey: Preferences.whisperModelPath) ?? defaults.modelURL.path
         reloadSessions()
@@ -298,6 +307,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func savePreferences() {
+        UserDefaults.standard.set(captureMode.rawValue, forKey: Preferences.captureMode)
         UserDefaults.standard.set(whisperCLIPath, forKey: Preferences.whisperCLIPath)
         UserDefaults.standard.set(whisperModelPath, forKey: Preferences.whisperModelPath)
     }
@@ -469,7 +479,7 @@ struct SessionStorage {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.timeZone = .current
         formatter.dateFormat = "MM-dd HH:mm"
-        return "会议 \(formatter.string(from: date)) · \(captureMode.title)"
+        return "会议 \(formatter.string(from: date)) · \(captureMode.shortTitle)"
     }
 
     private static func sourceFileName(for captureMode: CaptureMode) -> String {

@@ -65,11 +65,11 @@ struct WorkbenchSidebarView: View {
                             .font(.system(size: 22, weight: .semibold, design: .default))
                             .foregroundStyle(AppTheme.ink)
 
-                        Text("本地保存 · 录音结束后再出结果")
+                        Text("本地保存 · 录音结束后生成结果")
                             .font(.callout)
                             .foregroundStyle(AppTheme.muted)
 
-                        Text("线下用 Mac 麦克风，线上用钉钉混录，导入音频也能直接处理。")
+                        Text("录音、转写和会议要点都在这台 Mac 上完成。")
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -77,8 +77,6 @@ struct WorkbenchSidebarView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, AppTheme.space4)
                     .padding(.top, AppTheme.space4)
-
-                    WorkbenchCaptureModeSelector(selection: $store.captureMode)
 
                     WorkbenchSidebarSection(
                         title: "最近会话",
@@ -183,7 +181,7 @@ struct WorkbenchSessionRowView: View {
                     .foregroundStyle(subtitleColor)
 
                 HStack(spacing: 8) {
-                    WorkbenchMetaText(text: session.captureMode.title, inverse: isSelected)
+                    WorkbenchMetaText(text: session.captureMode.shortTitle, inverse: isSelected)
                     if let duration = session.duration {
                         WorkbenchMetaText(text: duration.clockLabel, inverse: isSelected)
                     }
@@ -225,55 +223,6 @@ struct WorkbenchSessionRowView: View {
 
     private var borderColor: Color {
         isSelected ? AppTheme.graphiteSoft.opacity(0.9) : AppTheme.rule
-    }
-}
-
-struct WorkbenchCaptureModeSelector: View {
-    @Binding var selection: CaptureMode
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("录音方式")
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.ink)
-                    Text("这只影响本次录音的来源，导入音频请用右上角按钮。")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                WorkbenchMetaText(text: "当前 \(selection.title)")
-            }
-
-            HStack(spacing: 8) {
-                ForEach(CaptureMode.recordingModes) { mode in
-                    Button {
-                        selection = mode
-                    } label: {
-                        HStack(spacing: 7) {
-                            Image(systemName: mode.icon)
-                                .font(.caption.weight(.semibold))
-                            Text(mode.title)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundStyle(selection == mode ? .white : AppTheme.ink)
-                        .background(selection == mode ? AppTheme.graphite : AppTheme.paperSoft, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                                .stroke(selection == mode ? AppTheme.graphiteSoft.opacity(0.9) : AppTheme.rule, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selection == mode ? .isSelected : [])
-                }
-            }
-        }
-        .padding(.horizontal, AppTheme.space4)
     }
 }
 
@@ -350,19 +299,227 @@ struct WorkbenchDetailView: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        ScrollView {
-            Group {
-                if let session = store.workspaceSession {
-                    WorkbenchSessionWorkspace(session: session)
-                } else {
-                    WorkbenchEmptyState()
+        VStack(spacing: 0) {
+            WorkbenchGlobalActionBar()
+
+            Divider()
+                .overlay(AppTheme.rule)
+
+            ScrollView {
+                Group {
+                    if let session = store.workspaceSession {
+                        WorkbenchSessionWorkspace(session: session)
+                    } else {
+                        WorkbenchEmptyState()
+                    }
                 }
+                .frame(maxWidth: 1220, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(maxWidth: 1220, alignment: .leading)
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(AppTheme.paper)
+    }
+}
+
+struct WorkbenchGlobalActionBar: View {
+    @EnvironmentObject private var store: MeetingStore
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            wideLayout
+            compactLayout
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(AppTheme.paper)
+    }
+
+    private var wideLayout: some View {
+        HStack(alignment: .center, spacing: 14) {
+            titleBlock
+
+            Spacer(minLength: 12)
+
+            WorkbenchCaptureSourceMenu(
+                selection: $store.captureMode,
+                isDisabled: store.isRecording || store.isProcessing
+            )
+
+            utilityButtons
+        }
+    }
+
+    private var compactLayout: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                titleBlock
+
+                Spacer(minLength: 8)
+
+                settingsButton
+            }
+
+            HStack(spacing: 10) {
+                WorkbenchCaptureSourceMenu(
+                    selection: $store.captureMode,
+                    isDisabled: store.isRecording || store.isProcessing
+                )
+
+                compactUtilityButtons
+            }
+        }
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("会议工作台")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text(statusLine)
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+        }
+        .frame(minWidth: 150, alignment: .leading)
+    }
+
+    private var utilityButtons: some View {
+        HStack(spacing: 8) {
+            Button {
+                store.importAudioPresented = true
+            } label: {
+                Label("导入音频", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(WorkbenchLightButtonStyle())
+            .disabled(store.isRecording || store.isProcessing)
+
+            Button {
+                toggleRecording()
+            } label: {
+                Label(primaryTitle, systemImage: primaryIcon)
+            }
+            .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
+            .disabled(store.isProcessing)
+
+            settingsButton
+        }
+    }
+
+    private var compactUtilityButtons: some View {
+        HStack(spacing: 8) {
+            Button {
+                store.importAudioPresented = true
+            } label: {
+                Label("导入音频", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(WorkbenchLightButtonStyle())
+            .disabled(store.isRecording || store.isProcessing)
+
+            Button {
+                toggleRecording()
+            } label: {
+                Label(primaryTitle, systemImage: primaryIcon)
+            }
+            .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
+            .disabled(store.isProcessing)
+        }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            store.showSettings = true
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.callout.weight(.semibold))
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(WorkbenchLightButtonStyle())
+        .help("设置")
+        .accessibilityLabel("设置")
+        .keyboardShortcut(",", modifiers: .command)
+    }
+
+    private var statusLine: String {
+        if store.isRecording {
+            return "录音进行中 · 结束后生成逐字稿和会议要点"
+        }
+        if store.isProcessing {
+            return "正在处理 · 结果完成后会留在本机"
+        }
+        return "新录音会沿用上次选择的录音来源"
+    }
+
+    private var primaryTitle: String {
+        store.isRecording ? "结束并转写" : "开始录音"
+    }
+
+    private var primaryIcon: String {
+        store.isRecording ? "stop.fill" : "record.circle"
+    }
+
+    private func toggleRecording() {
+        if store.isRecording {
+            store.stopRecording()
+        } else {
+            store.startRecording()
+        }
+    }
+}
+
+struct WorkbenchCaptureSourceMenu: View {
+    @Binding var selection: CaptureMode
+    let isDisabled: Bool
+
+    var body: some View {
+        Menu {
+            Section("选择下一次录音来源") {
+                ForEach(CaptureMode.recordingModes) { mode in
+                    Button {
+                        selection = mode
+                    } label: {
+                        Label {
+                            Text(mode.selectionLabel)
+                        } icon: {
+                            Image(systemName: mode.icon)
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            Text("选择后会自动记住，下次继续使用。")
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: selection.icon)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(AppTheme.accent)
+
+                Text(selection.selectionLabel)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(AppTheme.muted)
+            }
+            .frame(minWidth: 220, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(AppTheme.paperSoft, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                    .stroke(AppTheme.rule, lineWidth: 1)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(isDisabled)
+        .accessibilityLabel("录音来源")
+        .accessibilityValue(selection.selectionLabel)
+        .help(isDisabled ? "录音或处理进行中，暂不能切换来源" : "更改下一次录音来源")
     }
 }
 
@@ -375,20 +532,13 @@ struct WorkbenchSessionWorkspace: View {
             if session.status == .failed {
                 WorkbenchFailureState(
                     session: session,
-                    openFolderAction: store.openSelectedSessionFolder,
-                    settingsAction: { store.showSettings = true },
-                    importAction: { store.importAudioPresented = true }
+                    openFolderAction: store.openSelectedSessionFolder
                 )
             } else {
                 VStack(alignment: .leading, spacing: 20) {
                     WorkbenchSnapshotBand(
                         session: session,
-                        isRecording: store.isRecording,
-                        isProcessing: store.isProcessing,
-                        primaryAction: primaryAction,
-                        openFolderAction: store.openSelectedSessionFolder,
-                        settingsAction: { store.showSettings = true },
-                        importAction: { store.importAudioPresented = true }
+                        openFolderAction: store.openSelectedSessionFolder
                     )
 
                     WorkbenchMetricStrip(session: session)
@@ -401,22 +551,11 @@ struct WorkbenchSessionWorkspace: View {
         }
     }
 
-    private func primaryAction() {
-        if store.captureMode == .imported {
-            store.importAudioPresented = true
-        } else if store.isRecording {
-            store.stopRecording()
-        } else {
-            store.startRecording()
-        }
-    }
 }
 
 struct WorkbenchFailureState: View {
     let session: MeetingSession
     let openFolderAction: () -> Void
-    let settingsAction: () -> Void
-    let importAction: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -440,26 +579,11 @@ struct WorkbenchFailureState: View {
 
                 HStack(spacing: 8) {
                     Button {
-                        importAction()
-                    } label: {
-                        Label("导入", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle(emphasized: true))
-
-                    Button {
                         openFolderAction()
                     } label: {
                         Label("打开文件夹", systemImage: "folder")
                     }
                     .buttonStyle(WorkbenchDarkButtonStyle())
-
-                    Button {
-                        settingsAction()
-                    } label: {
-                        Label("设置", systemImage: "gearshape")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-                    .keyboardShortcut(",", modifiers: .command)
                 }
             }
 
@@ -473,12 +597,7 @@ struct WorkbenchFailureState: View {
 
 struct WorkbenchSnapshotBand: View {
     let session: MeetingSession
-    let isRecording: Bool
-    let isProcessing: Bool
-    let primaryAction: () -> Void
     let openFolderAction: () -> Void
-    let settingsAction: () -> Void
-    let importAction: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -489,7 +608,7 @@ struct WorkbenchSnapshotBand: View {
                         if let duration = session.duration {
                             WorkbenchDarkChip(text: duration.clockLabel, systemImage: "clock")
                         }
-                        WorkbenchDarkChip(text: session.captureMode.title, systemImage: session.captureMode.icon)
+                        WorkbenchDarkChip(text: session.captureMode.selectionLabel, systemImage: session.captureMode.icon)
                         WorkbenchDarkChip(text: "置信度 \(session.analysis.confidence.confidenceLabel)", systemImage: "scope")
                     }
 
@@ -510,33 +629,11 @@ struct WorkbenchSnapshotBand: View {
 
                 HStack(spacing: 8) {
                     Button {
-                        primaryAction()
-                    } label: {
-                        Label(primaryTitle, systemImage: primaryIcon)
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle(emphasized: true))
-
-                    Button {
-                        importAction()
-                    } label: {
-                        Label("导入", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-
-                    Button {
                         openFolderAction()
                     } label: {
                         Label("打开文件夹", systemImage: "folder")
                     }
                     .buttonStyle(WorkbenchDarkButtonStyle())
-
-                    Button {
-                        settingsAction()
-                    } label: {
-                        Label("设置", systemImage: "gearshape")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-                    .keyboardShortcut(",", modifiers: .command)
                 }
             }
 
@@ -564,19 +661,6 @@ struct WorkbenchSnapshotBand: View {
         return "转写完成后，速览、决策点和待办会出现在这里。"
     }
 
-    private var primaryTitle: String {
-        if session.captureMode == .imported {
-            return "导入音频"
-        }
-        return isRecording ? "结束并转写" : "开始录音"
-    }
-
-    private var primaryIcon: String {
-        if session.captureMode == .imported {
-            return "square.and.arrow.down"
-        }
-        return isRecording ? "stop.fill" : "record.circle"
-    }
 }
 
 struct WorkbenchMetricStrip: View {
@@ -913,59 +997,32 @@ struct WorkbenchEmptyHint: View {
 }
 
 struct WorkbenchEmptyState: View {
-    @EnvironmentObject private var store: MeetingStore
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("选中一场会议")
-                .font(.system(size: 30, weight: .semibold, design: .default))
-                .foregroundStyle(AppTheme.ink)
+            HStack(spacing: 12) {
+                Image(systemName: "waveform.and.mic")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 38, height: 38)
+                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
 
-            Text("开始录音或导入音频，结果会只留在这台 Mac 上。")
+                Text("还没有会议")
+                    .font(.system(size: 30, weight: .semibold, design: .default))
+                    .foregroundStyle(AppTheme.ink)
+            }
+
+            Text("从上方开始一次新的录音，或导入已有音频。")
                 .font(.callout)
                 .foregroundStyle(AppTheme.muted)
 
-            HStack(spacing: 10) {
-                Button {
-                    primaryAction()
-                } label: {
-                    Label(primaryTitle, systemImage: primaryIcon)
-                }
-                .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-
-                Button {
-                    store.importAudioPresented = true
-                } label: {
-                    Label("导入音频", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(WorkbenchLightButtonStyle())
-            }
+            Text("处理完成后，逐字稿、速览、决策点和待办会集中显示在这里。")
+                .font(.callout)
+                .foregroundStyle(AppTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 560, alignment: .leading)
         .workbenchPanel(cornerRadius: AppTheme.radiusLarge)
         .frame(maxWidth: .infinity, minHeight: 400, alignment: .center)
-    }
-
-    private func primaryAction() {
-        if store.captureMode == .imported {
-            store.importAudioPresented = true
-        } else {
-            store.startRecording()
-        }
-    }
-
-    private var primaryTitle: String {
-        if store.captureMode == .imported {
-            return "导入音频"
-        }
-        return "开始录音"
-    }
-
-    private var primaryIcon: String {
-        if store.captureMode == .imported {
-            return "square.and.arrow.down"
-        }
-        return "record.circle"
     }
 }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut */
 
 enum AppTheme {
     static let paper = Color(nsColor: NSColor(calibratedRed: 0.972, green: 0.979, blue: 0.993, alpha: 1))
