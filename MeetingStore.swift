@@ -13,34 +13,77 @@ final class MeetingStore: ObservableObject {
     }
     @Published var whisperCLIPath: String
     @Published var whisperModelPath: String
+    @Published var summarySettings: SummaryModelSettings
+    @Published var summaryAPIKeyInput: String = ""
+    @Published var summaryAPIKeyStatus: String = ""
+    @Published var summaryTestStatus: String = ""
     @Published var statusText: String = "准备就绪"
     @Published var isRecording: Bool = false
     @Published var isProcessing: Bool = false
+    @Published var processingProgress: Double = 0
+    @Published var processingStage: String = ""
     @Published var showSettings: Bool = false
     @Published var importAudioPresented: Bool = false
     @Published var errorMessage: String?
 
     private let storage = SessionStorage()
     private let transcoder = AudioTranscoder()
+    private let durationReader = AudioDurationReader()
     private let transcriber = WhisperCLIRunner()
+    private let summaryEngine = MeetingSummaryEngine()
+    private let keychain = KeychainStore.shared
     private var microphoneSession: MicrophoneRecordingSession?
     private var mixedSession: MixedRecordingSession?
+    private var processingTask: Task<Void, Never>?
+    private var recordingLimitTask: Task<Void, Never>?
     private var activeSessionID: UUID?
+    private var summaryRegenerationID: UUID?
+
+    private static let chunkDuration: TimeInterval = 10 * 60
+    private static let chunkOverlap: TimeInterval = 2
+    private static let maxRecordingDuration: UInt64 = 3 * 60 * 60 * 1_000_000_000
 
     private enum Preferences {
         static let captureMode = "meetingScribe.captureMode"
         static let whisperCLIPath = "meetingScribe.whisperCLIPath"
         static let whisperModelPath = "meetingScribe.whisperModelPath"
+        static let summaryProvider = "meetingScribe.summaryProvider"
+        static let summaryModel = "meetingScribe.summaryModel"
+        static let summaryEndpoint = "meetingScribe.summaryEndpoint"
     }
 
     init() {
         let defaults = Self.defaultRuntimePaths()
+        let legacyDefaults = Self.legacyRuntimePaths()
+        let storedCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath)
+        let storedModelPath = UserDefaults.standard.string(forKey: Preferences.whisperModelPath)
+        let summaryProvider = SummaryModelProvider(
+            rawValue: UserDefaults.standard.string(forKey: Preferences.summaryProvider) ?? ""
+        ) ?? .localRules
+        let storedSummaryModel = UserDefaults.standard.string(forKey: Preferences.summaryModel)
+        let storedSummaryEndpoint = UserDefaults.standard.string(forKey: Preferences.summaryEndpoint)
         captureMode = CaptureMode(
             rawValue: UserDefaults.standard.string(forKey: Preferences.captureMode) ?? ""
         ) ?? .mixed
-        whisperCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath) ?? defaults.cliURL.path
-        whisperModelPath = UserDefaults.standard.string(forKey: Preferences.whisperModelPath) ?? defaults.modelURL.path
+        whisperCLIPath = storedCLIPath == nil || storedCLIPath == legacyDefaults.cliURL.path
+            ? defaults.cliURL.path
+            : storedCLIPath!
+        whisperModelPath = storedModelPath == nil || storedModelPath == legacyDefaults.modelURL.path
+            ? defaults.modelURL.path
+            : storedModelPath!
+        summarySettings = SummaryModelSettings(
+            provider: summaryProvider,
+            modelName: storedSummaryModel ?? summaryProvider.defaultModelName,
+            endpoint: storedSummaryEndpoint ?? summaryProvider.defaultEndpoint
+        )
+        summaryAPIKeyInput = keychain.string(for: summaryProvider) ?? ""
+        summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
         reloadSessions()
+        savePreferences()
+
+        Task { @MainActor [weak self] in
+            self?.resumePendingProcessing()
+        }
     }
 
     var selectedSession: MeetingSession? {
@@ -49,14 +92,39 @@ final class MeetingStore: ObservableObject {
     }
 
     var workspaceSession: MeetingSession? {
-        if let selectedSession, selectedSession.status != .failed {
-            return selectedSession
-        }
-        return sessions.first { $0.status != .failed }
+        selectedSession ?? sessions.first
     }
 
     func reloadSessions() {
-        sessions = storage.loadSessions()
+        var loadedSessions = storage.loadSessions()
+        for index in loadedSessions.indices
+            where loadedSessions[index].status == .ready &&
+                (
+                    loadedSessions[index].analysis.summaryModel == nil ||
+                        loadedSessions[index].analysis.summaryModel == "本地整理" ||
+                        loadedSessions[index].analysis.summaryModel == SummaryModelProvider.localRules.title
+                ) {
+            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].transcriptSegments)
+            let title = MeetingAnalysisBuilder.title(
+                for: loadedSessions[index],
+                segments: loadedSessions[index].transcriptSegments
+            )
+            if analysis != loadedSessions[index].analysis || title != loadedSessions[index].title {
+                loadedSessions[index].analysis = analysis
+                loadedSessions[index].title = title
+                loadedSessions[index].updatedAt = Date()
+                try? storage.save(loadedSessions[index])
+            }
+        }
+
+        for index in loadedSessions.indices where loadedSessions[index].status == .recording {
+            loadedSessions[index].status = .failed
+            loadedSessions[index].errorMessage = "应用退出时录音未完成，原始文件已保留，可以重新处理。"
+            loadedSessions[index].updatedAt = Date()
+            try? storage.save(loadedSessions[index])
+        }
+
+        sessions = loadedSessions
         if selectedSessionID == nil {
             selectedSessionID = sessions.first?.id
         } else if sessions.contains(where: { $0.id == selectedSessionID }) == false {
@@ -79,6 +147,9 @@ final class MeetingStore: ObservableObject {
         activeSessionID = draft.id
         errorMessage = nil
         statusText = "正在准备录音..."
+        processingStage = ""
+        processingProgress = 0
+        summaryRegenerationID = nil
         savePreferences()
 
         switch captureMode {
@@ -92,6 +163,7 @@ final class MeetingStore: ObservableObject {
                         self.isRecording = true
                         self.statusText = "正在录音"
                         self.updateSessionStatus(draft.id, status: .recording)
+                        self.startRecordingLimit(for: draft.id)
                     }
                 } catch {
                     await MainActor.run {
@@ -109,6 +181,7 @@ final class MeetingStore: ObservableObject {
                         self.isRecording = true
                         self.statusText = "正在混录"
                         self.updateSessionStatus(draft.id, status: .recording)
+                        self.startRecordingLimit(for: draft.id)
                     }
                 } catch {
                     await MainActor.run {
@@ -125,9 +198,15 @@ final class MeetingStore: ObservableObject {
         guard isRecording, let sessionID = activeSessionID else { return }
         isRecording = false
         isProcessing = true
-        statusText = "正在整理录音..."
+        processingProgress = 0
+        processingStage = "正在整理录音..."
+        statusText = processingStage
+        recordingLimitTask?.cancel()
+        recordingLimitTask = nil
+        updateSessionStatus(sessionID, status: .processing)
 
-        Task {
+        processingTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 let session = try storage.session(with: sessionID)
                 let sourceURL = storage.sourceURL(for: session, preferredFileName: session.sourceFileName)
@@ -142,46 +221,76 @@ final class MeetingStore: ObservableObject {
                     _ = try await mixedSession?.stop()
                     mixedSession = nil
                     inputURL = storage.inputURL(for: session, preferredFileName: "input.wav")
-                    try transcoder.convertToWav(inputURL: sourceURL, outputURL: inputURL)
+                    try await transcoder.convertToWav(inputURL: sourceURL, outputURL: inputURL)
                 case .imported:
-                    inputURL = sourceURL
+                    inputURL = processingInputURL(for: session) ?? sourceURL
                 }
 
-                await process(sessionID: session.id, sourceURL: sourceURL, inputURL: inputURL)
+                try await process(sessionID: session.id, inputURL: inputURL, resume: false)
+            } catch is CancellationError {
+                cancelFinishedProcessing(sessionID: sessionID)
             } catch {
-                await MainActor.run {
-                    self.failProcessing(message: error.localizedDescription)
-                }
+                failProcessing(sessionID: sessionID, message: error.localizedDescription)
             }
         }
     }
 
     func importAudio(url: URL) {
         guard !isRecording, !isProcessing else { return }
+
+        let isSecurityScoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if isSecurityScoped {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        var draftID: UUID?
         do {
             let draft = storage.createDraftSession(captureMode: .imported)
+            draftID = draft.id
             sessions.insert(draft, at: 0)
             selectedSessionID = draft.id
             activeSessionID = draft.id
             errorMessage = nil
+            isProcessing = true
+            processingProgress = 0
+            processingStage = "正在导入音频..."
             statusText = "正在导入音频..."
+            summaryRegenerationID = nil
             savePreferences()
 
             let copiedSource = try storage.copyImportedAudio(url: url, into: draft)
-            Task {
+            if var importedSession = try? storage.session(with: draft.id) {
+                importedSession.status = .processing
+                importedSession.processingStage = "正在转换音频..."
+                importedSession.processingProgress = 0
+                importedSession.processingStartedAt = Date()
+                importedSession.updatedAt = Date()
+                try? storage.save(importedSession)
+                replaceSession(importedSession)
+            }
+            processingTask = Task { [weak self] in
+                guard let self else { return }
                 do {
                     let inputURL = storage.inputURL(for: draft, preferredFileName: "input.wav")
-                    try transcoder.convertToWav(inputURL: copiedSource, outputURL: inputURL)
-                    await process(sessionID: draft.id, sourceURL: copiedSource, inputURL: inputURL)
+                    processingStage = "正在转换音频..."
+                    statusText = processingStage
+                    try await transcoder.convertToWav(inputURL: copiedSource, outputURL: inputURL)
+                    try await process(sessionID: draft.id, inputURL: inputURL, resume: false)
+                } catch is CancellationError {
+                    cancelFinishedProcessing(sessionID: draft.id)
                 } catch {
-                    await MainActor.run {
-                        self.failSession(draft.id, message: error.localizedDescription)
-                    }
+                    failProcessing(sessionID: draft.id, message: error.localizedDescription)
                 }
             }
         } catch {
-            errorMessage = error.localizedDescription
-            statusText = error.localizedDescription
+            if let draftID {
+                failSession(draftID, message: error.localizedDescription)
+            } else {
+                errorMessage = error.localizedDescription
+                statusText = error.localizedDescription
+            }
         }
     }
 
@@ -191,11 +300,189 @@ final class MeetingStore: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([folderURL])
     }
 
+    func audioURL(for session: MeetingSession) -> URL? {
+        storage.playbackURL(for: session)
+    }
+
     func refreshPreferences() {
         savePreferences()
     }
 
+    func updateSummaryProvider(_ provider: SummaryModelProvider) {
+        guard summarySettings.provider != provider else { return }
+        summarySettings = SummaryModelSettings(
+            provider: provider,
+            modelName: provider.defaultModelName,
+            endpoint: provider.defaultEndpoint
+        )
+        summaryAPIKeyInput = keychain.string(for: provider) ?? ""
+        summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
+        summaryTestStatus = ""
+        savePreferences()
+    }
+
+    func saveSummaryAPIKey() {
+        let value = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.isEmpty {
+            keychain.delete(for: summarySettings.provider)
+            summaryAPIKeyInput = ""
+            summaryAPIKeyStatus = "未保存"
+        } else if keychain.save(value, for: summarySettings.provider) {
+            summaryAPIKeyInput = value
+            summaryAPIKeyStatus = "已保存到钥匙串"
+        } else {
+            summaryAPIKeyStatus = "保存失败"
+        }
+    }
+
+    func clearSummaryAPIKey() {
+        keychain.delete(for: summarySettings.provider)
+        summaryAPIKeyInput = ""
+        summaryAPIKeyStatus = "未保存"
+        summaryTestStatus = ""
+    }
+
+    func testSummaryModel() {
+        summaryTestStatus = "正在测试连接…"
+        let settings = summarySettings
+        let apiKey = summaryAPIKeyInput.isEmpty
+            ? keychain.string(for: settings.provider)
+            : summaryAPIKeyInput
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await summaryEngine.test(settings: settings, apiKey: apiKey)
+                summaryTestStatus = "连接正常"
+            } catch {
+                summaryTestStatus = error.localizedDescription
+            }
+        }
+    }
+
+    func regenerateSummary(for session: MeetingSession) {
+        guard session.status == .ready, !isRecording, !isProcessing else { return }
+        guard !session.transcriptSegments.isEmpty else {
+            statusText = "这场会议还没有逐字稿，暂时无法整理纪要。"
+            return
+        }
+
+        selectedSessionID = session.id
+        activeSessionID = session.id
+        isProcessing = true
+        processingProgress = 0
+        processingStage = "正在用 \(summarySettings.displayName) 整理纪要…"
+        statusText = processingStage
+        errorMessage = nil
+        let regenerationID = UUID()
+        summaryRegenerationID = regenerationID
+
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let analysis = try await buildAnalysis(from: session.transcriptSegments)
+                try Task.checkCancellation()
+                guard summaryRegenerationID == regenerationID else { return }
+
+                var updated = try storage.session(with: session.id)
+                updated.analysis = analysis
+                updated.updatedAt = Date()
+                try storage.save(updated)
+                replaceSession(updated)
+                statusText = analysis.summaryError == nil
+                    ? "纪要已更新"
+                    : "纪要已更新，使用本地整理兜底"
+                processingStage = statusText
+                processingProgress = 1
+                isProcessing = false
+                activeSessionID = nil
+                summaryRegenerationID = nil
+                processingTask = nil
+            } catch is CancellationError {
+                cancelFinishedSummary(sessionID: session.id, regenerationID: regenerationID)
+            } catch {
+                failProcessing(sessionID: session.id, message: error.localizedDescription)
+            }
+        }
+    }
+
+    func cancelProcessing() {
+        guard isProcessing else { return }
+        statusText = "正在停止处理..."
+        processingStage = "正在停止处理..."
+        processingTask?.cancel()
+        if let regenerationID = summaryRegenerationID,
+           let sessionID = activeSessionID {
+            cancelFinishedSummary(sessionID: sessionID, regenerationID: regenerationID)
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.transcriber.cancel()
+            await self.transcoder.cancel()
+        }
+    }
+
+    func retryProcessing(_ session: MeetingSession) {
+        guard !isRecording, !isProcessing else { return }
+        guard let inputURL = processingInputURL(for: session) else {
+            errorMessage = "找不到这场会议的音频文件。"
+            statusText = errorMessage ?? ""
+            return
+        }
+
+        var resetSession = session
+        resetSession.status = .processing
+        resetSession.updatedAt = Date()
+        resetSession.transcriptText = ""
+        resetSession.transcriptSegments = []
+        resetSession.analysis = .empty
+        resetSession.inputAudioFileName = inputURL.lastPathComponent
+        resetSession.errorMessage = nil
+        resetSession.processingProgress = 0
+        resetSession.processingStage = "准备重新处理"
+        resetSession.processingStartedAt = nil
+        resetSession.processingCompletedChunks = 0
+        resetSession.processingTotalChunks = nil
+        resetSession.processingNextOffset = 0
+
+        do {
+            try storage.save(resetSession)
+            replaceSession(resetSession)
+            selectedSessionID = resetSession.id
+            activeSessionID = resetSession.id
+            isProcessing = true
+            processingProgress = 0
+            processingStage = "准备重新处理"
+            statusText = "准备重新处理..."
+            errorMessage = nil
+            summaryRegenerationID = nil
+
+            processingTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await process(sessionID: resetSession.id, inputURL: inputURL, resume: false)
+                } catch is CancellationError {
+                    cancelFinishedProcessing(sessionID: resetSession.id)
+                } catch {
+                    failProcessing(sessionID: resetSession.id, message: error.localizedDescription)
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            statusText = error.localizedDescription
+        }
+    }
+
     func deleteSession(_ session: MeetingSession) {
+        if activeSessionID == session.id {
+            processingTask?.cancel()
+            recordingLimitTask?.cancel()
+            activeSessionID = nil
+            summaryRegenerationID = nil
+            isRecording = false
+            isProcessing = false
+        }
         do {
             try storage.delete(session)
             sessions.removeAll { $0.id == session.id }
@@ -208,52 +495,160 @@ final class MeetingStore: ObservableObject {
         }
     }
 
-    private func process(sessionID: UUID, sourceURL: URL, inputURL: URL) async {
-        do {
-            guard let cliURL = resolvedWhisperCLIURL(), let modelURL = resolvedModelURL() else {
-                throw PipelineError.missingBinary
-            }
+    private func process(sessionID: UUID, inputURL: URL, resume: Bool) async throws {
+        guard let cliURL = resolvedWhisperCLIURL(), let modelURL = resolvedModelURL() else {
+            throw PipelineError.missingBinary
+        }
 
-            await MainActor.run {
-                self.updateSessionStatus(sessionID, status: .processing)
-                self.statusText = "正在转写..."
-            }
+        guard FileManager.default.fileExists(atPath: inputURL.path) else {
+            throw PipelineError.transcriptionFailed("找不到待处理的音频文件。")
+        }
 
-            let transcript = try await transcriber.transcribe(
+        let duration = try durationReader.duration(for: inputURL)
+        let totalChunks = max(1, Int(ceil(duration / Self.chunkDuration)))
+        var session = try storage.session(with: sessionID)
+        let startedAt = session.processingStartedAt ?? Date()
+        var completedChunks = resume ? min(session.processingCompletedChunks ?? 0, totalChunks) : 0
+        var nextOffset = resume
+            ? min(max(session.processingNextOffset ?? Double(completedChunks) * Self.chunkDuration, 0), duration)
+            : 0
+        var segments = resume ? session.transcriptSegments : []
+
+        session.status = .processing
+        session.updatedAt = Date()
+        session.inputAudioFileName = inputURL.lastPathComponent
+        session.whisperCLIPath = cliURL.path
+        session.whisperModelPath = modelURL.path
+        session.processingProgress = Double(completedChunks) / Double(totalChunks)
+        session.processingStage = completedChunks >= totalChunks
+            ? "正在整理会议结果..."
+            : "准备第 \(completedChunks + 1)/\(totalChunks) 段"
+        session.processingStartedAt = startedAt
+        session.processingCompletedChunks = completedChunks
+        session.processingTotalChunks = totalChunks
+        session.processingNextOffset = nextOffset
+        session.errorMessage = nil
+        try storage.save(session)
+        replaceSession(session)
+        processingProgress = session.processingProgress ?? 0
+        processingStage = session.processingStage ?? "正在转写..."
+        statusText = processingStage
+        isProcessing = true
+
+        while completedChunks < totalChunks {
+            try Task.checkCancellation()
+
+            let coreStart = Double(completedChunks) * Self.chunkDuration
+            let coreEnd = min(duration, coreStart + Self.chunkDuration)
+            let chunkStart = max(0, coreStart - (completedChunks == 0 ? 0 : Self.chunkOverlap))
+            let chunkEnd = min(duration, coreEnd + (coreEnd < duration ? Self.chunkOverlap : 0))
+            let chunkDuration = max(0.1, chunkEnd - chunkStart)
+            let chunkNumber = completedChunks + 1
+            let prefix = storage.folderURL(for: session)
+                .appendingPathComponent("chunks", isDirectory: true)
+                .appendingPathComponent(String(format: "chunk-%04d", chunkNumber))
+
+            processingProgress = Double(completedChunks) / Double(totalChunks)
+            processingStage = "正在转写第 \(chunkNumber)/\(totalChunks) 段"
+            statusText = "\(processingStage) · \(processingProgress.percentLabel)"
+            updateProcessingState(
+                sessionID: sessionID,
+                progress: processingProgress,
+                stage: processingStage,
+                completedChunks: completedChunks,
+                totalChunks: totalChunks,
+                nextOffset: nextOffset,
+                startedAt: startedAt
+            )
+
+            let chunkTranscript = try await transcribeChunkWithTimeout(
                 audioURL: inputURL,
                 cliURL: cliURL,
                 modelURL: modelURL,
-                language: "zh"
+                outputPrefix: prefix,
+                offset: chunkStart,
+                duration: chunkDuration
             )
-            let analysis = MeetingAnalysisBuilder.build(from: transcript.segments)
 
-            var session = try storage.session(with: sessionID)
-            session.status = .ready
+            let ownedSegments = chunkTranscript.segments.filter { segment in
+                if completedChunks == 0 {
+                    return segment.start < coreEnd
+                }
+                return segment.start >= coreStart && segment.start < coreEnd
+            }
+            segments = Self.mergeSegments(existing: segments, incoming: ownedSegments)
+            completedChunks += 1
+            nextOffset = coreEnd
+
+            session = try storage.session(with: sessionID)
+            session.status = .processing
             session.updatedAt = Date()
-            session.transcriptSegments = transcript.segments
-            session.transcriptText = transcript.text.trimmedLines
-            session.analysis = analysis
+            session.transcriptSegments = segments
+            session.transcriptText = segments.map(\.text).joined(separator: "\n")
+            session.duration = duration
             session.inputAudioFileName = inputURL.lastPathComponent
             session.whisperCLIPath = cliURL.path
             session.whisperModelPath = modelURL.path
-            session.duration = transcript.segments.last?.end
+            session.processingProgress = Double(completedChunks) / Double(totalChunks)
+            session.processingStage = completedChunks == totalChunks
+                ? "正在整理会议结果..."
+                : "已完成第 \(completedChunks)/\(totalChunks) 段"
+            session.processingStartedAt = startedAt
+            session.processingCompletedChunks = completedChunks
+            session.processingTotalChunks = totalChunks
+            session.processingNextOffset = nextOffset
             session.errorMessage = nil
-            session.title = MeetingAnalysisBuilder.title(for: session, transcript: transcript)
-
             try storage.save(session)
-
-            await MainActor.run {
-                self.replaceSession(session)
-                self.selectedSessionID = session.id
-                self.statusText = "已完成"
-                self.isProcessing = false
-                self.activeSessionID = nil
-            }
-        } catch {
-            await MainActor.run {
-                self.failProcessing(message: error.localizedDescription)
-            }
+            replaceSession(session)
+            processingProgress = session.processingProgress ?? 0
+            processingStage = session.processingStage ?? "正在转写..."
+            statusText = "\(processingStage) · \(processingProgress.percentLabel)"
         }
+
+        processingStage = "正在整理会议结果..."
+        statusText = processingStage
+        updateProcessingState(
+            sessionID: sessionID,
+            progress: 1,
+            stage: processingStage,
+            completedChunks: totalChunks,
+            totalChunks: totalChunks,
+            nextOffset: duration,
+            startedAt: startedAt
+        )
+
+        let analysis = try await buildAnalysis(from: segments)
+        try Task.checkCancellation()
+
+        session = try storage.session(with: sessionID)
+        session.status = .ready
+        session.updatedAt = Date()
+        session.transcriptSegments = segments
+        session.transcriptText = segments.map(\.text).joined(separator: "\n")
+        session.analysis = analysis
+        session.inputAudioFileName = inputURL.lastPathComponent
+        session.whisperCLIPath = cliURL.path
+        session.whisperModelPath = modelURL.path
+        session.duration = duration
+        session.errorMessage = nil
+        session.title = MeetingAnalysisBuilder.title(for: session, segments: segments)
+        session.processingProgress = 1
+        session.processingStage = "已完成"
+        session.processingStartedAt = startedAt
+        session.processingCompletedChunks = totalChunks
+        session.processingTotalChunks = totalChunks
+        session.processingNextOffset = duration
+        try storage.save(session)
+
+        replaceSession(session)
+        selectedSessionID = session.id
+        statusText = "已完成"
+        processingStage = "已完成"
+        processingProgress = 1
+        isProcessing = false
+        activeSessionID = nil
+        summaryRegenerationID = nil
+        processingTask = nil
     }
 
     private func replaceSession(_ session: MeetingSession) {
@@ -262,30 +657,39 @@ final class MeetingStore: ObservableObject {
         sessions.sort { $0.createdAt > $1.createdAt }
     }
 
-    private func failSession(_ sessionID: UUID, message: String) {
+    private func buildAnalysis(from segments: [TranscriptSegment]) async throws -> MeetingAnalysis {
+        try Task.checkCancellation()
+        let fallback = await Task.detached(priority: .utility) {
+            MeetingAnalysisBuilder.build(from: segments)
+        }.value
+        try Task.checkCancellation()
+        let settings = summarySettings
+        let apiKey = keychain.string(for: settings.provider)
+
         do {
-            let session = try storage.session(with: sessionID)
-            try storage.delete(session)
-            sessions.removeAll { $0.id == session.id }
-            if selectedSessionID == session.id {
-                selectedSessionID = sessions.first?.id
-            }
+            let analysis = try await summaryEngine.analyze(
+                segments: segments,
+                settings: settings,
+                apiKey: apiKey
+            )
+            try Task.checkCancellation()
+            return analysis
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            errorMessage = error.localizedDescription
+            var fallback = fallback
+            fallback.summaryModel = settings.displayName
+            fallback.summaryError = error.localizedDescription
+            return fallback
         }
-        statusText = message
-        isRecording = false
-        isProcessing = false
-        activeSessionID = nil
-        microphoneSession = nil
-        mixedSession = nil
     }
 
-    private func failProcessing(message: String) {
-        if let activeSessionID, var session = try? storage.session(with: activeSessionID) {
+    private func failSession(_ sessionID: UUID, message: String) {
+        if var session = try? storage.session(with: sessionID) {
             session.status = .failed
             session.errorMessage = message
             session.updatedAt = Date()
+            session.processingStage = "处理失败"
             try? storage.save(session)
             replaceSession(session)
         }
@@ -294,8 +698,220 @@ final class MeetingStore: ObservableObject {
         isRecording = false
         isProcessing = false
         activeSessionID = nil
+        summaryRegenerationID = nil
         microphoneSession = nil
         mixedSession = nil
+        processingTask = nil
+        recordingLimitTask?.cancel()
+        recordingLimitTask = nil
+    }
+
+    private func failProcessing(sessionID: UUID, message: String) {
+        if var session = try? storage.session(with: sessionID) {
+            session.status = .failed
+            session.errorMessage = message
+            session.updatedAt = Date()
+            session.processingStage = "处理失败"
+            try? storage.save(session)
+            replaceSession(session)
+        }
+        errorMessage = message
+        statusText = message
+        isRecording = false
+        isProcessing = false
+        if activeSessionID == sessionID {
+            activeSessionID = nil
+        }
+        summaryRegenerationID = nil
+        microphoneSession = nil
+        mixedSession = nil
+        processingTask = nil
+    }
+
+    private func cancelFinishedProcessing(sessionID: UUID) {
+        if var session = try? storage.session(with: sessionID) {
+            session.status = .failed
+            session.errorMessage = "已取消转写，已保留已经完成的内容，可以重新处理。"
+            session.processingStage = "已取消"
+            session.updatedAt = Date()
+            try? storage.save(session)
+            replaceSession(session)
+        }
+        errorMessage = nil
+        statusText = "已取消转写"
+        processingStage = "已取消"
+        isRecording = false
+        isProcessing = false
+        activeSessionID = nil
+        summaryRegenerationID = nil
+        processingTask = nil
+    }
+
+    private func cancelFinishedSummary(sessionID: UUID, regenerationID: UUID) {
+        guard summaryRegenerationID == regenerationID else { return }
+        summaryRegenerationID = nil
+        errorMessage = nil
+        statusText = "已取消整理，保留原有纪要"
+        processingStage = "已取消整理"
+        processingProgress = 0
+        isRecording = false
+        isProcessing = false
+        if activeSessionID == sessionID {
+            activeSessionID = nil
+        }
+        processingTask = nil
+    }
+
+    private func resumePendingProcessing() {
+        guard !isRecording, !isProcessing else { return }
+        guard let session = sessions.first(where: { $0.status == .processing }) else { return }
+        guard let inputURL = processingInputURL(for: session) else {
+            failProcessing(sessionID: session.id, message: "找不到待恢复的音频文件。")
+            return
+        }
+
+        activeSessionID = session.id
+        selectedSessionID = session.id
+        isProcessing = true
+        processingProgress = session.processingProgress ?? 0
+        processingStage = session.processingStage ?? "正在恢复转写..."
+        statusText = "正在恢复转写..."
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                var preparedURL = inputURL
+                if preparedURL.pathExtension.lowercased() != "wav" {
+                    let convertedURL = storage.inputURL(for: session, preferredFileName: "input.wav")
+                    processingStage = "正在恢复音频转换..."
+                    statusText = processingStage
+                    try await transcoder.convertToWav(inputURL: preparedURL, outputURL: convertedURL)
+                    preparedURL = convertedURL
+                }
+                try await process(sessionID: session.id, inputURL: preparedURL, resume: true)
+            } catch is CancellationError {
+                cancelFinishedProcessing(sessionID: session.id)
+            } catch {
+                failProcessing(sessionID: session.id, message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func startRecordingLimit(for sessionID: UUID) {
+        recordingLimitTask?.cancel()
+        recordingLimitTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.maxRecordingDuration)
+            } catch {
+                return
+            }
+            guard let self, self.isRecording, self.activeSessionID == sessionID else { return }
+            self.statusText = "已达到 3 小时上限，正在结束录音..."
+            self.stopRecording()
+        }
+    }
+
+    private func updateProcessingState(
+        sessionID: UUID,
+        progress: Double,
+        stage: String,
+        completedChunks: Int,
+        totalChunks: Int,
+        nextOffset: TimeInterval,
+        startedAt: Date
+    ) {
+        guard var session = try? storage.session(with: sessionID) else { return }
+        session.status = .processing
+        session.updatedAt = Date()
+        session.processingProgress = progress
+        session.processingStage = stage
+        session.processingCompletedChunks = completedChunks
+        session.processingTotalChunks = totalChunks
+        session.processingNextOffset = nextOffset
+        session.processingStartedAt = startedAt
+        try? storage.save(session)
+        replaceSession(session)
+    }
+
+    private func transcribeChunkWithTimeout(
+        audioURL: URL,
+        cliURL: URL,
+        modelURL: URL,
+        outputPrefix: URL,
+        offset: TimeInterval,
+        duration: TimeInterval
+    ) async throws -> WhisperTranscript {
+        try await withThrowingTaskGroup(of: WhisperTranscript.self) { group in
+            group.addTask { [transcriber] in
+                try await transcriber.transcribe(
+                    audioURL: audioURL,
+                    cliURL: cliURL,
+                    modelURL: modelURL,
+                    outputPrefix: outputPrefix,
+                    offset: offset,
+                    duration: duration,
+                    language: "zh"
+                )
+            }
+            group.addTask {
+                let timeoutSeconds = max(12 * 60, Int((duration * 1.5).rounded()))
+                try await Task.sleep(nanoseconds: UInt64(timeoutSeconds) * 1_000_000_000)
+                throw PipelineError.transcriptionTimedOut
+            }
+
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else {
+                throw PipelineError.transcriptionFailed("转写没有返回结果。")
+            }
+            return result
+        }
+    }
+
+    private func processingInputURL(for session: MeetingSession) -> URL? {
+        var candidates: [String] = []
+        if let inputAudioFileName = session.inputAudioFileName {
+            candidates.append(inputAudioFileName)
+        }
+        candidates.append("input.wav")
+        candidates.append(session.sourceFileName)
+
+        for name in candidates where !name.isEmpty {
+            let url = storage.sourceURL(for: session, preferredFileName: name)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private static func mergeSegments(
+        existing: [TranscriptSegment],
+        incoming: [TranscriptSegment]
+    ) -> [TranscriptSegment] {
+        var merged = existing
+        for segment in incoming.sorted(by: { $0.start < $1.start }) {
+            guard let previous = merged.last else {
+                merged.append(segment)
+                continue
+            }
+
+            let overlaps = segment.start < previous.end && previous.start < segment.end
+            let sameText = normalized(segment.text) == normalized(previous.text)
+            if overlaps && sameText {
+                if segment.confidence > previous.confidence {
+                    merged[merged.count - 1] = segment
+                }
+                continue
+            }
+            merged.append(segment)
+        }
+        return merged.sorted { $0.start < $1.start }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .trimmingCharacters(in: .punctuationCharacters)
     }
 
     private func updateSessionStatus(_ sessionID: UUID, status: MeetingStatus) {
@@ -310,14 +926,18 @@ final class MeetingStore: ObservableObject {
         UserDefaults.standard.set(captureMode.rawValue, forKey: Preferences.captureMode)
         UserDefaults.standard.set(whisperCLIPath, forKey: Preferences.whisperCLIPath)
         UserDefaults.standard.set(whisperModelPath, forKey: Preferences.whisperModelPath)
+        UserDefaults.standard.set(summarySettings.provider.rawValue, forKey: Preferences.summaryProvider)
+        UserDefaults.standard.set(summarySettings.modelName, forKey: Preferences.summaryModel)
+        UserDefaults.standard.set(summarySettings.endpoint, forKey: Preferences.summaryEndpoint)
     }
 
     private func resolvedWhisperCLIURL() -> URL? {
         let candidate = URL(fileURLWithPath: whisperCLIPath)
-        if FileManager.default.fileExists(atPath: candidate.path) {
+        if FileManager.default.isExecutableFile(atPath: candidate.path) {
             return candidate
         }
-        return Self.defaultRuntimePaths().cliURL
+        let fallback = Self.defaultRuntimePaths().cliURL
+        return FileManager.default.isExecutableFile(atPath: fallback.path) ? fallback : nil
     }
 
     private func resolvedModelURL() -> URL? {
@@ -325,10 +945,25 @@ final class MeetingStore: ObservableObject {
         if FileManager.default.fileExists(atPath: candidate.path) {
             return candidate
         }
-        return Self.defaultRuntimePaths().modelURL
+        let fallback = Self.defaultRuntimePaths().modelURL
+        return FileManager.default.fileExists(atPath: fallback.path) ? fallback : nil
     }
 
     static func defaultRuntimePaths() -> (cliURL: URL, modelURL: URL) {
+        if let resourceURL = Bundle.main.resourceURL {
+            let bundledRoot = resourceURL.appendingPathComponent("whisper", isDirectory: true)
+            let bundledCLI = bundledRoot.appendingPathComponent("bin/whisper-cli")
+            let bundledModel = bundledRoot.appendingPathComponent("models/ggml-small.bin")
+            if FileManager.default.isExecutableFile(atPath: bundledCLI.path),
+               FileManager.default.fileExists(atPath: bundledModel.path) {
+                return (bundledCLI, bundledModel)
+            }
+        }
+
+        return legacyRuntimePaths()
+    }
+
+    private static func legacyRuntimePaths() -> (cliURL: URL, modelURL: URL) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let whisperRoot = home
             .appendingPathComponent("Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp")
@@ -438,6 +1073,23 @@ struct SessionStorage {
         folderURL(for: session).appendingPathComponent(preferredFileName)
     }
 
+    func playbackURL(for session: MeetingSession) -> URL? {
+        var candidates: [String] = []
+        if let inputAudioFileName = session.inputAudioFileName {
+            candidates.append(inputAudioFileName)
+        }
+        candidates.append("input.wav")
+        candidates.append(session.sourceFileName)
+
+        for name in candidates where !name.isEmpty {
+            let url = sourceURL(for: session, preferredFileName: name)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
     func copyImportedAudio(url: URL, into session: MeetingSession) throws -> URL {
         let destination = sourceURL(for: session, preferredFileName: url.lastPathComponent)
         if FileManager.default.fileExists(atPath: destination.path) {
@@ -495,8 +1147,17 @@ struct SessionStorage {
 }
 
 enum MeetingAnalysisBuilder {
-    static func title(for session: MeetingSession, transcript: WhisperTranscript) -> String {
-        if let first = buildOverview(from: transcript.segments).first {
+    static func title(for session: MeetingSession, segments: [TranscriptSegment]) -> String {
+        if session.captureMode == .imported {
+            let fileTitle = URL(fileURLWithPath: session.sourceFileName)
+                .deletingPathExtension()
+                .lastPathComponent
+            if !fileTitle.isEmpty, fileTitle != "source", fileTitle != "input" {
+                return fileTitle
+            }
+        }
+
+        if let first = buildOverview(from: segments).first {
             let prefix = first.label.prefix(24)
             return "会议 \(prefix)"
         }
@@ -504,26 +1165,62 @@ enum MeetingAnalysisBuilder {
     }
 
     static func build(from segments: [TranscriptSegment]) -> MeetingAnalysis {
-        let overview = buildOverview(from: segments)
-        let timeline = buildTimeline(from: segments)
+        let overview: [InsightItem] = []
+        let timeline: [TimelineChunk] = []
         let decisions = buildDecisions(from: segments)
         let actions = buildActions(from: segments)
 
-        let scores = overview.map(\.confidence) + decisions.map(\.confidence) + actions.map(\.confidence)
-        let confidence = scores.isEmpty ? 0.5 : scores.reduce(0, +) / Double(scores.count)
+        let scores = decisions.map(\.confidence) + actions.map(\.confidence)
+        let confidence = scores.isEmpty ? 0 : scores.reduce(0, +) / Double(scores.count)
 
         return MeetingAnalysis(
             overview: overview,
             timeline: timeline,
             decisions: decisions,
             actions: actions,
-            confidence: confidence
+            confidence: confidence,
+            overviewText: buildOverviewText(
+                timeline: timeline,
+                decisions: decisions,
+                actions: actions
+            ),
+            minutesText: buildMinutesText(
+                timeline: timeline,
+                decisions: decisions,
+                actions: actions
+            ),
+            summaryModel: SummaryModelProvider.localRules.title,
+            summaryError: nil
         )
+    }
+
+    private static func buildOverviewText(
+        timeline: [TimelineChunk],
+        decisions: [InsightItem],
+        actions: [ActionItem]
+    ) -> String {
+        ""
+    }
+
+    private static func buildMinutesText(
+        timeline: [TimelineChunk],
+        decisions: [InsightItem],
+        actions: [ActionItem]
+    ) -> String {
+        ""
     }
 
     private static func buildOverview(from segments: [TranscriptSegment]) -> [InsightItem] {
         let candidates = segments
-            .filter { $0.text.count > 8 }
+            .filter { segment in
+                segment.text.count >= 18 &&
+                    segment.confidence >= 0.78 &&
+                    !isFiller(segment.text) &&
+                    !looksLikeQuestion(segment.text) &&
+                    !isLowQuality(segment.text) &&
+                    !hasRepeatedClause(segment.text) &&
+                    hasSummarySignal(segment.text)
+            }
             .map { segment in
                 (
                     segment,
@@ -541,8 +1238,8 @@ enum MeetingAnalysisBuilder {
         var occupiedRanges: [ClosedRange<Double>] = []
         for (segment, score) in candidates {
             let start = segment.start
-            let confidence = min(1, max(0.3, segment.confidence * 0.8 + score * 0.04))
-            guard confidence >= 0.4 else { continue }
+            guard score >= 4.5 else { continue }
+            let confidence = segment.confidence
 
             if occupiedRanges.contains(where: { range in
                 abs(range.lowerBound - start) < 180 || range.contains(start)
@@ -563,36 +1260,32 @@ enum MeetingAnalysisBuilder {
             if items.count == 4 { break }
         }
 
-        if items.isEmpty {
-            items = segments.prefix(3).map {
-                InsightItem(
-                    label: shorten($0.text, limit: 42),
-                    evidence: $0.text,
-                    confidence: max(0.45, $0.confidence),
-                    timestamp: $0.start
-                )
-            }
-        }
-
         return items
     }
 
     private static func buildTimeline(from segments: [TranscriptSegment]) -> [TimelineChunk] {
         let grouped = Dictionary(grouping: segments) { Int($0.start / 300) }
         return grouped.keys.sorted().compactMap { bucket in
-            guard let bucketSegments = grouped[bucket], let first = bucketSegments.first else { return nil }
+            let bucketSegments = (grouped[bucket] ?? []).sorted { $0.start < $1.start }
+            guard let first = bucketSegments.first else { return nil }
             let last = bucketSegments.last ?? first
-            let summary = bucketSegments
+            let reliableSegments = bucketSegments
+                .filter { isReliableSummarySegment($0, minimumConfidence: 0.78) }
                 .sorted { $0.confidence > $1.confidence }
+            guard !reliableSegments.isEmpty else { return nil }
+            let summary = reliableSegments
                 .prefix(2)
                 .map { shorten($0.text, limit: 28) }
                 .joined(separator: "；")
-            let evidence = bucketSegments.prefix(2).map(\.text).joined(separator: " / ")
-            let avg = bucketSegments.map(\.confidence).reduce(0, +) / Double(bucketSegments.count)
+            let evidence = reliableSegments
+                .prefix(2)
+                .map(\.text)
+                .joined(separator: " / ")
+            let avg = reliableSegments.map(\.confidence).reduce(0, +) / Double(reliableSegments.count)
             return TimelineChunk(
                 start: first.start,
                 end: last.end,
-                summary: summary.isEmpty ? shorten(first.text, limit: 28) : summary,
+                summary: summary.isEmpty ? "这一段转写内容置信度不足，建议查看原文。" : summary,
                 evidence: evidence,
                 confidence: avg
             )
@@ -600,17 +1293,41 @@ enum MeetingAnalysisBuilder {
     }
 
     private static func buildDecisions(from segments: [TranscriptSegment]) -> [InsightItem] {
-        let keywords = ["决定", "确认", "定为", "通过", "采用", "改成", "就这样", "先这样", "不需要", "保留", "取消", "落地", "统一"]
-        return uniqueMatches(in: segments, keywords: keywords)
+        let keywords = [
+            "决定", "确定为", "定为", "结论是", "最终采用",
+            "最终选择", "就这样", "先这样", "不再使用", "取消", "统一采用"
+        ]
+        return uniqueMatches(
+            in: segments,
+            keywords: keywords,
+            minimumConfidence: 0.80,
+            predicate: { text in
+                containsDecisionStructure(text) &&
+                    !hasRepeatedClause(text) &&
+                    !isLowQuality(text)
+            }
+        )
     }
 
     private static func buildActions(from segments: [TranscriptSegment]) -> [ActionItem] {
-        let keywords = ["需要", "尽快", "今天", "明天", "本周", "下周", "后天", "负责", "跟进", "整理", "补充", "发给", "提交", "排期", "确认", "同步", "准备"]
-        let matches = uniqueMatches(in: segments, keywords: keywords)
+        let keywords = [
+            "需要", "负责", "跟进", "整理", "补充", "发给", "提交给",
+            "排期", "同步", "准备", "创建", "改成", "完成", "处理", "发起"
+        ]
+        let matches = uniqueMatches(
+            in: segments,
+            keywords: keywords,
+            minimumConfidence: 0.78,
+            predicate: { text in
+                !looksLikeQuestion(text) &&
+                    !hasRepeatedClause(text) &&
+                    !isLowQuality(text) &&
+                    containsActionStructure(text)
+            }
+        )
         return matches.compactMap { item in
             let priority = priority(from: item.label, confidence: item.confidence)
             let dueText = dueText(from: item.evidence)
-            guard item.confidence >= 0.45 || dueText != nil else { return nil }
             return ActionItem(
                 label: item.label,
                 priority: priority,
@@ -622,24 +1339,30 @@ enum MeetingAnalysisBuilder {
         }
     }
 
-    private static func uniqueMatches(in segments: [TranscriptSegment], keywords: [String]) -> [InsightItem] {
+    private static func uniqueMatches(
+        in segments: [TranscriptSegment],
+        keywords: [String],
+        minimumConfidence: Double,
+        predicate: (String) -> Bool = { _ in true }
+    ) -> [InsightItem] {
         var seen = Set<String>()
         var items: [InsightItem] = []
 
         for segment in segments {
             let text = segment.text
             guard keywords.contains(where: { text.contains($0) }) else { continue }
+            guard segment.confidence >= minimumConfidence, predicate(text) else { continue }
+            guard text.replacingOccurrences(of: " ", with: "").count >= 12 else { continue }
 
             let label = shorten(text, limit: 44)
             let normalized = label.replacingOccurrences(of: " ", with: "")
             guard seen.insert(normalized).inserted else { continue }
 
-            let confidence = min(1, max(0.4, segment.confidence))
             items.append(
                 InsightItem(
                     label: label,
                     evidence: text,
-                    confidence: confidence,
+                    confidence: segment.confidence,
                     timestamp: segment.start
                 )
             )
@@ -657,7 +1380,8 @@ enum MeetingAnalysisBuilder {
         if urgent.contains(where: text.contains) {
             return .p1
         }
-        if soon.contains(where: text.contains) || confidence < 0.7 {
+        guard confidence >= 0.7 else { return nil }
+        if soon.contains(where: text.contains) {
             return .p2
         }
         return .p3
@@ -694,6 +1418,105 @@ enum MeetingAnalysisBuilder {
         let earlyBonus = segment.start < 900 ? 1.2 : 0
         let middleBonus = text.count > 20 ? 0.8 : 0.3
         return keywordBonus * 2 + earlyBonus + middleBonus + segment.confidence * 2
+    }
+
+    private static func isFiller(_ text: String) -> Bool {
+        let fillerWords = ["嗯", "啊", "哦", "对", "好", "行", "来", "就是", "然后", "不是"]
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        return compact.count < 16 || fillerWords.allSatisfy { compact.hasPrefix($0) }
+    }
+
+    private static func isLowQuality(_ text: String) -> Bool {
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        let fillerWords = ["那个", "就是", "然后", "呃", "嗯", "啊", "这个", "对吧"]
+        let fillerCount = fillerWords.reduce(0) { count, word in
+            count + compact.components(separatedBy: word).count - 1
+        }
+        let punctuationCount = compact.filter { "，,；;。！？?!".contains($0) }.count
+        let repeatedCharacterCount = Dictionary(grouping: compact, by: { $0 })
+            .values
+            .map(\.count)
+            .max() ?? 0
+        return fillerCount >= 3 &&
+            punctuationCount >= 3 ||
+            repeatedCharacterCount >= max(7, compact.count / 3)
+    }
+
+    private static func hasRepeatedClause(_ text: String) -> Bool {
+        let clauses = text
+            .split(whereSeparator: { "，,；;。".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 4 }
+        return Set(clauses).count < clauses.count
+    }
+
+    private static func looksLikeQuestion(_ text: String) -> Bool {
+        let questionMarkers = [
+            "？", "?", "吗", "啥", "什么", "哪", "怎么", "为什么",
+            "能不能", "是不是", "有没有", "是否"
+        ]
+        return questionMarkers.contains(where: text.contains)
+    }
+
+    private static func isReliableSummarySegment(
+        _ segment: TranscriptSegment,
+        minimumConfidence: Double
+    ) -> Bool {
+        let text = segment.text
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        guard segment.confidence >= minimumConfidence,
+              compact.count >= 18,
+              !looksLikeQuestion(text),
+              !isLowQuality(text),
+              !hasRepeatedClause(text) else {
+            return false
+        }
+
+        let punctuationCount = text.filter { "，,；;。！？?!".contains($0) }.count
+        let repeatedCharacterCount = Dictionary(grouping: compact, by: { $0 })
+            .values
+            .map(\.count)
+            .max() ?? 0
+        return punctuationCount <= 8 &&
+            repeatedCharacterCount < max(6, compact.count / 3) &&
+            !["对吧", "好不好", "行不行", "是不是"].contains(where: text.contains)
+    }
+
+    private static func containsActionStructure(_ text: String) -> Bool {
+        let explicitVerbs = [
+            "跟进", "整理", "补充", "发给", "提交给", "排期",
+            "同步", "准备", "创建", "改成", "完成", "发起", "处理", "负责"
+        ]
+        guard !text.contains("有两种"),
+              !text.contains("有一个"),
+              !text.contains("有多个"),
+              explicitVerbs.contains(where: text.contains) else {
+            return false
+        }
+        let assignmentMarkers = [
+            "你来", "你负责", "我来", "我负责", "由你", "由我",
+            "请你", "请负责", "需要你", "需要我", "安排你",
+            "后续请", "下一步由", "负责跟进", "负责人"
+        ]
+        return assignmentMarkers.contains(where: text.contains)
+    }
+
+    private static func containsDecisionStructure(_ text: String) -> Bool {
+        let markers = [
+            "决定", "确定为", "定为", "结论是", "最终采用",
+            "最终选择", "就这样", "先这样", "不再使用", "取消", "统一采用"
+        ]
+        return markers.contains(where: text.contains) &&
+            !looksLikeQuestion(text) &&
+            !["可能", "考虑一下", "建议", "待定", "再看看"].contains(where: text.contains)
+    }
+
+    private static func hasSummarySignal(_ text: String) -> Bool {
+        [
+            "目标", "目的", "主要", "围绕", "方案", "需求", "问题",
+            "风险", "下一步", "安排", "确认", "落地", "重点",
+            "评审", "计划", "版本", "结果"
+        ].contains(where: text.contains)
     }
 
     private static func shorten(_ text: String, limit: Int) -> String {

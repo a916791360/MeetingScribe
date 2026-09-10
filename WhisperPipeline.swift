@@ -12,6 +12,8 @@ enum PipelineError: LocalizedError {
     case missingBinary
     case missingModel
     case missingJSONOutput
+    case audioDurationUnavailable
+    case transcriptionTimedOut
     case transcriptionFailed(String)
 
     var errorDescription: String? {
@@ -32,6 +34,10 @@ enum PipelineError: LocalizedError {
             return "找不到 whisper 模型文件。"
         case .missingJSONOutput:
             return "找不到 whisper 的 JSON 输出。"
+        case .audioDurationUnavailable:
+            return "无法读取音频时长。"
+        case .transcriptionTimedOut:
+            return "这一段转写超过预设时间没有完成，已停止本次处理。"
         case .transcriptionFailed(let message):
             return message
         }
@@ -247,7 +253,9 @@ final class MixedRecordingSession: NSObject, @preconcurrency SCRecordingOutputDe
 }
 
 struct AudioTranscoder {
-    func convertToWav(inputURL: URL, outputURL: URL) throws {
+    private let processRunner = LocalProcessRunner()
+
+    func convertToWav(inputURL: URL, outputURL: URL) async throws {
         if inputURL == outputURL {
             return
         }
@@ -261,33 +269,53 @@ struct AudioTranscoder {
             throw PipelineError.transcriptionFailed("找不到系统音频转换工具 afconvert。")
         }
 
-        let process = Process()
-        process.executableURL = converter
-        process.arguments = [
-            "-f", "WAVE",
-            "-d", "LEI16@16000",
-            "-c", "1",
-            inputURL.path,
-            outputURL.path
-        ]
+        let result = try await processRunner.run(
+            executableURL: converter,
+            arguments: [
+                "-f", "WAVE",
+                "-d", "LEI16@16000",
+                "-c", "1",
+                inputURL.path,
+                outputURL.path
+            ],
+            environment: nil
+        )
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            throw PipelineError.transcriptionFailed(message.isEmpty ? "音频转 WAV 失败。" : message)
+        guard result.status == 0 else {
+            throw PipelineError.transcriptionFailed(
+                result.failureMessage(default: "音频转 WAV 失败。")
+            )
         }
+    }
+
+    func cancel() async {
+        await processRunner.cancel()
     }
 }
 
-struct WhisperCLIRunner {
-    func transcribe(audioURL: URL, cliURL: URL, modelURL: URL, language: String = "zh") async throws -> WhisperTranscript {
+struct AudioDurationReader {
+    func duration(for url: URL) throws -> TimeInterval {
+        let file = try AVAudioFile(forReading: url)
+        let sampleRate = file.fileFormat.sampleRate
+        guard sampleRate > 0, file.length > 0 else {
+            throw PipelineError.audioDurationUnavailable
+        }
+        return Double(file.length) / sampleRate
+    }
+}
+
+actor WhisperCLIRunner {
+    private let processRunner = LocalProcessRunner()
+
+    func transcribe(
+        audioURL: URL,
+        cliURL: URL,
+        modelURL: URL,
+        outputPrefix: URL,
+        offset: TimeInterval = 0,
+        duration: TimeInterval? = nil,
+        language: String = "zh"
+    ) async throws -> WhisperTranscript {
         guard FileManager.default.fileExists(atPath: cliURL.path) else {
             throw PipelineError.missingBinary
         }
@@ -295,12 +323,12 @@ struct WhisperCLIRunner {
             throw PipelineError.missingModel
         }
 
-        let outputPrefix = audioURL.deletingPathExtension()
-            .appendingPathExtension("whisper")
-            .deletingPathExtension()
-
         let jsonURL = outputPrefix.appendingPathExtension("json")
         let textURL = outputPrefix.appendingPathExtension("txt")
+        try FileManager.default.createDirectory(
+            at: outputPrefix.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
 
         if FileManager.default.fileExists(atPath: jsonURL.path) {
             try FileManager.default.removeItem(at: jsonURL)
@@ -309,34 +337,43 @@ struct WhisperCLIRunner {
             try FileManager.default.removeItem(at: textURL)
         }
 
-        let process = Process()
-        process.executableURL = cliURL
-        process.arguments = [
-            "-ng",
+        var arguments = [
             "-m", modelURL.path,
             "-f", audioURL.path,
             "-l", language,
-            "-t", "\(max(4, ProcessInfo.processInfo.activeProcessorCount - 2))",
+            "-t", "\(min(8, max(4, ProcessInfo.processInfo.activeProcessorCount - 2)))",
+            // The bundled whisper.cpp Metal backend crashes on this machine.
+            // Keep transcription on the stable Apple Silicon CPU path for now.
+            "-ng",
             "-oj",
             "-ojf",
             "-np",
+            "--prompt", "这是一场中文工作会议，内容涉及产品、技术、需求、项目和业务讨论。",
             "-of", outputPrefix.path
         ]
-        process.environment = [
-            "DYLD_LIBRARY_PATH": cliURL.deletingLastPathComponent().path
-        ]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
+        if offset > 0 {
+            arguments.append(contentsOf: ["-ot", "\(Int((offset * 1000).rounded()))"])
+        }
+        if let duration, duration > 0 {
+            arguments.append(contentsOf: ["-d", "\(Int((duration * 1000).rounded()))"])
+        }
 
-        try process.run()
-        process.waitUntilExit()
+        let result = try await processRunner.run(
+            executableURL: cliURL,
+            arguments: arguments,
+            environment: [
+                "DYLD_LIBRARY_PATH": cliURL.deletingLastPathComponent().path
+            ]
+        )
 
-        if process.terminationStatus != 0 {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8) ?? "whisper-cli 运行失败。"
-            throw PipelineError.transcriptionFailed(message)
+        if result.status != 0 {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            throw PipelineError.transcriptionFailed(
+                result.failureMessage(default: "whisper-cli 运行失败。")
+            )
         }
 
         guard FileManager.default.fileExists(atPath: jsonURL.path) else {
@@ -347,6 +384,132 @@ struct WhisperCLIRunner {
         let raw = try JSONDecoder().decode(WhisperRawTranscript.self, from: data)
         return WhisperTranscript(raw: raw)
     }
+
+    func cancel() async {
+        await processRunner.cancel()
+    }
+}
+
+private struct LocalProcessResult: Sendable {
+    let status: Int32
+    let standardOutput: String
+    let standardError: String
+
+    func failureMessage(default fallback: String, limit: Int = 2_000) -> String {
+        let combined = [standardError, standardOutput]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !combined.isEmpty else { return fallback }
+        if combined.count <= limit { return combined }
+        return String(combined.prefix(limit)) + "\n（错误日志已截断）"
+    }
+}
+
+private final class ProcessBox: @unchecked Sendable {
+    let process: Process
+
+    init(_ process: Process) {
+        self.process = process
+    }
+}
+
+private actor LocalProcessRunner {
+    private var activeProcess: Process?
+
+    func run(
+        executableURL: URL,
+        arguments: [String],
+        environment: [String: String]?
+    ) async throws -> LocalProcessResult {
+        let runDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MeetingScribeProcess-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+
+        let stdoutURL = runDirectory.appendingPathComponent("stdout.log")
+        let stderrURL = runDirectory.appendingPathComponent("stderr.log")
+        FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
+        FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+
+        let process = Process()
+        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        defer {
+            process.terminationHandler = nil
+            activeProcess = nil
+            try? stdoutHandle.close()
+            try? stderrHandle.close()
+            try? FileManager.default.removeItem(at: runDirectory)
+        }
+
+        process.executableURL = executableURL
+        process.arguments = arguments
+        process.qualityOfService = .userInitiated
+        process.standardOutput = stdoutHandle
+        process.standardError = stderrHandle
+
+        var mergedEnvironment = ProcessInfo.processInfo.environment
+        if let environment {
+            for (key, value) in environment {
+                if key == "DYLD_LIBRARY_PATH",
+                   let existing = mergedEnvironment[key],
+                   !existing.isEmpty {
+                    mergedEnvironment[key] = "\(value):\(existing)"
+                } else {
+                    mergedEnvironment[key] = value
+                }
+            }
+        }
+        process.environment = mergedEnvironment
+
+        activeProcess = process
+        let processBox = ProcessBox(process)
+
+        let terminationStatus: Int32 = try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                process.terminationHandler = { terminatedProcess in
+                    continuation.resume(returning: terminatedProcess.terminationStatus)
+                }
+
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }, onCancel: {
+            processBox.process.terminate()
+        })
+
+        process.terminationHandler = nil
+        activeProcess = nil
+        try Task.checkCancellation()
+
+        let standardOutput = String(
+            decoding: (try? Data(contentsOf: stdoutURL)) ?? Data(),
+            as: UTF8.self
+        )
+        let standardError = String(
+            decoding: (try? Data(contentsOf: stderrURL)) ?? Data(),
+            as: UTF8.self
+        )
+
+        return LocalProcessResult(
+            status: terminationStatus,
+            standardOutput: standardOutput,
+            standardError: standardError
+        )
+    }
+
+    func cancel() {
+        activeProcess?.terminate()
+    }
 }
 
 struct WhisperTranscript {
@@ -356,18 +519,25 @@ struct WhisperTranscript {
 
     init(raw: WhisperRawTranscript) {
         self.raw = raw
-        self.segments = raw.transcription.map { segment in
+        self.segments = raw.transcription.compactMap { segment in
             let start = Double(segment.offsets.from) / 1000
             let end = Double(segment.offsets.to) / 1000
+            let text = segment.text.trimmedLines
+            guard !text.isEmpty, end >= start else { return nil }
+
             let tokenScores = segment.tokens.compactMap(\.p)
-            let confidence = tokenScores.isEmpty ? 0.5 : tokenScores.reduce(0, +) / Double(tokenScores.count)
+            let confidence = tokenScores.isEmpty
+                ? 0.5
+                : min(1, max(0, tokenScores.reduce(0, +) / Double(tokenScores.count)))
+
             return TranscriptSegment(
                 start: start,
                 end: end,
-                text: segment.text.trimmedLines,
+                text: text,
                 confidence: confidence
             )
         }
+        .sorted { $0.start < $1.start }
         self.text = segments.map(\.text).joined(separator: "\n")
     }
 }

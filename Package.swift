@@ -30,7 +30,10 @@ let package = Package(
                 "WindowConfiguration.swift",
                 "MeetingModels.swift",
                 "MeetingStore.swift",
-                "WhisperPipeline.swift"
+                "WhisperPipeline.swift",
+                "SummaryEngine.swift",
+                "KeychainStore.swift",
+                "AudioPlayback.swift"
             ]
         )
     ]
