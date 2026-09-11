@@ -93,17 +93,22 @@ final class MeetingStore: ObservableObject {
         }
     }
 
+    /// 选中的会话。这里**故意不过滤 status**：失败 / 中断的会话同样要能被选中，
+    /// 否则用户既看不到它、也点不进去、更点不到「重新处理」——
+    /// 等于把一段还在磁盘上的录音从界面上藏起来。
+    ///
+    /// 上一版这里 filter 掉 .failed，后果是 `workspaceSession` 永远只返回非 failed 会话，
+    /// 于是 `WorkbenchSessionWorkspace` 里的 `case .failed` 分支根本没有机会执行，
+    /// `WorkbenchFailureState`（以及全项目唯一一处 `retryProcessing` 调用）整块成了死代码；
+    /// 而 `reloadSessions()` 又会把「应用退出时未完成的录音」标成 failed 并写下
+    /// 「可以重新处理」的提示——那句话因此一直是空头支票。
     var selectedSession: MeetingSession? {
-        guard let selectedSessionID else { return visibleSessions.first }
-        return visibleSessions.first { $0.id == selectedSessionID }
+        guard let selectedSessionID else { return sessions.first }
+        return sessions.first { $0.id == selectedSessionID }
     }
 
     var workspaceSession: MeetingSession? {
-        selectedSession ?? visibleSessions.first
-    }
-
-    private var visibleSessions: [MeetingSession] {
-        sessions.filter { $0.status != .failed }
+        selectedSession ?? sessions.first
     }
 
     func reloadSessions() {
@@ -666,7 +671,7 @@ final class MeetingStore: ObservableObject {
             try storage.delete(session)
             sessions.removeAll { $0.id == session.id }
             if selectedSessionID == session.id {
-                selectedSessionID = visibleSessions.first?.id
+                selectedSessionID = sessions.first?.id
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -839,8 +844,8 @@ final class MeetingStore: ObservableObject {
 
     private func normalizeSelection() {
         guard let selectedSessionID,
-              visibleSessions.contains(where: { $0.id == selectedSessionID }) else {
-            selectedSessionID = visibleSessions.first?.id
+              sessions.contains(where: { $0.id == selectedSessionID }) else {
+            selectedSessionID = sessions.first?.id
             return
         }
     }

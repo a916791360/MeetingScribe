@@ -1,10 +1,12 @@
 import SwiftUI
 import AppKit
 
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut
- * chrome: Liquid Glass —— 只在「结果页控制条」这一处铺玻璃（macOS 26 glassEffect .regular，
- *         macOS 15 回退 ultraThinMaterial）。正文一律不叠玻璃：玻璃叠玻璃会糊成一片，
- *         而且玻璃得有背景内容才显质感，正文本身是纯纸面。
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut
+ * chrome: 原生分段控件 —— 结果页控制条不再铺液态玻璃。
+ *         玻璃的质感来自折射「背后有变化的内容」，而这条控制条背后是纯色纸面，
+ *         没有东西可折射，玻璃只剩一块发灰的底，比不做更脏（第五轮用户原话「不精致、没质感」）。
+ *         现在回到 macOS 原生的纪律：容器只包住真正需要边界的东西（三个 Tab），
+ *         右侧图标不要底板，质感交给排印、2pt 内衬和 1pt 发丝线。
  */
 
 enum AppTheme {
@@ -46,14 +48,17 @@ enum AppTheme {
     static let contentColumn: CGFloat = 920
     static let contentInset: CGFloat = 32
 
-    /// 结果页控制条：玻璃底托的高度与圆角。
-    /// 44 = 32（选中胶囊）+ 上下各 6pt 内衬，胶囊不会贴到玻璃边上。
-    static let stripHeight: CGFloat = 44
-    static let radiusBar: CGFloat = 14
-    /// 玻璃条里的图标命中区，比图标本身大一圈，才够好点。
+    /// 结果页控制条：一个**贴合内容宽度**的分段控件 + 一条发丝线。
+    /// 轨道比纸面深一档（paper 是 248,250,253），白色凸起段才立得起来；
+    /// 轨道若也用 paper，选中段和轨道会糊成一片，正是「看不出边界」的老毛病。
+    static let segmentTrack = Color(nsColor: NSColor(calibratedRed: 0.929, green: 0.941, blue: 0.965, alpha: 1))
+    /// 分段高度：轨道 2pt 内衬 + 28pt 凸起段 = 32pt，与 controlCompact 同高。
+    static let segmentHeight: CGFloat = 28
+    static let segmentRadius: CGFloat = 8
+    /// 控制条整行高度（发丝线收在它下面）。
+    static let segmentRowHeight: CGFloat = 46
+    /// 控制条里的图标命中区，比图标本身大一圈，才够好点。
     static let stripIconHit: CGFloat = 30
-    /// 玻璃条内衬：选中胶囊到玻璃边留 6pt，胶囊的圆角才不和玻璃的圆角打架。
-    static let stripInset: CGFloat = 6
 }
 
 extension View {
@@ -77,31 +82,5 @@ extension View {
                     .stroke(AppTheme.graphiteSoft.opacity(0.75), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    }
-
-    /// 液态玻璃底托（Liquid Glass）。
-    /// macOS 26 用系统材质 `.glassEffect(.regular, in:)`；macOS 15 没有这套 API，
-    /// 回退成 `.ultraThinMaterial` + 一道高光描边，观感尽量靠拢，不做假玻璃渐变。
-    ///
-    /// 注意：玻璃自带边缘高光与投影，**不要再叠第二道描边**，否则会出现「双层边」。
-    /// 只有回退分支才补描边，因为材质本身不画轮廓。
-    @ViewBuilder
-    func workbenchGlassBar(cornerRadius: CGFloat = AppTheme.radiusBar) -> some View {
-        if #available(macOS 26.0, *) {
-            self.glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-        } else {
-            self
-                .background(
-                    .ultraThinMaterial,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                )
-        }
     }
 }

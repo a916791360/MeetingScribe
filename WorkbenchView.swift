@@ -110,9 +110,9 @@ struct WorkbenchSidebarView: View {
                     .padding(.horizontal, AppTheme.space4)
                     .padding(.top, AppTheme.space4)
 
-                    if successfulSessions.isEmpty {
+                    if store.sessions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("还没有可查看的会议")
+                            Text("还没有会议记录")
                                 .font(.headline)
                                 .foregroundStyle(AppTheme.ink)
                             Text("开始录音或导入音频，结果会显示在这里。")
@@ -126,10 +126,12 @@ struct WorkbenchSidebarView: View {
                         WorkbenchSidebarSection(
                             title: "最近会议",
                             subtitle: "",
-                            count: successfulSessions.count
+                            count: store.sessions.count
                         ) {
                             VStack(spacing: 4) {
-                                ForEach(successfulSessions) { session in
+                                // 失败 / 中断的会话也留在列表里（原来被 filter 掉了）。
+                                // 它们的录音还在磁盘上，藏起来用户就既看不到、也没法重新处理。
+                                ForEach(store.sessions) { session in
                                     WorkbenchSessionRowView(
                                         session: session,
                                         isSelected: store.selectedSessionID == session.id
@@ -147,10 +149,6 @@ struct WorkbenchSidebarView: View {
         }
         .frame(minWidth: 274, idealWidth: 288, maxWidth: 330)
         .background(AppTheme.paper)
-    }
-
-    private var successfulSessions: [MeetingSession] {
-        store.sessions.filter { $0.status != .failed }
     }
 
 }
@@ -387,66 +385,78 @@ struct WorkbenchDetailView: View {
         return Text(meta)
     }
 
-    // 全局操作全部注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
+    // 全局操作注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
     // 三个动作按角色分层，而不是三个同样轻重的裸字形：
     //   次要 → 导入音频（.bordered 底盘）
-    //   主操作 → 开始录音 / 结束并转写 / 停止处理（.borderedProminent 实底，重色标注）
+    //   主操作 → 开始录音 / 结束并转写 / 停止处理 / 重新处理（.borderedProminent 实底）
     //   全局 → 设置（.bordered 方形图标钮，齿轮是通用符号，不给文字）
+    //
+    // 为什么没有会话时整条撤掉：空态正文里已经有一对很大的「开始录音 / 导入已有音频」，
+    // 标题栏再摆一遍同样的两个动作，同一屏就有四处入口在做两件事；而且此刻选中的
+    // 是"什么都没有"，工具栏却在喊"开始录音"，权重给错了对象。
+    // 设置是 app 级动作、不针对某场会议，跟着一起收走，改由 app 菜单的「设置…（⌘,）」
+    // 承担——那本来就是 macOS 上设置该在的地方。
     @ToolbarContentBuilder
     private var workbenchToolbar: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                store.importAudioPresented = true
-            } label: {
-                Label("导入音频", systemImage: "square.and.arrow.down")
+        if let session = store.workspaceSession {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    store.importAudioPresented = true
+                } label: {
+                    Label("导入音频", systemImage: "square.and.arrow.down")
+                }
+                .labelStyle(.titleAndIcon)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("导入一段已有音频")
+                .disabled(store.isRecording || store.isProcessing)
             }
-            .labelStyle(.titleAndIcon)
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .help("导入一段已有音频")
-            .disabled(store.isRecording || store.isProcessing)
-        }
 
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                toggleRecording()
-            } label: {
-                Label(primaryTitle, systemImage: primaryIcon)
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    performPrimaryAction(for: session)
+                } label: {
+                    Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
+                }
+                .labelStyle(.titleAndIcon)
+                // 实底 + 着色：占满一行里唯一的高权重，录制/处理中整体转为危险色。
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(primaryTint)
+                .help(primaryTitle(for: session))
             }
-            .labelStyle(.titleAndIcon)
-            // 实底 + 着色：占满一行里唯一的高权重，录制/处理中整体转为危险色。
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(primaryTint)
-            .help(primaryTitle)
-        }
 
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                store.showSettings = true
-            } label: {
-                Image(systemName: "gearshape")
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    store.showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("设置")
+                .accessibilityLabel("设置")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .help("设置")
-            .accessibilityLabel("设置")
-            .keyboardShortcut(",", modifiers: .command)
         }
     }
 
-    private var primaryTitle: String {
-        if store.isProcessing {
-            return "停止处理"
-        }
-        return store.isRecording ? "结束并转写" : "开始录音"
+    /// 一场会议在标题栏上只能有**一个**状态迁移动作，且必须和当前状态对得上：
+    /// 转写中 → 停止处理；录音中 → 结束并转写；失败 → 重新处理；其余 → 开始录音。
+    ///
+    /// 原来它只看 isRecording / isProcessing（都是全局开关，不看选中的是哪场会议），
+    /// 于是在一条**失败**的会议记录上，主按钮显示的是「开始录音」——
+    /// 用户正对着一条出错的记录，主按钮却在招呼他开一场新录音。
+    private func primaryTitle(for session: MeetingSession) -> String {
+        if store.isProcessing { return "停止处理" }
+        if store.isRecording { return "结束并转写" }
+        if session.status == .failed { return "重新处理" }
+        return "开始录音"
     }
 
-    private var primaryIcon: String {
-        if store.isProcessing {
-            return "stop.fill"
-        }
-        return store.isRecording ? "stop.fill" : "record.circle"
+    private func primaryIcon(for session: MeetingSession) -> String {
+        if store.isProcessing || store.isRecording { return "stop.fill" }
+        if session.status == .failed { return "arrow.clockwise" }
+        return "record.circle"
     }
 
     private var primaryTint: Color {
@@ -456,11 +466,13 @@ struct WorkbenchDetailView: View {
         return AppTheme.accent
     }
 
-    private func toggleRecording() {
+    private func performPrimaryAction(for session: MeetingSession) {
         if store.isProcessing {
             store.cancelProcessing()
         } else if store.isRecording {
             store.stopRecording()
+        } else if session.status == .failed {
+            store.retryProcessing(session)
         } else {
             store.startRecording()
         }
@@ -482,14 +494,13 @@ struct WorkbenchSessionWorkspace: View {
                     openFolderAction: store.openSelectedSessionFolder,
                     retryAction: { store.retryProcessing(session) }
                 )
-                .padding(24)
+                .padding(AppTheme.space6)
             case .processing, .recording:
-                WorkbenchProcessingState(
-                    session: session,
-                    cancelAction: store.cancelProcessing,
-                    openFolderAction: store.openSelectedSessionFolder
-                )
-                .padding(24)
+                // 卡片只负责说明"现在在干什么"，不再摆按钮：
+                // 状态迁移统一由标题栏那**一个**主按钮承担，一处唯一，
+                // 不会再出现「卡片里停止处理 / 导航上结束并转写」两个按钮打架的局面。
+                WorkbenchProcessingState(session: session)
+                .padding(AppTheme.space6)
             case .ready:
                 VStack(spacing: 0) {
                     // 原来这里有两行：会议头（元信息 + 两个图标按钮）、结果页 Tab。
@@ -545,14 +556,17 @@ struct WorkbenchSessionMeta: View {
     }
 }
 
-/// 结果页控制条：左边是文档 Tab，右边是页内动作，整条坐在一片液态玻璃底托上。
+/// 结果页控制条：左边是一个**贴合内容宽度**的分段控件（原文 / 速览 / 纪要），
+/// 右边是本场会议的两个页内动作，整行下面收一条发丝线。
 ///
-/// 为什么把两个图标从会议头挪进来：它们和 Tab 一样都是「针对这一场会议的动作」，
+/// 为什么不再铺液态玻璃：玻璃的质感来自折射「背后有变化的内容」。这条控制条背后是
+/// 纯色纸面，没有东西可折射，玻璃就只剩一块发灰的底——用户的原话是「不精致、没质感」。
+/// 现在的做法回到 macOS 原生的纪律：容器只包住真正需要边界的东西（三个 Tab，
+/// 而且是贴合内容而不是拉通栏），右侧两个图标干脆不要底板，
+/// 质感交给排印、2pt 内衬和 1pt 发丝线。
+///
+/// 为什么把两个图标和 Tab 放在同一行：它们和 Tab 一样都是「针对这一场会议的动作」，
 /// 分两行放既白占一整行高度，也让右上角飘着两个孤立的小方块。
-///
-/// 选中态为什么是内嵌实心胶囊，而不是原来的下划线：
-/// 1. 玻璃自带圆角和高光，在下沿画一条 3pt 直线会直接顶到玻璃的圆角上；
-/// 2. 玻璃上不叠第二层玻璃（会糊成一片），所以选中态靠**填充**区分，不靠再铺一层材质。
 struct WorkbenchResultTabBar: View {
     @Binding var selection: MeetingResultTab
     let isRefreshing: Bool
@@ -560,43 +574,65 @@ struct WorkbenchResultTabBar: View {
     let regenerateAction: () -> Void
 
     var body: some View {
-        HStack(spacing: AppTheme.space2) {
-            tabs
-            Spacer(minLength: AppTheme.space4)
-            pageActions
+        VStack(spacing: 0) {
+            HStack(spacing: AppTheme.space4) {
+                segmentedControl
+                Spacer(minLength: AppTheme.space4)
+                pageActions
+            }
+            .frame(height: AppTheme.segmentRowHeight)
+
+            // 发丝线把控制条和正文分开。它是这一行唯一的"边界"，
+            // 所以只有 1pt，且不参与任何圆角——一旦带圆角就又变成"容器"了。
+            Rectangle()
+                .fill(AppTheme.rule)
+                .frame(height: 1)
         }
-        .padding(.horizontal, AppTheme.stripInset)
-        .frame(height: AppTheme.stripHeight)
         .frame(maxWidth: AppTheme.contentColumn)
-        .workbenchGlassBar()
         .padding(.horizontal, AppTheme.contentInset)
         // 会议头撤掉后，这条就是正文顶部第一件东西，上方留一档气口即可。
         .padding(.top, AppTheme.space4)
-        .padding(.bottom, AppTheme.space2)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    private var tabs: some View {
-        HStack(spacing: AppTheme.space1) {
+    /// 分段控件：轨道只比三个 Tab 宽一点点（**不拉通栏**）。
+    /// 选中段靠「纸色填充 + 1pt 描边」立起来——三档并列时色块面积越大越吵，
+    /// 所以不用主色实底，只在字体粗细上再补一档。
+    private var segmentedControl: some View {
+        HStack(spacing: 2) {
             ForEach(MeetingResultTab.allCases) { tab in
                 Button {
                     selection = tab
                 } label: {
                     Text(tab.title)
-                        .font(.system(size: 13, weight: selection == tab ? .semibold : .medium))
-                        .foregroundStyle(selection == tab ? AppTheme.ink : AppTheme.muted)
-                        .padding(.horizontal, AppTheme.space3)
-                        .frame(height: AppTheme.controlCompact)
+                        .font(.system(size: 13, weight: isCurrent(tab) ? .semibold : .regular))
+                        .foregroundStyle(isCurrent(tab) ? AppTheme.ink : AppTheme.muted)
+                        .padding(.horizontal, AppTheme.space4)
+                        .frame(height: AppTheme.segmentHeight)
                         .background(
-                            selection == tab ? AppTheme.accentSoft : Color.clear,
-                            in: Capsule()
+                            isCurrent(tab) ? AppTheme.paper : Color.clear,
+                            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
                         )
-                        .contentShape(Capsule())
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
+                                .stroke(isCurrent(tab) ? AppTheme.rule : Color.clear, lineWidth: 1)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(selection == tab ? .isSelected : [])
+                .accessibilityAddTraits(isCurrent(tab) ? .isSelected : [])
             }
         }
+        .padding(2)
+        .background(
+            AppTheme.segmentTrack,
+            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius, style: .continuous)
+        )
+        .fixedSize()
+    }
+
+    private func isCurrent(_ tab: MeetingResultTab) -> Bool {
+        selection == tab
     }
 
     private var pageActions: some View {
@@ -1027,6 +1063,7 @@ struct WorkbenchAudioPlayerBar: View {
     private static let rateOptions: [Float] = [1, 1.25, 1.5, 2]
 
     @State private var isRateHovering = false
+    @State private var isRatePopoverPresented = false
 
     var body: some View {
         VStack(spacing: AppTheme.space2) {
@@ -1122,44 +1159,32 @@ struct WorkbenchAudioPlayerBar: View {
         }
     }
 
-    /// 倍速控件。这里踩过三个坑，一并记下来：
+    /// 倍速控件。走到现在这一步踩过四个坑，一并记下来：
     /// 1. `Menu` 不加 `.fixedSize()` 会吃掉横栏里的全部剩余宽度 →「1×」留在最左边、
-    ///    系统下拉箭头被推到最右边，也就是用户看到的「分开两地」。
-    /// 2. `.borderlessButton` 会把 label 自带的 background / overlay 丢掉，所以胶囊底
-    ///    必须画在 Menu 外层；同时它还会给 label 额外内缩约 4pt，**且只缩左边**——
-    ///    内边距加在 label 上时实测左 6pt / 右 12pt，文字贴着左边缘，
-    ///    正是用户说的「底色贴着倍速文字」。
-    /// 3. 于是改成 ZStack：可见的胶囊完全自绘，左右内边距严格对称；上面铺一层透明的
-    ///    Menu 只负责命中。外观与点击区互不干扰，也顺带让胶囊高度可控。
+    ///    系统下拉箭头被推到最右边，也就是「分开两地」。
+    /// 2. `.borderlessButton` 会丢掉 label 自带的 background / overlay，而且会给 label
+    ///    额外内缩约 4pt、**只缩左边**——实测左 6pt / 右 12pt，也就是「底色贴着倍速文字」。
+    /// 3. 改成「自绘胶囊 + 透明 Menu 命中层」后外观对了，但**不好点**：透明层用
+    ///    `Color.clear` + `maxWidth/maxHeight: .infinity` 铺在 ZStack 里，尺寸是由兄弟视图
+    ///    间接推出来的，命中区和看得见的胶囊并不严格重合，点边缘会落空，
+    ///    表现就是用户说的「有时候要点好几下才出来」。
+    /// 4. 现在换成最直白的一件东西：**一个真按钮**，它的 label 就是那颗胶囊，
+    ///    命中区 = 画出来的形状，不可能错位；点开是一个 popover 列表。
+    ///    顺带除掉了「hover 状态变化触发菜单重绘」这类隐患（按钮重绘没有副作用）。
     private var rateMenu: some View {
-        WorkbenchDisabledDim {
-            ZStack {
-                HStack(spacing: AppTheme.space1 + 1) {
-                    Text("\(player.playbackRate.cleanRateLabel)×")
-                        .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(AppTheme.ink)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                .padding(.horizontal, AppTheme.space3)   // 左右各 12pt，对称气口
-                .allowsHitTesting(false)
-
-                // 透明命中层：铺满整个胶囊，点哪儿都能开菜单。
-                Menu {
-                    // 用 Toggle 让当前倍速带上系统勾选，一眼看出选中的是哪一档。
-                    ForEach(Self.rateOptions, id: \.self) { rate in
-                        Toggle("\(rate.cleanRateLabel)×", isOn: rateBinding(for: rate))
-                    }
-                } label: {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
+        Button {
+            isRatePopoverPresented = true
+        } label: {
+            HStack(spacing: AppTheme.space1) {
+                Text("\(player.playbackRate.cleanRateLabel)×")
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.ink)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(AppTheme.muted)
             }
+            .padding(.horizontal, AppTheme.space3)   // 左右各 12pt，对称气口
             .frame(height: AppTheme.controlCompact)
             // paper 铺在 paperSoft 上对比度只有 1.02，等于一个看不出边界的脏底；
             // 悬停时整颗胶囊浮到 accentSoft，用来确认"这是一个可点的控件"。
@@ -1168,24 +1193,49 @@ struct WorkbenchAudioPlayerBar: View {
                 Capsule().stroke(isRateHovering ? AppTheme.ruleStrong : AppTheme.rule, lineWidth: 1)
             )
             .contentShape(Capsule())
-            .onHover { hovering in
-                guard player.isAvailable else { return }
-                isRateHovering = hovering
+        }
+        // `.plain` 不会像 `.borderlessButton` 那样剥掉 label 的底，也不会给 label 加内缩，
+        // 所以胶囊的外形和命中区是同一个矩形，点哪儿都算。
+        .buttonStyle(.plain)
+        .fixedSize()
+        .onHover { hovering in
+            guard player.isAvailable else { return }
+            isRateHovering = hovering
+        }
+        .popover(isPresented: $isRatePopoverPresented) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Self.rateOptions, id: \.self) { rate in
+                    Button {
+                        player.setRate(rate)
+                        isRatePopoverPresented = false
+                    } label: {
+                        HStack(spacing: AppTheme.space2) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .opacity(isCurrentRate(rate) ? 1 : 0)
+                            Text("\(rate.cleanRateLabel)×")
+                                .font(.system(size: 12, weight: .medium))
+                                .monospacedDigit()
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(AppTheme.ink)
+                        .padding(.horizontal, AppTheme.space2)
+                        .frame(height: 26)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(AppTheme.space1)
+            .frame(width: 118)
         }
         .disabled(!player.isAvailable)
         .help("播放速度")
         .accessibilityLabel("播放速度")
     }
 
-    /// 某一档是否就是当前倍速；点它即切换。
-    private func rateBinding(for rate: Float) -> Binding<Bool> {
-        Binding(
-            get: { abs(player.playbackRate - rate) < 0.001 },
-            set: { isOn in
-                if isOn { player.setRate(rate) }
-            }
-        )
+    private func isCurrentRate(_ rate: Float) -> Bool {
+        abs(player.playbackRate - rate) < 0.001
     }
 
     private var timeReadout: some View {
@@ -1209,15 +1259,10 @@ struct WorkbenchFailureState: View {
                 VStack(alignment: .leading, spacing: 10) {
                     WorkbenchDarkChip(text: session.status.title, systemImage: session.status.icon)
 
-                    Text(session.title)
-                        .font(.system(size: 30, weight: .semibold, design: .default))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
+                    // 会议名不在这里重复——窗口标题栏已经有它（第四轮已确立的规矩）。
                     Text(session.errorMessage ?? "录音未能启动。")
                         .font(.callout)
-                        .foregroundStyle(.white.opacity(0.82))
+                        .foregroundStyle(.white.opacity(0.86))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -1248,74 +1293,105 @@ struct WorkbenchFailureState: View {
     }
 }
 
+/// 录音 / 转写中的状态卡片。
+///
+/// 三处结构性修正：
+///
+/// 1. **卡片里不再放按钮。** 原来这里有个「停止处理」，但在录音阶段它调的是
+///    `cancelProcessing()`，而那个方法第一行就是 `guard isProcessing else { return }`——
+///    录音时 isProcessing 是 false，所以那颗按钮**点了完全没反应**，是颗死按钮。
+///    同一个界面里标题栏还挂着「结束并转写」，于是出现两个"停止"，一个有效一个无效，
+///    这正是「看不懂该点哪个」的来源。现在卡片回归只读，状态迁移只由标题栏
+///    **一个**主按钮承担。顺带「打开文件夹」也撤了：录音刚开始，去翻文件夹没有意义。
+///
+/// 2. **不再重复一遍会议名。** 它已经在窗口标题栏，这里再来一遍 30pt 大白字，
+///    就是第四轮刚消掉的那类重复。
+///
+/// 3. **录音阶段不再显示进度条。** 转写还没开始，`processingProgress` 恒为 0、
+///    `processingStartedAt` 为 nil，所以原来整个录音过程都停在「0% / 刚刚开始」，
+///    看着像卡死。现在录音阶段改走每秒一格的已用时长，进度条只在转写阶段出现。
 struct WorkbenchProcessingState: View {
     let session: MeetingSession
-    let cancelAction: () -> Void
-    let openFolderAction: () -> Void
+
+    private var isRecordingPhase: Bool { session.status == .recording }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 10) {
-                    WorkbenchDarkChip(text: "正在处理", systemImage: "waveform")
+        VStack(alignment: .leading, spacing: AppTheme.space5) {
+            HStack(alignment: .center, spacing: AppTheme.space3) {
+                WorkbenchDarkChip(
+                    text: isRecordingPhase ? "录音中" : "正在转写",
+                    systemImage: isRecordingPhase ? "record.circle.fill" : "waveform"
+                )
 
-                    Text(session.title)
-                        .font(.system(size: 30, weight: .semibold, design: .default))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: AppTheme.space3)
 
-                    Text(session.processingStage ?? "正在准备转写...")
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.82))
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 8) {
-                    Button {
-                        cancelAction()
-                    } label: {
-                        Label("停止处理", systemImage: "stop.fill")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-
-                    Button {
-                        openFolderAction()
-                    } label: {
-                        Label("打开文件夹", systemImage: "folder")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-                }
+                elapsedBadge
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(progressLabel)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Spacer(minLength: 12)
-                    Text(elapsedLabel)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.68))
-                        .monospacedDigit()
-                }
+            Text(stageText)
+                .font(.callout)
+                .foregroundStyle(.white.opacity(0.86))
+                .fixedSize(horizontal: false, vertical: true)
 
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                    .tint(.white)
-
-                Text("每段完成后会立即保存，应用重新打开后会从未完成的段继续。")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.68))
+            if !isRecordingPhase {
+                progressBox
             }
-            .padding(16)
-            .background(
-                Color.white.opacity(0.07),
-                in: RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
-            )
         }
         .workbenchDarkPanel()
+    }
+
+    private var stageText: String {
+        if isRecordingPhase {
+            return "正在同时录制系统声音和这台 Mac 的麦克风。结束后会自动转写，原始录音一直保存在本机。"
+        }
+        return session.processingStage ?? "正在准备转写..."
+    }
+
+    /// 已用时长每秒走一格。录音阶段的起点取 `createdAt`——草稿会话就是按下录音那一刻建的；
+    /// 转写阶段取 `processingStartedAt`。
+    private var elapsedBadge: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(elapsedText(now: context.date))
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.68))
+                .monospacedDigit()
+        }
+    }
+
+    private func elapsedText(now: Date) -> String {
+        let startedAt = isRecordingPhase ? session.createdAt : session.processingStartedAt
+        guard let startedAt else {
+            return "刚刚开始"
+        }
+        return "已用时 \(max(0, now.timeIntervalSince(startedAt)).clockLabel)"
+    }
+
+    private var progressBox: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space3) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(progressLabel)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Spacer(minLength: AppTheme.space3)
+                Text(elapsedText(now: Date()))
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.68))
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+                .tint(.white)
+
+            Text("每段完成后会立即保存，应用重新打开后会从未完成的段继续。")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.68))
+        }
+        .padding(AppTheme.space4)
+        .background(
+            Color.white.opacity(0.07),
+            in: RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
+        )
     }
 
     private var progress: Double {
@@ -1330,13 +1406,6 @@ struct WorkbenchProcessingState: View {
             return "\(percent)% · 第 \(min(completed + 1, total))/\(total) 段"
         }
         return "\(percent)%"
-    }
-
-    private var elapsedLabel: String {
-        guard let startedAt = session.processingStartedAt else {
-            return "刚刚开始"
-        }
-        return "已用时 \(max(0, Date().timeIntervalSince(startedAt)).clockLabel)"
     }
 }
 
