@@ -28,10 +28,16 @@ extension MeetingSession {
     /// 渲染不了自定义视图，所以那一行不能再摆 Label + SF Symbol。
     /// 反过来说，这刚好让「会议头」整块从正文里消失——
     /// 它原本占掉正文顶部一整行，只为了重复标题栏里已经有的信息。
-    var metaLine: String {
+    var metaLine: String { metaLine(includingStatus: true) }
+
+    /// `includingStatus: false` 专给「进行中」的副标题用。
+    ///
+    /// 那时副标题前面已经顶着 `statusText`（「正在录音」/「正在转写第 1/2 段 · 0%」），
+    /// 末尾再挂一个状态词（「录音中」/「转写中」）就是同一句话说两遍。
+    func metaLine(includingStatus: Bool) -> String {
         var parts = [createdAt.formatted(date: .numeric, time: .shortened)]
         if let duration { parts.append(duration.clockLabel) }
-        parts.append(status.title)
+        if includingStatus { parts.append(status.title) }
         if let model = analysis.summaryModel, !model.isEmpty { parts.append(model) }
         return parts.joined(separator: "  ·  ")
     }
@@ -378,11 +384,12 @@ struct WorkbenchDetailView: View {
         guard let session = store.workspaceSession else {
             return Text(store.statusText)
         }
-        let meta = session.metaLine
         if store.isRecording || store.isProcessing {
-            return Text("\(store.statusText)  ·  \(meta)")
+            // 进行中：`statusText` 本身已经说明了状态（「正在录音」/「正在转写第 1/2 段 · 0%」），
+            // 所以元信息里不再重复那个状态词，否则副标题末尾会再挂一个「转写中」。
+            return Text("\(store.statusText)  ·  \(session.metaLine(includingStatus: false))")
         }
-        return Text(meta)
+        return Text(session.metaLine)
     }
 
     // 全局操作注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
@@ -1310,6 +1317,8 @@ struct WorkbenchFailureState: View {
 /// 3. **录音阶段不再显示进度条。** 转写还没开始，`processingProgress` 恒为 0、
 ///    `processingStartedAt` 为 nil，所以原来整个录音过程都停在「0% / 刚刚开始」，
 ///    看着像卡死。现在录音阶段改走每秒一格的已用时长，进度条只在转写阶段出现。
+///
+/// 4. **进度区不再重复右上角的已用时长，也不再重复段号。** 详见 `progressBox` 的注释。
 struct WorkbenchProcessingState: View {
     let session: MeetingSession
 
@@ -1366,22 +1375,29 @@ struct WorkbenchProcessingState: View {
         return "已用时 \(max(0, now.timeIntervalSince(startedAt)).clockLabel)"
     }
 
+    /// 进度区：只剩「进度条 + 百分比」。
+    ///
+    /// 这里原来有两处重复，都去掉了：
+    ///
+    /// - **又写了一遍「已用时 XX:XX」。** 它和右上角那个是**同一个值**，
+    ///   但右上角走 `TimelineView` 每秒刷新，这个只是在 body 求值那一刻取了一次快照 ——
+    ///   于是它**只在进度发生变化时才动**，中间一直停着，看着像卡死。
+    ///   同一个数显示两遍、其中一个还是死的，纯属自找麻烦：时间只保留右上角那一个。
+    /// - **又写了一遍段号。** 上一行 `stageText` 已经写了「正在转写第 1/2 段」，
+    ///   这里再来一次「第 1/2 段」。段号归 `stageText`，这里只报百分比。
     private var progressBox: some View {
         VStack(alignment: .leading, spacing: AppTheme.space3) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(progressLabel)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Spacer(minLength: AppTheme.space3)
-                Text(elapsedText(now: Date()))
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.68))
-                    .monospacedDigit()
-            }
+            HStack(alignment: .center, spacing: AppTheme.space4) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(.white)
 
-            ProgressView(value: progress)
-                .progressViewStyle(.linear)
-                .tint(.white)
+                Text(percentText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.86))
+                    .monospacedDigit()
+                    .fixedSize()
+            }
 
             Text("每段完成后会立即保存，应用重新打开后会从未完成的段继续。")
                 .font(.caption)
@@ -1398,14 +1414,9 @@ struct WorkbenchProcessingState: View {
         max(0, min(1, session.processingProgress ?? 0))
     }
 
-    private var progressLabel: String {
-        let percent = Int((progress * 100).rounded())
-        if let completed = session.processingCompletedChunks,
-           let total = session.processingTotalChunks,
-           total > 0 {
-            return "\(percent)% · 第 \(min(completed + 1, total))/\(total) 段"
-        }
-        return "\(percent)%"
+    /// 单纯一个百分比。**段号不在这里**——它已经在上一行 `stageText` 里了。
+    private var percentText: String {
+        "\(Int((progress * 100).rounded()))%"
     }
 }
 
