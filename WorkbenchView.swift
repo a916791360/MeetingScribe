@@ -355,6 +355,10 @@ struct WorkbenchDetailView: View {
     }
 
     // 全局操作全部注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
+    // 三个动作按角色分层，而不是三个同样轻重的裸字形：
+    //   次要 → 导入音频（.bordered 底盘）
+    //   主操作 → 开始录音 / 结束并转写 / 停止处理（.borderedProminent 实底，重色标注）
+    //   全局 → 设置（.bordered 方形图标钮，齿轮是通用符号，不给文字）
     @ToolbarContentBuilder
     private var workbenchToolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -364,6 +368,8 @@ struct WorkbenchDetailView: View {
                 Label("导入音频", systemImage: "square.and.arrow.down")
             }
             .labelStyle(.titleAndIcon)
+            .buttonStyle(.bordered)
+            .controlSize(.large)
             .help("导入一段已有音频")
             .disabled(store.isRecording || store.isProcessing)
         }
@@ -372,14 +378,13 @@ struct WorkbenchDetailView: View {
             Button {
                 toggleRecording()
             } label: {
-                Label {
-                    Text(primaryTitle)
-                } icon: {
-                    Image(systemName: primaryIcon)
-                        .foregroundStyle(primaryTint)
-                }
+                Label(primaryTitle, systemImage: primaryIcon)
             }
             .labelStyle(.titleAndIcon)
+            // 实底 + 着色：占满一行里唯一的高权重，录制/处理中整体转为危险色。
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(primaryTint)
             .help(primaryTitle)
         }
 
@@ -387,8 +392,10 @@ struct WorkbenchDetailView: View {
             Button {
                 store.showSettings = true
             } label: {
-                Label("设置", systemImage: "gearshape")
+                Image(systemName: "gearshape")
             }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
             .help("设置")
             .accessibilityLabel("设置")
             .keyboardShortcut(",", modifiers: .command)
@@ -496,30 +503,24 @@ struct WorkbenchSessionHeader: View {
     let regenerateAction: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppTheme.space6) {
-            VStack(alignment: .leading, spacing: AppTheme.space3) {
-                Text(session.title)
-                    .font(.system(size: 28, weight: .semibold, design: .default))
-                    .foregroundStyle(AppTheme.ink)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // 无底色的小标签之间要留够气口，否则图标会贴到上一项的文字上。
-                HStack(spacing: AppTheme.space3) {
-                    WorkbenchSessionMeta(
-                        text: session.createdAt.formatted(date: .numeric, time: .shortened),
-                        systemImage: "calendar"
-                    )
-                    if let duration = session.duration {
-                        WorkbenchSessionMeta(text: duration.clockLabel, systemImage: "clock")
-                    }
-                    WorkbenchSessionMeta(
-                        text: session.status.title,
-                        systemImage: session.status.icon
-                    )
-                    if let summaryModel = session.analysis.summaryModel {
-                        WorkbenchSessionMeta(text: summaryModel, systemImage: "wand.and.stars")
-                    }
+        // 会议名由窗口标题栏（§一）唯一承担，正文不再重复一遍 28pt 大标题——
+        // 之前同屏出现「标题栏 + 正文大标题 + 侧栏列表行」三处同名，抬头只保留元信息。
+        HStack(alignment: .center, spacing: AppTheme.space4) {
+            // 无底色的小标签之间要留够气口，否则图标会贴到上一项的文字上。
+            HStack(spacing: AppTheme.space3) {
+                WorkbenchSessionMeta(
+                    text: session.createdAt.formatted(date: .numeric, time: .shortened),
+                    systemImage: "calendar"
+                )
+                if let duration = session.duration {
+                    WorkbenchSessionMeta(text: duration.clockLabel, systemImage: "clock")
+                }
+                WorkbenchSessionMeta(
+                    text: session.status.title,
+                    systemImage: session.status.icon
+                )
+                if let summaryModel = session.analysis.summaryModel {
+                    WorkbenchSessionMeta(text: summaryModel, systemImage: "wand.and.stars")
                 }
             }
 
@@ -555,8 +556,9 @@ struct WorkbenchSessionHeader: View {
         // 原来会议头贴面板左边 32pt、正文却居中，宽窗口下会差出 40pt 以上。
         .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
         .padding(.horizontal, AppTheme.contentInset)
-        .padding(.top, AppTheme.space6)
-        .padding(.bottom, AppTheme.space4)
+        // 大标题撤掉后不再需要为它留出气口，上下收一档，抬头更紧凑。
+        .padding(.top, AppTheme.space5)
+        .padding(.bottom, AppTheme.space3)
         .frame(maxWidth: .infinity, alignment: .center)
         .background(AppTheme.paper)
     }
@@ -568,7 +570,8 @@ struct WorkbenchSessionMeta: View {
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.caption)
+            // 抬头行现在由元信息独自承担，从 caption 提到 subheadline 才有抬头的分量。
+            .font(.subheadline)
             .foregroundStyle(AppTheme.muted)
             .lineLimit(1)
     }
@@ -1010,6 +1013,8 @@ struct WorkbenchAudioPlayerBar: View {
 
     private static let rateOptions: [Float] = [1, 1.25, 1.5, 2]
 
+    @State private var isRateHovering = false
+
     var body: some View {
         VStack(spacing: AppTheme.space2) {
             HStack(spacing: AppTheme.space3) {
@@ -1094,44 +1099,70 @@ struct WorkbenchAudioPlayerBar: View {
         }
     }
 
-    /// 倍速控件。这里踩过两个坑：
+    /// 倍速控件。这里踩过三个坑，一并记下来：
     /// 1. `Menu` 不加 `.fixedSize()` 会吃掉横栏里的全部剩余宽度 →「1×」留在最左边、
-    ///    系统下拉箭头被推到最右边，也就是用户看到的「分开两地」；
-    /// 2. `.borderlessButton` 会把 label 自带的 background / overlay 丢掉，
-    ///    所以胶囊底必须画在 Menu 外层，箭头也做成 Menu 的兄弟视图，才能保证它永远贴着数值。
+    ///    系统下拉箭头被推到最右边，也就是用户看到的「分开两地」。
+    /// 2. `.borderlessButton` 会把 label 自带的 background / overlay 丢掉，所以胶囊底
+    ///    必须画在 Menu 外层；同时它还会给 label 额外内缩约 4pt，**且只缩左边**——
+    ///    内边距加在 label 上时实测左 6pt / 右 12pt，文字贴着左边缘，
+    ///    正是用户说的「底色贴着倍速文字」。
+    /// 3. 于是改成 ZStack：可见的胶囊完全自绘，左右内边距严格对称；上面铺一层透明的
+    ///    Menu 只负责命中。外观与点击区互不干扰，也顺带让胶囊高度可控。
     private var rateMenu: some View {
-        HStack(spacing: AppTheme.space1 + 1) {
-            Menu {
-                ForEach(Self.rateOptions, id: \.self) { rate in
-                    Button("\(rate.cleanRateLabel)×") {
-                        player.setRate(rate)
-                    }
+        WorkbenchDisabledDim {
+            ZStack {
+                HStack(spacing: AppTheme.space1 + 1) {
+                    Text("\(player.playbackRate.cleanRateLabel)×")
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(AppTheme.ink)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(AppTheme.muted)
                 }
-            } label: {
-                Text("\(player.playbackRate.cleanRateLabel)×")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.ink)
-                    .monospacedDigit()
-                    .padding(.leading, 10)
-                    .frame(height: AppTheme.controlCompact)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-
-            Image(systemName: "chevron.down")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(AppTheme.muted)
-                .padding(.trailing, 10)
-                .frame(height: AppTheme.controlCompact)
+                .padding(.horizontal, AppTheme.space3)   // 左右各 12pt，对称气口
                 .allowsHitTesting(false)
+
+                // 透明命中层：铺满整个胶囊，点哪儿都能开菜单。
+                Menu {
+                    // 用 Toggle 让当前倍速带上系统勾选，一眼看出选中的是哪一档。
+                    ForEach(Self.rateOptions, id: \.self) { rate in
+                        Toggle("\(rate.cleanRateLabel)×", isOn: rateBinding(for: rate))
+                    }
+                } label: {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+            }
+            .frame(height: AppTheme.controlCompact)
+            // paper 铺在 paperSoft 上对比度只有 1.02，等于一个看不出边界的脏底；
+            // 悬停时整颗胶囊浮到 accentSoft，用来确认"这是一个可点的控件"。
+            .background(isRateHovering ? AppTheme.accentSoft : AppTheme.paper, in: Capsule())
+            .overlay(
+                Capsule().stroke(isRateHovering ? AppTheme.ruleStrong : AppTheme.rule, lineWidth: 1)
+            )
+            .contentShape(Capsule())
+            .onHover { hovering in
+                guard player.isAvailable else { return }
+                isRateHovering = hovering
+            }
         }
-        .background(AppTheme.paper, in: Capsule())
-        .overlay(Capsule().stroke(AppTheme.rule, lineWidth: 1))
-        .contentShape(Capsule())
         .disabled(!player.isAvailable)
         .help("播放速度")
         .accessibilityLabel("播放速度")
+    }
+
+    /// 某一档是否就是当前倍速；点它即切换。
+    private func rateBinding(for rate: Float) -> Binding<Bool> {
+        Binding(
+            get: { abs(player.playbackRate - rate) < 0.001 },
+            set: { isOn in
+                if isOn { player.setRate(rate) }
+            }
+        )
     }
 
     private var timeReadout: some View {
