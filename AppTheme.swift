@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut */
 
 enum AppTheme {
     static let paper = Color(nsColor: NSColor(calibratedRed: 0.972, green: 0.979, blue: 0.993, alpha: 1))
@@ -22,11 +22,25 @@ enum AppTheme {
     static let radius: CGFloat = 12
     static let radiusSmall: CGFloat = 10
     static let radiusTiny: CGFloat = 8
+
+    /// 4pt 间距刻度。新代码只从这几档里取值，
+    /// 不要再写 5 / 7 / 9 / 11 / 14 / 18 / 22 / 26 / 28 这类散值。
+    static let space1: CGFloat = 4
     static let space2: CGFloat = 8
     static let space3: CGFloat = 12
     static let space4: CGFloat = 16
     static let space5: CGFloat = 20
     static let space6: CGFloat = 24
+    static let space7: CGFloat = 32
+
+    /// 控件尺寸只留三档：紧凑图标按钮 / 常规图标按钮 / 强调圆形按钮。
+    static let controlCompact: CGFloat = 32
+    static let controlRegular: CGFloat = 34
+    static let controlEmphasis: CGFloat = 38
+
+    /// 会议头、结果页 Tab、正文文档共用同一条居中列，三者左边界必须齐平。
+    static let contentColumn: CGFloat = 920
+    static let contentInset: CGFloat = 32
 }
 
 extension View {

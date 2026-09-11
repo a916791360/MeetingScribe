@@ -463,10 +463,10 @@ struct WorkbenchSessionWorkspace: View {
 
                     ScrollView {
                         WorkbenchResultDocument(session: session, tab: selectedTab)
-                            .frame(maxWidth: 920, alignment: .leading)
-                            .padding(.horizontal, 32)
-                            .padding(.top, 10)
-                            .padding(.bottom, 28)
+                            .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+                            .padding(.horizontal, AppTheme.contentInset)
+                            .padding(.top, AppTheme.space3)
+                            .padding(.bottom, AppTheme.space6)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
 
@@ -496,15 +496,16 @@ struct WorkbenchSessionHeader: View {
     let regenerateAction: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 24) {
-            VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .top, spacing: AppTheme.space6) {
+            VStack(alignment: .leading, spacing: AppTheme.space3) {
                 Text(session.title)
                     .font(.system(size: 28, weight: .semibold, design: .default))
                     .foregroundStyle(AppTheme.ink)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 8) {
+                // 无底色的小标签之间要留够气口，否则图标会贴到上一项的文字上。
+                HStack(spacing: AppTheme.space3) {
                     WorkbenchSessionMeta(
                         text: session.createdAt.formatted(date: .numeric, time: .shortened),
                         systemImage: "calendar"
@@ -522,9 +523,9 @@ struct WorkbenchSessionHeader: View {
                 }
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: AppTheme.space3)
 
-            HStack(spacing: 8) {
+            HStack(spacing: AppTheme.space2) {
                 Button {
                     regenerateAction()
                 } label: {
@@ -550,9 +551,13 @@ struct WorkbenchSessionHeader: View {
                 .accessibilityLabel("打开录音文件夹")
             }
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 26)
-        .padding(.bottom, 20)
+        // 与下方结果页 Tab、正文文档共用同一条居中列，三者左边界必须齐平；
+        // 原来会议头贴面板左边 32pt、正文却居中，宽窗口下会差出 40pt 以上。
+        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+        .padding(.horizontal, AppTheme.contentInset)
+        .padding(.top, AppTheme.space6)
+        .padding(.bottom, AppTheme.space4)
+        .frame(maxWidth: .infinity, alignment: .center)
         .background(AppTheme.paper)
     }
 }
@@ -573,21 +578,24 @@ struct WorkbenchResultTabBar: View {
     @Binding var selection: MeetingResultTab
 
     var body: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: AppTheme.space6) {
             ForEach(MeetingResultTab.allCases) { tab in
                 Button {
                     selection = tab
                 } label: {
-                    VStack(spacing: 10) {
-                        Text(tab.title)
-                            .font(.system(size: 16, weight: .semibold))
+                    // 下划线跟随文字宽度，文字左边界才能和会议头、正文严格对齐。
+                    // 原来把文字居中放进固定 48pt 的框里，整条 Tab 会右移 8pt，
+                    // 实测「原文」落在 370.5pt，而大标题落在 362pt。
+                    Text(tab.title)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(selection == tab ? AppTheme.ink : AppTheme.muted)
-
-                        Rectangle()
-                            .fill(selection == tab ? AppTheme.ink : Color.clear)
-                            .frame(width: 48, height: 3)
-                    }
-                    .frame(minWidth: 48)
+                        .padding(.vertical, AppTheme.space2)
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(selection == tab ? AppTheme.ink : Color.clear)
+                                .frame(height: 3)
+                        }
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
@@ -595,10 +603,10 @@ struct WorkbenchResultTabBar: View {
 
             Spacer(minLength: 0)
         }
-        // 与下方正文列（maxWidth 920 + 左右 32）左对齐，不再顶着整条分隔线单独成栏。
-        .frame(maxWidth: 920, alignment: .leading)
-        .padding(.horizontal, 32)
-        .padding(.bottom, 16)
+        // 与上方会议头、下方正文共用同一条居中列，左边界严格对齐。
+        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+        .padding(.horizontal, AppTheme.contentInset)
+        .padding(.bottom, AppTheme.space2)
         .frame(maxWidth: .infinity, alignment: .center)
         .background(AppTheme.paper)
     }
@@ -1000,63 +1008,26 @@ struct WorkbenchAudioPlayerBar: View {
     @ObservedObject var player: MeetingAudioPlayer
     let audioURL: URL?
 
+    private static let rateOptions: [Float] = [1, 1.25, 1.5, 2]
+
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 18) {
-                Button {
-                    player.skip(by: -15)
-                } label: {
-                    Image(systemName: "gobackward.15")
+        VStack(spacing: AppTheme.space2) {
+            HStack(spacing: AppTheme.space3) {
+                transportGroup
+
+                if !player.isAvailable {
+                    Text("暂无可播放音频")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(1)
                 }
-                .buttonStyle(WorkbenchPlayerIconButtonStyle())
-                .help("后退 15 秒")
-                .disabled(!player.isAvailable)
 
-                Button {
-                    player.togglePlayback()
-                } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                Spacer(minLength: AppTheme.space4)
+
+                HStack(spacing: AppTheme.space3) {
+                    rateMenu
+                    timeReadout
                 }
-                .buttonStyle(WorkbenchPlayerIconButtonStyle(emphasized: true))
-                .help(player.isPlaying ? "暂停" : "播放")
-                .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
-                .disabled(!player.isAvailable)
-
-                Button {
-                    player.skip(by: 15)
-                } label: {
-                    Image(systemName: "goforward.15")
-                }
-                .buttonStyle(WorkbenchPlayerIconButtonStyle())
-                .help("前进 15 秒")
-                .disabled(!player.isAvailable)
-
-                Text(player.isAvailable ? "录音" : "暂无可播放音频")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
-
-                Spacer(minLength: 12)
-
-                Menu {
-                    ForEach([Float(1), Float(1.25), Float(1.5), Float(2)], id: \.self) { rate in
-                        Button("\(rate.cleanRateLabel)×") {
-                            player.setRate(rate)
-                        }
-                    }
-                } label: {
-                    Text("\(player.playbackRate.cleanRateLabel)×")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.ink)
-                }
-                .menuStyle(.borderlessButton)
-                .disabled(!player.isAvailable)
-                .help("播放速度")
-
-                Text("\(player.currentTime.clockLabel) / \(player.duration.clockLabel)")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
             }
 
             Slider(
@@ -1070,9 +1041,9 @@ struct WorkbenchAudioPlayerBar: View {
             .disabled(!player.isAvailable)
             .accessibilityLabel("录音进度")
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
+        .padding(.horizontal, AppTheme.contentInset)
+        .padding(.top, AppTheme.space3)
+        .padding(.bottom, AppTheme.space4)
         .background(AppTheme.paperSoft)
         .overlay(alignment: .top) {
             Divider()
@@ -1084,6 +1055,92 @@ struct WorkbenchAudioPlayerBar: View {
         .onChange(of: audioURL) { _, newValue in
             player.load(url: newValue)
         }
+    }
+
+    /// 后退 / 播放 / 前进 属于同一个功能组，用 8pt 抱在一起。
+    /// 原来 18pt 的间距把三个按钮摊成三块，反而看不出它们是一组。
+    private var transportGroup: some View {
+        HStack(spacing: AppTheme.space2) {
+            Button {
+                player.skip(by: -15)
+            } label: {
+                Image(systemName: "gobackward.15")
+            }
+            .buttonStyle(WorkbenchPlayerIconButtonStyle())
+            .help("后退 15 秒")
+            .accessibilityLabel("后退 15 秒")
+            .disabled(!player.isAvailable)
+
+            Button {
+                player.togglePlayback()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .buttonStyle(WorkbenchPlayerIconButtonStyle(emphasized: true))
+            .help(player.isPlaying ? "暂停" : "播放")
+            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+            .disabled(!player.isAvailable)
+
+            Button {
+                player.skip(by: 15)
+            } label: {
+                Image(systemName: "goforward.15")
+            }
+            .buttonStyle(WorkbenchPlayerIconButtonStyle())
+            .help("前进 15 秒")
+            .accessibilityLabel("前进 15 秒")
+            .disabled(!player.isAvailable)
+        }
+    }
+
+    /// 倍速控件。这里踩过两个坑：
+    /// 1. `Menu` 不加 `.fixedSize()` 会吃掉横栏里的全部剩余宽度 →「1×」留在最左边、
+    ///    系统下拉箭头被推到最右边，也就是用户看到的「分开两地」；
+    /// 2. `.borderlessButton` 会把 label 自带的 background / overlay 丢掉，
+    ///    所以胶囊底必须画在 Menu 外层，箭头也做成 Menu 的兄弟视图，才能保证它永远贴着数值。
+    private var rateMenu: some View {
+        HStack(spacing: AppTheme.space1 + 1) {
+            Menu {
+                ForEach(Self.rateOptions, id: \.self) { rate in
+                    Button("\(rate.cleanRateLabel)×") {
+                        player.setRate(rate)
+                    }
+                }
+            } label: {
+                Text("\(player.playbackRate.cleanRateLabel)×")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .monospacedDigit()
+                    .padding(.leading, 10)
+                    .frame(height: AppTheme.controlCompact)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(AppTheme.muted)
+                .padding(.trailing, 10)
+                .frame(height: AppTheme.controlCompact)
+                .allowsHitTesting(false)
+        }
+        .background(AppTheme.paper, in: Capsule())
+        .overlay(Capsule().stroke(AppTheme.rule, lineWidth: 1))
+        .contentShape(Capsule())
+        .disabled(!player.isAvailable)
+        .help("播放速度")
+        .accessibilityLabel("播放速度")
+    }
+
+    private var timeReadout: some View {
+        Text("\(player.currentTime.clockLabel) / \(player.duration.clockLabel)")
+            .font(.caption)
+            .foregroundStyle(AppTheme.muted)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
@@ -2333,22 +2390,39 @@ struct WorkbenchMetaText: View {
     }
 }
 
+/// 自定义 ButtonStyle 不会自动响应 `.disabled()`，这里统一读环境开关降透明度，
+/// 保证「没有音频可播 / 正在重新整理」这类不可用状态看得出来。
+struct WorkbenchDisabledDim<Content: View>: View {
+    @Environment(\.isEnabled) private var isEnabled
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content.opacity(isEnabled ? 1 : 0.35)
+    }
+}
+
 struct WorkbenchToolbarIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(AppTheme.ink)
-            .frame(width: 34, height: 34)
-            .background(
-                configuration.isPressed ? AppTheme.rule : AppTheme.paperSoft,
-                in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                    .stroke(AppTheme.rule, lineWidth: 1)
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
+        WorkbenchDisabledDim {
+            configuration.label
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(AppTheme.ink)
+                .frame(width: AppTheme.controlRegular, height: AppTheme.controlRegular)
+                .background(
+                    configuration.isPressed ? AppTheme.rule : AppTheme.paperSoft,
+                    in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                        .stroke(AppTheme.rule, lineWidth: 1)
+                )
+                .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                .opacity(configuration.isPressed ? 0.88 : 1)
+        }
     }
 }
 
@@ -2356,20 +2430,25 @@ struct WorkbenchPlayerIconButtonStyle: ButtonStyle {
     var emphasized: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(emphasized ? .white : AppTheme.ink)
-            .frame(width: emphasized ? 38 : 32, height: emphasized ? 38 : 32)
-            .background(
-                emphasized ? AppTheme.ink : AppTheme.paper,
-                in: Circle()
-            )
-            .overlay(
-                Circle()
-                    .stroke(emphasized ? AppTheme.ink : AppTheme.rule, lineWidth: 1)
-            )
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
+        WorkbenchDisabledDim {
+            configuration.label
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(emphasized ? .white : AppTheme.ink)
+                .frame(
+                    width: emphasized ? AppTheme.controlEmphasis : AppTheme.controlCompact,
+                    height: emphasized ? AppTheme.controlEmphasis : AppTheme.controlCompact
+                )
+                .background(
+                    emphasized ? AppTheme.ink : AppTheme.paper,
+                    in: Circle()
+                )
+                .overlay(
+                    Circle()
+                        .stroke(emphasized ? AppTheme.ink : AppTheme.rule, lineWidth: 1)
+                )
+                .scaleEffect(configuration.isPressed ? 0.95 : 1)
+                .opacity(configuration.isPressed ? 0.88 : 1)
+        }
     }
 }
 
@@ -2418,18 +2497,20 @@ struct WorkbenchLightButtonStyle: ButtonStyle {
     var emphasized: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(emphasized ? .white : AppTheme.ink)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(emphasized ? AppTheme.accent : AppTheme.paperSoft)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                    .stroke(emphasized ? AppTheme.accent : AppTheme.rule, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
-            .opacity(configuration.isPressed ? 0.88 : 1)
+        WorkbenchDisabledDim {
+            configuration.label
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(emphasized ? .white : AppTheme.ink)
+                .padding(.horizontal, AppTheme.space3)
+                .padding(.vertical, 10)
+                .background(emphasized ? AppTheme.accent : AppTheme.paperSoft)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                        .stroke(emphasized ? AppTheme.accent : AppTheme.rule, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+                .opacity(configuration.isPressed ? 0.88 : 1)
+        }
     }
 }
 
@@ -2437,18 +2518,20 @@ struct WorkbenchDarkButtonStyle: ButtonStyle {
     var emphasized: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(emphasized ? .white : .white.opacity(0.90))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(emphasized ? AppTheme.accent : Color.white.opacity(0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                    .stroke(emphasized ? AppTheme.accent : Color.white.opacity(0.12), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
-            .opacity(configuration.isPressed ? 0.88 : 1)
+        WorkbenchDisabledDim {
+            configuration.label
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(emphasized ? .white : .white.opacity(0.90))
+                .padding(.horizontal, AppTheme.space3)
+                .padding(.vertical, 10)
+                .background(emphasized ? AppTheme.accent : Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                        .stroke(emphasized ? AppTheme.accent : Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+                .opacity(configuration.isPressed ? 0.88 : 1)
+        }
     }
 }
 
