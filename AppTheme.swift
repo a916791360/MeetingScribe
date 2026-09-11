@@ -1,7 +1,11 @@
 import SwiftUI
 import AppKit
 
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut
+ * chrome: Liquid Glass —— 只在「结果页控制条」这一处铺玻璃（macOS 26 glassEffect .regular，
+ *         macOS 15 回退 ultraThinMaterial）。正文一律不叠玻璃：玻璃叠玻璃会糊成一片，
+ *         而且玻璃得有背景内容才显质感，正文本身是纯纸面。
+ */
 
 enum AppTheme {
     static let paper = Color(nsColor: NSColor(calibratedRed: 0.972, green: 0.979, blue: 0.993, alpha: 1))
@@ -41,6 +45,15 @@ enum AppTheme {
     /// 会议头、结果页 Tab、正文文档共用同一条居中列，三者左边界必须齐平。
     static let contentColumn: CGFloat = 920
     static let contentInset: CGFloat = 32
+
+    /// 结果页控制条：玻璃底托的高度与圆角。
+    /// 44 = 32（选中胶囊）+ 上下各 6pt 内衬，胶囊不会贴到玻璃边上。
+    static let stripHeight: CGFloat = 44
+    static let radiusBar: CGFloat = 14
+    /// 玻璃条里的图标命中区，比图标本身大一圈，才够好点。
+    static let stripIconHit: CGFloat = 30
+    /// 玻璃条内衬：选中胶囊到玻璃边留 6pt，胶囊的圆角才不和玻璃的圆角打架。
+    static let stripInset: CGFloat = 6
 }
 
 extension View {
@@ -64,5 +77,31 @@ extension View {
                     .stroke(AppTheme.graphiteSoft.opacity(0.75), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    /// 液态玻璃底托（Liquid Glass）。
+    /// macOS 26 用系统材质 `.glassEffect(.regular, in:)`；macOS 15 没有这套 API，
+    /// 回退成 `.ultraThinMaterial` + 一道高光描边，观感尽量靠拢，不做假玻璃渐变。
+    ///
+    /// 注意：玻璃自带边缘高光与投影，**不要再叠第二道描边**，否则会出现「双层边」。
+    /// 只有回退分支才补描边，因为材质本身不画轮廓。
+    @ViewBuilder
+    func workbenchGlassBar(cornerRadius: CGFloat = AppTheme.radiusBar) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            self
+                .background(
+                    .ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                )
+        }
     }
 }

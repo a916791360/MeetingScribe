@@ -21,6 +21,22 @@ enum MeetingResultTab: String, CaseIterable, Identifiable {
 
 }
 
+extension MeetingSession {
+    /// 会议元信息压成一行**纯文本**。
+    ///
+    /// 为什么是纯文本：窗口副标题（`navigationSubtitle`）只吃 `Text`，
+    /// 渲染不了自定义视图，所以那一行不能再摆 Label + SF Symbol。
+    /// 反过来说，这刚好让「会议头」整块从正文里消失——
+    /// 它原本占掉正文顶部一整行，只为了重复标题栏里已经有的信息。
+    var metaLine: String {
+        var parts = [createdAt.formatted(date: .numeric, time: .shortened)]
+        if let duration { parts.append(duration.clockLabel) }
+        parts.append(status.title)
+        if let model = analysis.summaryModel, !model.isEmpty { parts.append(model) }
+        return parts.joined(separator: "  ·  ")
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var store: MeetingStore
 
@@ -350,8 +366,25 @@ struct WorkbenchDetailView: View {
         }
         .background(AppTheme.paper)
         .navigationTitle(store.workspaceSession?.title ?? "会议")
-        .navigationSubtitle(store.statusText)
+        .navigationSubtitle(navigationSubtitleText)
         .toolbar { workbenchToolbar }
+    }
+
+    /// 副标题原来只放一句「准备就绪」，一整条宽度只承载四个字，信息密度太低。
+    /// 现在由会议元信息接管（日期 · 时长 · 状态 · 整理模型），也就是原来正文顶部那一行，
+    /// 所以正文少了一整行、标题栏的副标题位才真正被用起来。
+    ///
+    /// 录音 / 转写 / 整理进行中时把实时状态顶到最前——这时候进度比元信息更该被看见；
+    /// 终态（已完成 / 失败）本来就写在元信息里，不会丢。
+    private var navigationSubtitleText: Text {
+        guard let session = store.workspaceSession else {
+            return Text(store.statusText)
+        }
+        let meta = session.metaLine
+        if store.isRecording || store.isProcessing {
+            return Text("\(store.statusText)  ·  \(meta)")
+        }
+        return Text(meta)
     }
 
     // 全局操作全部注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
@@ -459,14 +492,15 @@ struct WorkbenchSessionWorkspace: View {
                 .padding(24)
             case .ready:
                 VStack(spacing: 0) {
-                    WorkbenchSessionHeader(
-                        session: session,
+                    // 原来这里有两行：会议头（元信息 + 两个图标按钮）、结果页 Tab。
+                    // 现在元信息上移到窗口副标题，两个图标并进 Tab 同一行，
+                    // 整条包在一片液态玻璃底托里，正文少了一整行、多了一件有体积的控制件。
+                    WorkbenchResultTabBar(
+                        selection: $selectedTab,
                         isRefreshing: store.isProcessing,
                         openFolderAction: store.openSelectedSessionFolder,
                         regenerateAction: { store.regenerateSummary(for: session) }
                     )
-
-                    WorkbenchResultTabBar(selection: $selectedTab)
 
                     ScrollView {
                         WorkbenchResultDocument(session: session, tab: selectedTab)
@@ -496,122 +530,101 @@ struct WorkbenchSessionWorkspace: View {
 
 }
 
-struct WorkbenchSessionHeader: View {
-    let session: MeetingSession
-    let isRefreshing: Bool
-    let openFolderAction: () -> Void
-    let regenerateAction: () -> Void
-
-    var body: some View {
-        // 会议名由窗口标题栏（§一）唯一承担，正文不再重复一遍 28pt 大标题——
-        // 之前同屏出现「标题栏 + 正文大标题 + 侧栏列表行」三处同名，抬头只保留元信息。
-        HStack(alignment: .center, spacing: AppTheme.space4) {
-            // 无底色的小标签之间要留够气口，否则图标会贴到上一项的文字上。
-            HStack(spacing: AppTheme.space3) {
-                WorkbenchSessionMeta(
-                    text: session.createdAt.formatted(date: .numeric, time: .shortened),
-                    systemImage: "calendar"
-                )
-                if let duration = session.duration {
-                    WorkbenchSessionMeta(text: duration.clockLabel, systemImage: "clock")
-                }
-                WorkbenchSessionMeta(
-                    text: session.status.title,
-                    systemImage: session.status.icon
-                )
-                if let summaryModel = session.analysis.summaryModel {
-                    WorkbenchSessionMeta(text: summaryModel, systemImage: "wand.and.stars")
-                }
-            }
-
-            Spacer(minLength: AppTheme.space3)
-
-            HStack(spacing: AppTheme.space2) {
-                Button {
-                    regenerateAction()
-                } label: {
-                    if isRefreshing {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .buttonStyle(WorkbenchToolbarIconButtonStyle())
-                .help("重新整理纪要")
-                .accessibilityLabel("重新整理纪要")
-                .disabled(isRefreshing)
-
-                Button {
-                    openFolderAction()
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .buttonStyle(WorkbenchToolbarIconButtonStyle())
-                .help("打开录音文件夹")
-                .accessibilityLabel("打开录音文件夹")
-            }
-        }
-        // 与下方结果页 Tab、正文文档共用同一条居中列，三者左边界必须齐平；
-        // 原来会议头贴面板左边 32pt、正文却居中，宽窗口下会差出 40pt 以上。
-        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
-        .padding(.horizontal, AppTheme.contentInset)
-        // 大标题撤掉后不再需要为它留出气口，上下收一档，抬头更紧凑。
-        .padding(.top, AppTheme.space5)
-        .padding(.bottom, AppTheme.space3)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .background(AppTheme.paper)
-    }
-}
-
+/// 会议元信息的一「格」：图标 + 文字。
+/// 正文文档里（行动项截止日、逐字稿时间戳）还在用它，所以保留；
+/// 会议头那一行已经上移到窗口副标题，不再走这个视图。
 struct WorkbenchSessionMeta: View {
     let text: String
     let systemImage: String
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            // 抬头行现在由元信息独自承担，从 caption 提到 subheadline 才有抬头的分量。
-            .font(.subheadline)
+            .font(.caption)
             .foregroundStyle(AppTheme.muted)
             .lineLimit(1)
     }
 }
 
+/// 结果页控制条：左边是文档 Tab，右边是页内动作，整条坐在一片液态玻璃底托上。
+///
+/// 为什么把两个图标从会议头挪进来：它们和 Tab 一样都是「针对这一场会议的动作」，
+/// 分两行放既白占一整行高度，也让右上角飘着两个孤立的小方块。
+///
+/// 选中态为什么是内嵌实心胶囊，而不是原来的下划线：
+/// 1. 玻璃自带圆角和高光，在下沿画一条 3pt 直线会直接顶到玻璃的圆角上；
+/// 2. 玻璃上不叠第二层玻璃（会糊成一片），所以选中态靠**填充**区分，不靠再铺一层材质。
 struct WorkbenchResultTabBar: View {
     @Binding var selection: MeetingResultTab
+    let isRefreshing: Bool
+    let openFolderAction: () -> Void
+    let regenerateAction: () -> Void
 
     var body: some View {
-        HStack(spacing: AppTheme.space6) {
+        HStack(spacing: AppTheme.space2) {
+            tabs
+            Spacer(minLength: AppTheme.space4)
+            pageActions
+        }
+        .padding(.horizontal, AppTheme.stripInset)
+        .frame(height: AppTheme.stripHeight)
+        .frame(maxWidth: AppTheme.contentColumn)
+        .workbenchGlassBar()
+        .padding(.horizontal, AppTheme.contentInset)
+        // 会议头撤掉后，这条就是正文顶部第一件东西，上方留一档气口即可。
+        .padding(.top, AppTheme.space4)
+        .padding(.bottom, AppTheme.space2)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: AppTheme.space1) {
             ForEach(MeetingResultTab.allCases) { tab in
                 Button {
                     selection = tab
                 } label: {
-                    // 下划线跟随文字宽度，文字左边界才能和会议头、正文严格对齐。
-                    // 原来把文字居中放进固定 48pt 的框里，整条 Tab 会右移 8pt，
-                    // 实测「原文」落在 370.5pt，而大标题落在 362pt。
                     Text(tab.title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 13, weight: selection == tab ? .semibold : .medium))
                         .foregroundStyle(selection == tab ? AppTheme.ink : AppTheme.muted)
-                        .padding(.vertical, AppTheme.space2)
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(selection == tab ? AppTheme.ink : Color.clear)
-                                .frame(height: 3)
-                        }
-                        .contentShape(Rectangle())
+                        .padding(.horizontal, AppTheme.space3)
+                        .frame(height: AppTheme.controlCompact)
+                        .background(
+                            selection == tab ? AppTheme.accentSoft : Color.clear,
+                            in: Capsule()
+                        )
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
-
-            Spacer(minLength: 0)
         }
-        // 与上方会议头、下方正文共用同一条居中列，左边界严格对齐。
-        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
-        .padding(.horizontal, AppTheme.contentInset)
-        .padding(.bottom, AppTheme.space2)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .background(AppTheme.paper)
+    }
+
+    private var pageActions: some View {
+        HStack(spacing: AppTheme.space1) {
+            Button {
+                regenerateAction()
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
+            }
+            .buttonStyle(WorkbenchStripIconButtonStyle())
+            .help("重新整理纪要")
+            .accessibilityLabel("重新整理纪要")
+            .disabled(isRefreshing)
+
+            Button {
+                openFolderAction()
+            } label: {
+                Image(systemName: "folder")
+            }
+            .buttonStyle(WorkbenchStripIconButtonStyle())
+            .help("打开录音文件夹")
+            .accessibilityLabel("打开录音文件夹")
+        }
     }
 }
 
@@ -1017,22 +1030,32 @@ struct WorkbenchAudioPlayerBar: View {
 
     var body: some View {
         VStack(spacing: AppTheme.space2) {
-            HStack(spacing: AppTheme.space3) {
+            // 左 / 中 / 右三区叠放：中区的传输键因此落在**整条播放器的水平中点**，
+            // 而不是「跟着左边界排」。原来它贴在左侧、右半条全空，播放器看着像没做完。
+            // 左右两区各自只占需要的宽度，不参与中区定位，所以中区永远是真居中。
+            ZStack {
+                // 左区：只在没有音频时占位，用来交代「为什么按钮是灰的」。
+                HStack(spacing: AppTheme.space2) {
+                    if !player.isAvailable {
+                        Text("暂无可播放音频")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+
+                // 中区：后退 15 / 播放暂停 / 前进 15
                 transportGroup
 
-                if !player.isAvailable {
-                    Text("暂无可播放音频")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.muted)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: AppTheme.space4)
-
+                // 右区：倍速 + 时间
                 HStack(spacing: AppTheme.space3) {
+                    Spacer(minLength: 0)
                     rateMenu
                     timeReadout
                 }
+                .frame(maxWidth: .infinity)
             }
 
             Slider(
@@ -2454,6 +2477,38 @@ struct WorkbenchToolbarIconButtonStyle: ButtonStyle {
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
                 .opacity(configuration.isPressed ? 0.88 : 1)
         }
+    }
+}
+
+/// 玻璃条里的图标按钮：**不自绘底盘**。
+/// 玻璃条本身已经是一件有体积的容器，再给里面的每个图标各套一个方底，
+/// 就成了「按钮里套按钮」——右上角那两颗孤立小方块的毛病会在新容器里复发。
+/// 所以这里只留字形，悬停 / 按下时才浮出一层很浅的圆底，也就是 macOS 工具栏的惯用做法。
+struct WorkbenchStripIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        WorkbenchDisabledDim {
+            WorkbenchStripGlyph(configuration: configuration)
+        }
+    }
+}
+
+private struct WorkbenchStripGlyph: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var isHovering = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(isHovering || configuration.isPressed ? AppTheme.ink : AppTheme.muted)
+            .frame(width: AppTheme.stripIconHit, height: AppTheme.stripIconHit)
+            .background(hoverSurface, in: Circle())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .contentShape(Circle())
+            .onHover { isHovering = $0 }
+    }
+
+    private var hoverSurface: Color {
+        (isHovering || configuration.isPressed) ? AppTheme.rule.opacity(0.55) : .clear
     }
 }
 
