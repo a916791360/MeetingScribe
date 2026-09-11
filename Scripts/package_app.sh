@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-release}"
 APP_NAME="MeetingScribe"
 APP_DIR="${APP_DIR:-$ROOT_DIR/.build/$APP_NAME.app}"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 ASSET_OUTPUT="$(mktemp -d /private/tmp/meetingscribe-assets.XXXXXX)"
 WHISPER_ROOT="${WHISPER_ROOT:-$HOME/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp}"
 WHISPER_BIN_DIR="$WHISPER_ROOT/build/bin"
@@ -60,6 +61,7 @@ else
         "$ROOT_DIR/MeetingStore.swift" \
         "$ROOT_DIR/WhisperPipeline.swift" \
         "$ROOT_DIR/SummaryEngine.swift" \
+        "$ROOT_DIR/SummaryModelDiscovery.swift" \
         "$ROOT_DIR/KeychainStore.swift" \
         "$ROOT_DIR/AudioPlayback.swift"
     BIN_DIR="$FALLBACK_BIN_DIR"
@@ -94,6 +96,14 @@ cp "$ASSET_OUTPUT/Assets.car" "$APP_DIR/Contents/Resources/Assets.car"
 cp "$ASSET_OUTPUT/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 chmod 755 "$APP_DIR/Contents/MacOS/$APP_NAME"
-codesign --force --deep --sign - "$APP_DIR" >/dev/null
+if [[ -z "$SIGNING_IDENTITY" ]]; then
+    if security find-identity -v -p codesigning | grep -Fq '"PM Studio Signing"'; then
+        SIGNING_IDENTITY="PM Studio Signing"
+    else
+        SIGNING_IDENTITY="-"
+    fi
+fi
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_DIR" >/dev/null
 
 print "Packaged: $APP_DIR"
+print "Signed with: $SIGNING_IDENTITY"

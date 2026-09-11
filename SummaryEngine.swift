@@ -1,36 +1,5 @@
 import Foundation
 
-private struct SummaryModelReference: Decodable {
-    let id: String
-
-    init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer()
-        if let id = try? value.decode(String.self) {
-            self.id = id
-            return
-        }
-
-        struct ModelObject: Decodable {
-            let id: String?
-            let name: String?
-        }
-
-        let object = try value.decode(ModelObject.self)
-        guard let id = object.id ?? object.name else {
-            throw DecodingError.dataCorruptedError(
-                in: value,
-                debugDescription: "模型对象缺少 id 或 name"
-            )
-        }
-        self.id = id
-    }
-}
-
-private struct SummaryModelsResponse: Decodable {
-    let data: [SummaryModelReference]?
-    let models: [SummaryModelReference]?
-}
-
 enum SummaryEngineError: LocalizedError {
     case missingAPIKey
     case invalidEndpoint
@@ -47,7 +16,7 @@ enum SummaryEngineError: LocalizedError {
         case .missingAPIKey:
             return "当前总结模型需要 API Key，请先在设置中保存。"
         case .invalidEndpoint:
-            return "总结模型地址无效。请填写服务商 API 根地址，例如 https://xtapi.site/v1。应用会自动补全 /chat/completions。"
+            return "总结模型地址无效。请填写服务商 API 根地址，例如 https://example.com/v1。应用会自动补全 /chat/completions。"
         case .invalidModelName:
             return "模型 ID 不能为空。请填写服务商提供的真实模型 ID，不要填写服务商名称。"
         case .modelUnavailable(let requested, let available):
@@ -58,10 +27,10 @@ enum SummaryEngineError: LocalizedError {
             return "找不到模型“\(requested)”。可用模型：\(preview)。请在设置中改成其中一个真实模型 ID。"
         case .requestFailed(let status, let message):
             if status == 401 || status == 403 {
-                return "总结模型认证失败（\(status)）。请确认 API Key 有效，并点击“保存并测试”。"
+                return "总结模型认证失败（\(status)）。请确认 API Key 有效，并重新获取可用模型。"
             }
             if status == 404 {
-                return "总结模型接口不存在（404）。请填写服务商 API 根地址，例如 https://xtapi.site/v1；应用会自动补全 /chat/completions。"
+                return "总结模型接口不存在（404）。请填写服务商 API 根地址，例如 https://example.com/v1；应用会自动补全 /chat/completions。"
             }
             return "总结模型请求失败（\(status)）：\(message)"
         case .networkFailed(let message):
@@ -163,7 +132,7 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?
     ) async throws -> [String]? {
-        guard settings.provider == .custom else { return nil }
+        guard settings.provider != .localRules else { return nil }
         let endpoint = try chatCompletionsURL(from: settings.endpoint)
         guard let modelsEndpoint = modelsURL(from: endpoint) else {
             return nil
@@ -175,56 +144,11 @@ struct MeetingSummaryEngine: Sendable {
     }
 
     private func chatCompletionsURL(from rawEndpoint: String) throws -> URL {
-        let value = rawEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty,
-              var components = URLComponents(string: value),
-              let scheme = components.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              components.host != nil else {
-            throw SummaryEngineError.invalidEndpoint
-        }
-
-        var path = components.path
-        while path.count > 1 && path.hasSuffix("/") {
-            path.removeLast()
-        }
-
-        let lowercasedPath = path.lowercased()
-        let isKnownChatEndpoint = [
-            "/chat/completions",
-            "/text/chatcompletion_v2"
-        ].contains { lowercasedPath.hasSuffix($0) }
-        if !isKnownChatEndpoint {
-            path = path.isEmpty
-                ? "/v1/chat/completions"
-                : "\(path)/chat/completions"
-        }
-
-        components.path = path
-        guard let endpoint = components.url else {
-            throw SummaryEngineError.invalidEndpoint
-        }
-        return endpoint
+        try SummaryModelEndpoint.chatCompletionsURL(from: rawEndpoint)
     }
 
     private func modelsURL(from chatEndpoint: URL) -> URL? {
-        guard var components = URLComponents(
-            url: chatEndpoint,
-            resolvingAgainstBaseURL: false
-        ) else {
-            return nil
-        }
-
-        let suffix = "/chat/completions"
-        guard components.path.lowercased().hasSuffix(suffix) else {
-            return nil
-        }
-
-        let basePath = String(components.path.dropLast(suffix.count))
-        components.path = (basePath.isEmpty ? "" : basePath) + "/models"
-        components.query = nil
-        components.fragment = nil
-        return components.url
+        SummaryModelEndpoint.modelsURL(from: chatEndpoint)
     }
 
     private func requestModels(endpoint: URL, apiKey: String?) async throws -> [String]? {
@@ -264,25 +188,11 @@ struct MeetingSummaryEngine: Sendable {
             )
         }
 
-        let decoder = JSONDecoder()
-        let modelReferences: [SummaryModelReference]
-        if let decoded = try? decoder.decode(SummaryModelsResponse.self, from: data) {
-            modelReferences = decoded.data ?? decoded.models ?? []
-        } else if let decoded = try? decoder.decode([SummaryModelReference].self, from: data) {
-            modelReferences = decoded
-        } else {
+        do {
+            return try SummaryModelDiscovery.parse(data)
+        } catch {
             throw SummaryEngineError.invalidModelList
         }
-
-        return Array(
-            Set(
-                modelReferences
-                    .map(\.id)
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            )
-        )
-        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     private func summarizeChapters(

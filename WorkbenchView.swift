@@ -77,6 +77,13 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // NavigationSplitView extends the sidebar beneath the unified title bar.
+            // Keep the traffic-light row clear instead of letting scrollable content
+            // slide underneath the system window controls.
+            Color.clear
+                .frame(height: 36)
+                .accessibilityHidden(true)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.space5) {
                     VStack(alignment: .leading, spacing: AppTheme.space3) {
@@ -1703,32 +1710,52 @@ struct WorkbenchEmptyHint: View {
 }
 
 struct WorkbenchEmptyState: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "waveform.and.mic")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 38, height: 38)
-                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+    @EnvironmentObject private var store: MeetingStore
 
-                Text("还没有会议")
-                    .font(.system(size: 30, weight: .semibold, design: .default))
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "waveform.and.mic")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 72, height: 72)
+                .background(AppTheme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(spacing: 9) {
+                Text("开始记录第一场会议")
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
+
+                Text("录音结束后，会在本机转成文字，并把速览、纪要、决策和待办集中放在这里。")
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("从上方开始一次新的录音，或导入已有音频。")
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
+            HStack(spacing: 10) {
+                Button {
+                    store.startRecording()
+                } label: {
+                    Label("开始录音", systemImage: "record.circle")
+                }
+                .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
+                .disabled(store.isRecording || store.isProcessing)
 
-            Text("处理完成后，逐字稿、速览、决策点和待办会集中显示在这里。")
-                .font(.callout)
-                .foregroundStyle(AppTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    store.importAudioPresented = true
+                } label: {
+                    Label("导入已有音频", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(WorkbenchLightButtonStyle())
+                .disabled(store.isRecording || store.isProcessing)
+            }
+
         }
-        .frame(maxWidth: 560, alignment: .leading)
-        .workbenchPanel(cornerRadius: AppTheme.radiusLarge)
-        .frame(maxWidth: .infinity, minHeight: 400, alignment: .center)
+        .frame(maxWidth: 620)
+        .padding(.horizontal, 48)
+        .padding(.vertical, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 
@@ -1834,13 +1861,13 @@ struct WorkbenchSettingsPane: View {
                                     }
                                 } label: {
                                     HStack(spacing: 7) {
-                                        Text("选择模型")
+                                        Text("接入方式")
                                         Image(systemName: "chevron.up.chevron.down")
                                             .font(.caption2.weight(.semibold))
                                     }
                                 }
                                 .buttonStyle(WorkbenchLightButtonStyle())
-                                .accessibilityLabel("更换会后整理模型")
+                                .accessibilityLabel("更换会后整理接入方式")
                             }
 
                             Divider()
@@ -1861,102 +1888,21 @@ struct WorkbenchSettingsPane: View {
                                     }
                                 }
                             } else {
-                                VStack(alignment: .leading, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 16) {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(store.availableSummaryModels.isEmpty ? "模型 ID" : "服务商模型")
+                                        Text("服务地址")
                                             .font(.callout.weight(.semibold))
                                             .foregroundStyle(AppTheme.ink)
-                                        Text(
-                                            store.availableSummaryModels.isEmpty
-                                                ? (
-                                                    store.canEditSummaryModelManually
-                                                        ? "服务商未提供模型列表时，可手动填写模型 ID。"
-                                                        : "先保存并测试，成功后选择服务商提供的模型。"
-                                                )
-                                                : "连接通过，选择一个用于会后整理。"
+                                        TextField(
+                                            "https://服务商域名/v1",
+                                            text: $store.summarySettings.endpoint
                                         )
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .monospaced))
+                                        Text("可填写 API 根地址或完整的聊天接口地址，应用会自动定位模型列表。")
                                             .font(.caption)
                                             .foregroundStyle(AppTheme.muted)
-
-                                        if store.availableSummaryModels.isEmpty {
-                                            if store.canEditSummaryModelManually {
-                                                TextField(
-                                                    "服务商提供的模型 ID",
-                                                    text: $store.summarySettings.modelName
-                                                )
-                                                .textFieldStyle(.roundedBorder)
-                                            } else {
-                                                Label(
-                                                    "测试通过后，这里会出现模型选择菜单",
-                                                    systemImage: "list.bullet.rectangle"
-                                                )
-                                                .font(.callout)
-                                                .foregroundStyle(AppTheme.muted)
-                                            }
-                                        } else {
-                                            HStack(spacing: 8) {
-                                                Menu {
-                                                    ForEach(store.availableSummaryModels, id: \.self) { model in
-                                                        Button {
-                                                            store.selectSummaryModel(model)
-                                                        } label: {
-                                                            if model == store.summarySettings.modelName {
-                                                                Label(model, systemImage: "checkmark")
-                                                            } else {
-                                                                Text(model)
-                                                            }
-                                                        }
-                                                    }
-                                                } label: {
-                                                    HStack(spacing: 8) {
-                                                        Text(
-                                                            store.summarySettings.modelName.isEmpty
-                                                                ? "选择模型"
-                                                                : store.summarySettings.modelName
-                                                        )
-                                                        .lineLimit(1)
-                                                        .truncationMode(.middle)
-                                                        Spacer(minLength: 8)
-                                                        Image(systemName: "chevron.up.chevron.down")
-                                                            .font(.caption2.weight(.semibold))
-                                                    }
-                                                    .foregroundStyle(AppTheme.ink)
-                                                    .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
-                                                    .padding(.horizontal, 12)
-                                                    .padding(.vertical, 9)
-                                                    .background(
-                                                        AppTheme.paper,
-                                                        in: RoundedRectangle(
-                                                            cornerRadius: AppTheme.radiusSmall,
-                                                            style: .continuous
-                                                        )
-                                                    )
-                                                    .overlay(
-                                                        RoundedRectangle(
-                                                            cornerRadius: AppTheme.radiusSmall,
-                                                            style: .continuous
-                                                        )
-                                                        .stroke(AppTheme.rule, lineWidth: 1)
-                                                    )
-                                                }
-                                                .menuStyle(.borderlessButton)
-                                                .help("选择服务商提供的总结模型")
-                                                .accessibilityLabel("服务商模型")
-                                                .accessibilityValue(store.summarySettings.modelName)
-
-                                                Button {
-                                                    store.testSummaryModel()
-                                                } label: {
-                                                    Image(systemName: "arrow.clockwise")
-                                                        .font(.callout.weight(.semibold))
-                                                        .frame(width: 20, height: 20)
-                                                }
-                                                .buttonStyle(WorkbenchToolbarIconButtonStyle())
-                                                .help("重新获取模型列表")
-                                                .accessibilityLabel("重新获取模型列表")
-                                                .disabled(store.isLoadingSummaryModels)
-                                            }
-                                        }
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
 
                                     if store.summarySettings.provider.requiresAPIKey {
@@ -1971,7 +1917,7 @@ struct WorkbenchSettingsPane: View {
                                             .textFieldStyle(.roundedBorder)
 
                                             HStack(spacing: 10) {
-                                                Button("保存密钥") {
+                                                Button("保存到钥匙串") {
                                                     store.saveSummaryAPIKey()
                                                 }
                                                 .buttonStyle(WorkbenchLightButtonStyle())
@@ -1989,34 +1935,29 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     }
 
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("API 地址")
-                                            .font(.callout.weight(.semibold))
-                                            .foregroundStyle(AppTheme.ink)
-                                        Text("填写服务商 API 根地址即可，例如 https://xtapi.site/v1。应用会自动补全 /chat/completions，也兼容直接填写完整接口地址。")
-                                            .font(.caption)
-                                            .foregroundStyle(AppTheme.muted)
-                                            .fixedSize(horizontal: false, vertical: true)
-
-                                        TextField(
-                                            "https://服务商域名/v1",
-                                            text: $store.summarySettings.endpoint
-                                        )
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .monospaced))
-                                    }
-
-                                    HStack(spacing: 12) {
+                                    HStack(alignment: .center, spacing: 12) {
                                         Button {
                                             store.testSummaryModel()
                                         } label: {
-                                            Label("保存并测试", systemImage: "bolt.horizontal")
+                                            if store.isLoadingSummaryModels {
+                                                HStack(spacing: 7) {
+                                                    ProgressView()
+                                                        .controlSize(.small)
+                                                    Text("正在获取模型…")
+                                                }
+                                            } else {
+                                                Label("获取可用模型", systemImage: "arrow.triangle.2.circlepath")
+                                            }
                                         }
-                                        .buttonStyle(WorkbenchLightButtonStyle())
+                                        .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
                                         .disabled(
                                             store.summarySettings.endpoint
                                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                                                 .isEmpty ||
+                                                (store.summarySettings.provider.requiresAPIKey &&
+                                                    store.summaryAPIKeyInput
+                                                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                                                        .isEmpty) ||
                                                 store.isLoadingSummaryModels
                                         )
 
@@ -2024,11 +1965,98 @@ struct WorkbenchSettingsPane: View {
                                             Text(store.summaryTestStatus)
                                                 .font(.caption)
                                                 .foregroundStyle(
-                                                    store.summaryTestStatus.hasPrefix("连接正常")
+                                                    store.summaryTestStatus.hasPrefix("连接正常") ||
+                                                        store.summaryTestStatus.hasPrefix("已获取") ||
+                                                        store.summaryTestStatus.hasPrefix("已选择")
                                                         ? AppTheme.success
-                                                        : AppTheme.muted
+                                                        : store.summaryTestStatus.hasPrefix("正在")
+                                                            ? AppTheme.muted
+                                                            : AppTheme.danger
                                                 )
-                                                .lineLimit(2)
+                                                .lineLimit(3)
+                                        }
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(store.canEditSummaryModelManually ? "模型 ID" : "选择服务商模型")
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(AppTheme.ink)
+
+                                        if !store.availableSummaryModels.isEmpty {
+                                            Menu {
+                                                ForEach(store.availableSummaryModels, id: \.self) { model in
+                                                    Button {
+                                                        store.selectSummaryModel(model)
+                                                    } label: {
+                                                        if model == store.summarySettings.modelName {
+                                                            Label(model, systemImage: "checkmark")
+                                                        } else {
+                                                            Text(model)
+                                                        }
+                                                    }
+                                                }
+                                            } label: {
+                                                HStack(spacing: 8) {
+                                                    Text(
+                                                        store.summarySettings.modelName.isEmpty
+                                                            ? "请选择一个模型"
+                                                            : store.summarySettings.modelName
+                                                    )
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+                                                    Spacer(minLength: 8)
+                                                    Image(systemName: "chevron.up.chevron.down")
+                                                        .font(.caption2.weight(.semibold))
+                                                }
+                                                .foregroundStyle(
+                                                    store.summarySettings.modelName.isEmpty
+                                                        ? AppTheme.muted
+                                                        : AppTheme.ink
+                                                )
+                                                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 9)
+                                                .background(
+                                                    AppTheme.paper,
+                                                    in: RoundedRectangle(
+                                                        cornerRadius: AppTheme.radiusSmall,
+                                                        style: .continuous
+                                                    )
+                                                )
+                                                .overlay(
+                                                    RoundedRectangle(
+                                                        cornerRadius: AppTheme.radiusSmall,
+                                                        style: .continuous
+                                                    )
+                                                    .stroke(AppTheme.rule, lineWidth: 1)
+                                                )
+                                            }
+                                            .menuStyle(.borderlessButton)
+                                            .disabled(store.isLoadingSummaryModels)
+                                            .help("选择服务商接口返回的总结模型")
+                                            .accessibilityLabel("选择服务商模型")
+                                            .accessibilityValue(store.summarySettings.modelName)
+                                        } else if store.canEditSummaryModelManually {
+                                            TextField(
+                                                "服务商提供的模型 ID",
+                                                text: Binding(
+                                                    get: { store.summarySettings.modelName },
+                                                    set: { store.updateManualSummaryModel($0) }
+                                                )
+                                            )
+                                            .textFieldStyle(.roundedBorder)
+                                            Text("接口没有返回模型列表时，才需要手动填写。")
+                                                .font(.caption)
+                                                .foregroundStyle(AppTheme.muted)
+                                        } else {
+                                            Label(
+                                                store.isLoadingSummaryModels
+                                                    ? "正在读取服务商的模型列表"
+                                                    : "填写服务地址和密钥后，点击“获取可用模型”",
+                                                systemImage: "list.bullet.rectangle"
+                                            )
+                                            .font(.callout)
+                                            .foregroundStyle(AppTheme.muted)
                                         }
                                     }
                                 }
@@ -2115,6 +2143,9 @@ struct WorkbenchSettingsPane: View {
             .background(AppTheme.paper)
         }
         .frame(minWidth: 700, minHeight: 620)
+        .onAppear {
+            store.loadSummaryModelsIfNeeded()
+        }
         .onChange(of: store.whisperCLIPath) { _, _ in
             store.refreshPreferences()
         }
@@ -2127,6 +2158,9 @@ struct WorkbenchSettingsPane: View {
         .onChange(of: store.summarySettings.endpoint) { _, _ in
             store.invalidateSummaryModels()
             store.refreshPreferences()
+        }
+        .onChange(of: store.summaryAPIKeyInput) { _, _ in
+            store.summaryAPIKeyInputDidChange()
         }
     }
 

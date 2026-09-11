@@ -39,6 +39,9 @@ final class MeetingStore: ObservableObject {
     private var mixedSession: MixedRecordingSession?
     private var processingTask: Task<Void, Never>?
     private var recordingLimitTask: Task<Void, Never>?
+    private var summaryModelDiscoveryTask: Task<Void, Never>?
+    private var summaryModelDiscoveryID: UUID?
+    private var pendingSummaryModelSelection: String?
     private var activeSessionID: UUID?
     private var summaryRegenerationID: UUID?
 
@@ -79,7 +82,7 @@ final class MeetingStore: ObservableObject {
             modelName: storedSummaryModel ?? summaryProvider.defaultModelName,
             endpoint: storedSummaryEndpoint ?? summaryProvider.defaultEndpoint
         )
-        canEditSummaryModelManually = summaryProvider != .custom
+        canEditSummaryModelManually = false
         summaryAPIKeyInput = keychain.string(for: summaryProvider) ?? ""
         summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
         reloadSessions()
@@ -284,16 +287,18 @@ final class MeetingStore: ObservableObject {
 
     func updateSummaryProvider(_ provider: SummaryModelProvider) {
         guard summarySettings.provider != provider else { return }
+        cancelSummaryModelDiscovery()
+        pendingSummaryModelSelection = nil
         summarySettings = SummaryModelSettings(
             provider: provider,
-            modelName: provider.defaultModelName,
+            modelName: provider == .localRules ? provider.defaultModelName : "",
             endpoint: provider.defaultEndpoint
         )
         summaryAPIKeyInput = keychain.string(for: provider) ?? ""
         summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
         summaryTestStatus = ""
         availableSummaryModels = []
-        canEditSummaryModelManually = provider != .custom
+        canEditSummaryModelManually = false
         isLoadingSummaryModels = false
         savePreferences()
     }
@@ -301,14 +306,21 @@ final class MeetingStore: ObservableObject {
     @discardableResult
     func saveSummaryAPIKey() -> Bool {
         let value = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousValue = keychain.string(for: summarySettings.provider) ?? ""
         if value.isEmpty {
             keychain.delete(for: summarySettings.provider)
             summaryAPIKeyInput = ""
             summaryAPIKeyStatus = "未保存"
+            if previousValue != value {
+                invalidateSummaryModels()
+            }
             return true
         } else if keychain.save(value, for: summarySettings.provider) {
             summaryAPIKeyInput = value
             summaryAPIKeyStatus = "已保存到钥匙串"
+            if previousValue != value {
+                invalidateSummaryModels()
+            }
             return true
         } else {
             summaryAPIKeyStatus = "保存失败"
@@ -320,84 +332,180 @@ final class MeetingStore: ObservableObject {
         keychain.delete(for: summarySettings.provider)
         summaryAPIKeyInput = ""
         summaryAPIKeyStatus = "未保存"
-        summaryTestStatus = ""
-        availableSummaryModels = []
-        canEditSummaryModelManually = summarySettings.provider != .custom
+        invalidateSummaryModels()
+    }
+
+    func summaryAPIKeyInputDidChange() {
+        let enteredValue = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedValue = keychain.string(for: summarySettings.provider) ?? ""
+        if enteredValue != savedValue {
+            invalidateSummaryModels()
+        }
     }
 
     func testSummaryModel() {
-        guard !isLoadingSummaryModels else { return }
-        summaryTestStatus = "正在连接服务商…"
-        isLoadingSummaryModels = true
+        cancelSummaryModelDiscovery()
         // Testing should use the same credentials that a later meeting will use.
         // Persist the current field first so a successful test cannot be followed
         // by a failed summary because the key was only held in the text field.
         let enteredAPIKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = saveSummaryAPIKey()
+        guard saveSummaryAPIKey() else {
+            summaryTestStatus = "API Key 保存失败，请重试后再获取模型"
+            return
+        }
         savePreferences()
         let settings = summarySettings
         let apiKey = keychain.string(for: settings.provider)
             ?? (enteredAPIKey.isEmpty ? nil : enteredAPIKey)
+        let selectionCandidate = SummaryModelDiscovery.selectionCandidate(
+            current: settings.modelName,
+            pending: pendingSummaryModelSelection
+        )
+        let discoveryID = UUID()
+        summaryModelDiscoveryID = discoveryID
+        summaryTestStatus = "正在连接服务商…"
+        isLoadingSummaryModels = true
 
-        Task { [weak self] in
+        summaryModelDiscoveryTask = Task { [weak self] in
             guard let self else { return }
+            defer { finishSummaryModelDiscovery(id: discoveryID) }
             do {
-                if settings.provider == .custom {
-                    let discoveredModels = try await summaryEngine.discoverModels(
-                        settings: settings,
-                        apiKey: apiKey
+                let discoveredModels = try await summaryEngine.discoverModels(
+                    settings: settings,
+                    apiKey: apiKey
+                )
+                guard isCurrentSummaryModelDiscovery(
+                    id: discoveryID,
+                    settings: settings,
+                    enteredAPIKey: enteredAPIKey,
+                    resolvedAPIKey: apiKey
+                ) else { return }
+
+                if let models = discoveredModels, !models.isEmpty {
+                    availableSummaryModels = models
+                    canEditSummaryModelManually = false
+                    let retainedSelection = SummaryModelDiscovery.selectionAfterDiscovery(
+                        current: selectionCandidate,
+                        available: models
                     )
-
-                    if let models = discoveredModels, !models.isEmpty {
-                        availableSummaryModels = models
-                        canEditSummaryModelManually = false
-
-                        let currentModel = settings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if let firstModel = models.first, !models.contains(currentModel) {
-                            summarySettings.modelName = firstModel
-                            savePreferences()
-                        }
-
-                        // A successful /models response is the provider test.
-                        // Do not send a second request with an arbitrary model.
-                        summaryTestStatus = "连接正常 · 已获取 \(models.count) 个模型"
-                    } else {
-                        availableSummaryModels = []
-                        canEditSummaryModelManually = true
-                        summaryTestStatus = "正在测试当前模型…"
-                        try await summaryEngine.test(settings: settings, apiKey: apiKey)
-                        summaryTestStatus = "连接正常 · 服务商未提供模型列表"
-                    }
+                    summarySettings.modelName = retainedSelection ?? ""
+                    pendingSummaryModelSelection = nil
+                    savePreferences()
+                    summaryTestStatus = retainedSelection == nil
+                        ? "已获取 \(models.count) 个模型，请选择一个"
+                        : "连接正常 · 已获取 \(models.count) 个模型"
                 } else {
+                    availableSummaryModels = []
                     canEditSummaryModelManually = true
-                    try await summaryEngine.test(settings: settings, apiKey: apiKey)
-                    summaryTestStatus = "连接正常"
+                    let currentModel = selectionCandidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if currentModel.isEmpty {
+                        summaryTestStatus = "连接正常 · 服务商未提供模型列表，请手动填写模型 ID"
+                    } else {
+                        summaryTestStatus = "正在测试当前模型…"
+                        var fallbackSettings = settings
+                        fallbackSettings.modelName = currentModel
+                        try await summaryEngine.test(settings: fallbackSettings, apiKey: apiKey)
+                        guard isCurrentSummaryModelDiscovery(
+                            id: discoveryID,
+                            settings: settings,
+                            enteredAPIKey: enteredAPIKey,
+                            resolvedAPIKey: apiKey
+                        ) else { return }
+                        summarySettings.modelName = currentModel
+                        pendingSummaryModelSelection = nil
+                        savePreferences()
+                        summaryTestStatus = "连接正常 · 当前模型可用"
+                    }
                 }
             } catch {
-                if settings.provider == .custom && availableSummaryModels.isEmpty {
+                guard isCurrentSummaryModelDiscovery(
+                    id: discoveryID,
+                    settings: settings,
+                    enteredAPIKey: enteredAPIKey,
+                    resolvedAPIKey: apiKey
+                ) else { return }
+                if settings.provider != .localRules && availableSummaryModels.isEmpty {
                     canEditSummaryModelManually = true
                 }
                 summaryTestStatus = error.localizedDescription
             }
-            isLoadingSummaryModels = false
         }
     }
 
     func selectSummaryModel(_ model: String) {
         let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanModel.isEmpty else { return }
+        cancelSummaryModelDiscovery()
         summarySettings.modelName = cleanModel
+        pendingSummaryModelSelection = nil
         canEditSummaryModelManually = false
-        summaryTestStatus = "已选择 \(cleanModel)，会后整理将使用它"
+        summaryTestStatus = "已选择 \(cleanModel) · 会后整理将使用它"
+        savePreferences()
+    }
+
+    func updateManualSummaryModel(_ model: String) {
+        cancelSummaryModelDiscovery()
+        pendingSummaryModelSelection = nil
+        summarySettings.modelName = model
+        summaryTestStatus = ""
         savePreferences()
     }
 
     func invalidateSummaryModels() {
+        cancelSummaryModelDiscovery()
         availableSummaryModels = []
-        canEditSummaryModelManually = summarySettings.provider != .custom
-        if !summaryTestStatus.hasPrefix("正在") {
-            summaryTestStatus = ""
+        canEditSummaryModelManually = false
+        if summarySettings.provider != .localRules {
+            let currentSelection = summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !currentSelection.isEmpty {
+                pendingSummaryModelSelection = currentSelection
+            }
+            summarySettings.modelName = ""
         }
+        summaryTestStatus = ""
+        savePreferences()
+    }
+
+    private func cancelSummaryModelDiscovery() {
+        summaryModelDiscoveryTask?.cancel()
+        summaryModelDiscoveryTask = nil
+        summaryModelDiscoveryID = nil
+        isLoadingSummaryModels = false
+    }
+
+    private func isCurrentSummaryModelDiscovery(
+        id: UUID,
+        settings: SummaryModelSettings,
+        enteredAPIKey: String,
+        resolvedAPIKey: String?
+    ) -> Bool {
+        !Task.isCancelled &&
+            summaryModelDiscoveryID == id &&
+            summarySettings.provider == settings.provider &&
+            summarySettings.endpoint == settings.endpoint &&
+            summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines) == enteredAPIKey &&
+            keychain.string(for: settings.provider) == resolvedAPIKey
+    }
+
+    private func finishSummaryModelDiscovery(id: UUID) {
+        guard summaryModelDiscoveryID == id else { return }
+        summaryModelDiscoveryTask = nil
+        summaryModelDiscoveryID = nil
+        isLoadingSummaryModels = false
+    }
+
+    func loadSummaryModelsIfNeeded() {
+        guard summarySettings.provider != .localRules,
+              !summarySettings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              availableSummaryModels.isEmpty,
+              summaryTestStatus.isEmpty,
+              !isLoadingSummaryModels else {
+            return
+        }
+        if summarySettings.provider.requiresAPIKey && summaryAPIKeyInput.isEmpty {
+            return
+        }
+        testSummaryModel()
     }
 
     func renameSession(_ session: MeetingSession, to title: String) {

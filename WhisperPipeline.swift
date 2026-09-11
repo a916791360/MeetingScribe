@@ -117,7 +117,7 @@ final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
 }
 
 @MainActor
-final class MixedRecordingSession: NSObject, @preconcurrency SCRecordingOutputDelegate, @preconcurrency SCStreamDelegate {
+final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate {
     private let movieURL: URL
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
@@ -133,7 +133,11 @@ final class MixedRecordingSession: NSObject, @preconcurrency SCRecordingOutputDe
 
     func start() async throws {
         let granted = await Self.requestScreenAccess()
-        guard granted else { throw PipelineError.transcriptionFailed("屏幕录制权限未授权。") }
+        guard granted else {
+            throw PipelineError.transcriptionFailed(
+                "未获得屏幕与系统音频录制权限。如果刚刚允许，请完全退出并重新打开 MeetingScribe 后再试。"
+            )
+        }
 
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
@@ -200,23 +204,31 @@ final class MixedRecordingSession: NSObject, @preconcurrency SCRecordingOutputDe
         }
     }
 
-    func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
-        didStartRecording = true
+    nonisolated func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
+        Task { @MainActor [weak self] in
+            self?.didStartRecording = true
+        }
     }
 
-    func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
-        didFinishRecording = true
-        finishStopIfPossible()
+    nonisolated func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
+        Task { @MainActor [weak self] in
+            self?.didFinishRecording = true
+            self?.finishStopIfPossible()
+        }
     }
 
-    func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
-        stopError = error
-        finishStopIfPossible()
+    nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
+        Task { @MainActor [weak self] in
+            self?.stopError = error
+            self?.finishStopIfPossible()
+        }
     }
 
-    func stream(_ stream: SCStream, didStopWithError error: Error) {
-        stopError = error
-        finishStopIfPossible()
+    nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
+        Task { @MainActor [weak self] in
+            self?.stopError = error
+            self?.finishStopIfPossible()
+        }
     }
 
     private func finishStopIfPossible() {

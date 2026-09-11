@@ -15,12 +15,15 @@ let package = Package(
             path: ".",
             exclude: [
                 "README.md",
+                "LICENSE",
                 ".gitignore",
                 "AppIcon.svg",
                 "AppIcon.iconset",
                 "Resources",
                 "Packaging",
-                "Scripts"
+                "Scripts",
+                "Tests",
+                "docs"
             ],
             sources: [
                 "MeetingScribeApp.swift",
@@ -32,9 +35,15 @@ let package = Package(
                 "MeetingStore.swift",
                 "WhisperPipeline.swift",
                 "SummaryEngine.swift",
+                "SummaryModelDiscovery.swift",
                 "KeychainStore.swift",
                 "AudioPlayback.swift"
             ]
+        ),
+        .testTarget(
+            name: "MeetingScribeTests",
+            dependencies: ["MeetingScribe"],
+            path: "Tests/MeetingScribeTests"
         )
     ]
 )
