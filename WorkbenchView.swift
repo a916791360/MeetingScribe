@@ -77,13 +77,7 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // NavigationSplitView extends the sidebar beneath the unified title bar.
-            // Keep the traffic-light row clear instead of letting scrollable content
-            // slide underneath the system window controls.
-            Color.clear
-                .frame(height: 36)
-                .accessibilityHidden(true)
-
+            // 交通灯区域由原生 NavigationSplitView + 标题栏统一让位，这里不再手写占位。
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.space5) {
                     VStack(alignment: .leading, spacing: AppTheme.space3) {
@@ -346,12 +340,7 @@ struct WorkbenchDetailView: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        VStack(spacing: 0) {
-            WorkbenchGlobalActionBar()
-
-            Divider()
-                .overlay(AppTheme.rule)
-
+        Group {
             if let session = store.workspaceSession {
                 WorkbenchSessionWorkspace(session: session)
             } else {
@@ -360,126 +349,50 @@ struct WorkbenchDetailView: View {
             }
         }
         .background(AppTheme.paper)
-    }
-}
-
-struct WorkbenchGlobalActionBar: View {
-    @EnvironmentObject private var store: MeetingStore
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            wideLayout
-            compactLayout
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 14)
-        .background(AppTheme.paper)
+        .navigationTitle(store.workspaceSession?.title ?? "会议")
+        .navigationSubtitle(store.statusText)
+        .toolbar { workbenchToolbar }
     }
 
-    private var wideLayout: some View {
-        HStack(alignment: .center, spacing: 14) {
-            titleBlock
-
-            Spacer(minLength: 12)
-
-            utilityButtons
-        }
-    }
-
-    private var compactLayout: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                titleBlock
-
-                Spacer(minLength: 8)
-
-                settingsButton
-            }
-
-            HStack(spacing: 10) {
-                compactUtilityButtons
-            }
-        }
-    }
-
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("会议工作台")
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(AppTheme.ink)
-
-            Text(statusLine)
-                .font(.caption)
-                .foregroundStyle(AppTheme.muted)
-                .lineLimit(1)
-        }
-        .frame(minWidth: 150, alignment: .leading)
-    }
-
-    private var utilityButtons: some View {
-        HStack(spacing: 8) {
+    // 全局操作全部注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
+    @ToolbarContentBuilder
+    private var workbenchToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 store.importAudioPresented = true
             } label: {
                 Label("导入音频", systemImage: "square.and.arrow.down")
             }
-            .buttonStyle(WorkbenchLightButtonStyle())
+            .labelStyle(.titleAndIcon)
+            .help("导入一段已有音频")
             .disabled(store.isRecording || store.isProcessing)
+        }
 
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 toggleRecording()
             } label: {
-                Label(primaryTitle, systemImage: primaryIcon)
+                Label {
+                    Text(primaryTitle)
+                } icon: {
+                    Image(systemName: primaryIcon)
+                        .foregroundStyle(primaryTint)
+                }
             }
-            .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-            .disabled(false)
-
-            settingsButton
+            .labelStyle(.titleAndIcon)
+            .help(primaryTitle)
         }
-    }
 
-    private var compactUtilityButtons: some View {
-        HStack(spacing: 8) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
-                store.importAudioPresented = true
+                store.showSettings = true
             } label: {
-                Label("导入音频", systemImage: "square.and.arrow.down")
+                Label("设置", systemImage: "gearshape")
             }
-            .buttonStyle(WorkbenchLightButtonStyle())
-            .disabled(store.isRecording || store.isProcessing)
-
-            Button {
-                toggleRecording()
-            } label: {
-                Label(primaryTitle, systemImage: primaryIcon)
-            }
-            .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-            .disabled(false)
+            .help("设置")
+            .accessibilityLabel("设置")
+            .keyboardShortcut(",", modifiers: .command)
         }
-    }
-
-    private var settingsButton: some View {
-        Button {
-            store.showSettings = true
-        } label: {
-            Image(systemName: "gearshape")
-                .font(.callout.weight(.semibold))
-                .frame(width: 20, height: 20)
-        }
-        .buttonStyle(WorkbenchLightButtonStyle())
-        .help("设置")
-        .accessibilityLabel("设置")
-        .keyboardShortcut(",", modifiers: .command)
-    }
-
-    private var statusLine: String {
-        if store.isRecording {
-            return "录音进行中 · 结束后自动转写和整理"
-        }
-        if store.isProcessing {
-            return "\(store.processingStage) · \(store.processingProgress.percentLabel)"
-        }
-        return "结束后自动生成逐字稿、速览和纪要"
     }
 
     private var primaryTitle: String {
@@ -494,6 +407,13 @@ struct WorkbenchGlobalActionBar: View {
             return "stop.fill"
         }
         return store.isRecording ? "stop.fill" : "record.circle"
+    }
+
+    private var primaryTint: Color {
+        if store.isRecording || store.isProcessing {
+            return AppTheme.danger
+        }
+        return AppTheme.accent
     }
 
     private func toggleRecording() {
@@ -541,14 +461,12 @@ struct WorkbenchSessionWorkspace: View {
 
                     WorkbenchResultTabBar(selection: $selectedTab)
 
-                    Divider()
-                        .overlay(AppTheme.rule)
-
                     ScrollView {
                         WorkbenchResultDocument(session: session, tab: selectedTab)
                             .frame(maxWidth: 920, alignment: .leading)
                             .padding(.horizontal, 32)
-                            .padding(.vertical, 28)
+                            .padding(.top, 10)
+                            .padding(.bottom, 28)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
 
@@ -677,9 +595,11 @@ struct WorkbenchResultTabBar: View {
 
             Spacer(minLength: 0)
         }
+        // 与下方正文列（maxWidth 920 + 左右 32）左对齐，不再顶着整条分隔线单独成栏。
+        .frame(maxWidth: 920, alignment: .leading)
         .padding(.horizontal, 32)
-        .padding(.top, 4)
-        .padding(.bottom, 0)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .center)
         .background(AppTheme.paper)
     }
 }

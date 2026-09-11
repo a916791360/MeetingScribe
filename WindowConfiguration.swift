@@ -19,7 +19,8 @@ struct WindowConfigurationView: NSViewRepresentable {
     private func configure(_ window: NSWindow?) {
         guard let window else { return }
 
-        window.title = "MeetingScribe"
+        // 窗口标题交给 SwiftUI 的 navigationTitle 管理（选中会议时显示会议名）。
+        // 这里不要再硬写标题，否则标题栏永远显示 MeetingScribe，和侧边栏品牌名重复。
         window.setFrameAutosaveName("MeetingScribeMainWindow")
         window.styleMask.insert([.titled, .closable, .miniaturizable, .resizable])
         window.standardWindowButton(.zoomButton)?.isHidden = false
