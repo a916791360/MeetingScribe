@@ -7,7 +7,9 @@ enum SummaryEngineError: LocalizedError {
     case modelUnavailable(String, [String])
     case requestFailed(Int, String)
     case networkFailed(String)
-    case emptyResponse
+    case emptyResponse(String?)
+    /// 推理模型把 max_tokens 全花在思考链上、正文一字未出（finish_reason=length）。
+    case budgetExhausted(Int)
     case invalidModelList
     case invalidStructuredResponse
 
@@ -35,8 +37,20 @@ enum SummaryEngineError: LocalizedError {
             return "总结模型请求失败（\(status)）：\(message)"
         case .networkFailed(let message):
             return "总结模型连接失败：\(message)"
-        case .emptyResponse:
+        case .emptyResponse(let detail):
+            // 只说「没有返回内容」用户没法排查——服务商可能 200 回了一个错误信封、
+            // 或者回了别家格式。把原样回包截一段带出来，问题一眼可见。
+            if let detail, !detail.isEmpty {
+                return "总结模型没有返回可用内容。服务商回包：\(detail)"
+            }
             return "总结模型没有返回内容。"
+        case .budgetExhausted(let tokens):
+            // 这是推理模型的典型行为，不是用户配置错——文案要给出可执行的下一步。
+            return """
+            总结模型把 \(tokens) token 的预算全部花在了思考过程上，没能输出正文。\
+            已自动翻倍预算重试；若反复出现，说明该模型面对长材料时思考链过长，\
+            建议在设置里换一个非推理模型（例如 deepseek-v4-flash）。
+            """
         case .invalidModelList:
             return "服务商返回的模型列表格式无法识别。可以检查 API 地址，或使用手动模型 ID 兜底。"
         case .invalidStructuredResponse:
@@ -46,6 +60,21 @@ enum SummaryEngineError: LocalizedError {
 }
 
 struct MeetingSummaryEngine: Sendable {
+    // MARK: - token 预算
+    //
+    // max_tokens 是「思考链 + 正文」的总预算，推理模型（如 deepseek-v4.1-flash）
+    // 会先产出一大段思考链再写正文。实测在 1.6 万字材料上，思考链稳定吃掉
+    // 2000~3500 token —— 给 1800 的预算时接口返回 200 但 content 完全为空
+    // （reasoning_tokens=1800、text_tokens=0、finish_reason=length）。
+    // 这几档数值是照着实测留的余量，别往下调。
+
+    /// 单章摘要：思考链余量 + 几百字正文。
+    static let chapterTokenBudget = 8_000
+    /// 综合分析：要输出 overview+minutes+timeline+decisions+actions 的完整 JSON。
+    static let analysisTokenBudget = 16_000
+    /// 连通性测试：只要求回四个字，但推理模型光思考就要几百 token。
+    static let probeTokenBudget = 2_048
+
     func analyze(
         segments: [TranscriptSegment],
         settings: SummaryModelSettings,
@@ -123,7 +152,8 @@ struct MeetingSummaryEngine: Sendable {
             endpoint: endpoint,
             settings: settings,
             apiKey: apiKey,
-            maxTokens: 16,
+            // 推理模型光思考就要几百 token，16 会让连通性测试假失败。
+            maxTokens: Self.probeTokenBudget,
             timeoutInterval: 60
         )
     }
@@ -172,7 +202,7 @@ struct MeetingSummaryEngine: Sendable {
         }
         try Task.checkCancellation()
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw SummaryEngineError.emptyResponse
+            throw SummaryEngineError.emptyResponse(nil)
         }
 
         if httpResponse.statusCode == 404 {
@@ -237,7 +267,7 @@ struct MeetingSummaryEngine: Sendable {
                             endpoint: endpoint,
                             settings: settings,
                             apiKey: apiKey,
-                            maxTokens: 1_800
+                            maxTokens: Self.chapterTokenBudget
                         )
                         return (index, result)
                     }
@@ -305,7 +335,7 @@ struct MeetingSummaryEngine: Sendable {
             endpoint: endpoint,
             settings: settings,
             apiKey: apiKey,
-            maxTokens: 6_000
+            maxTokens: Self.analysisTokenBudget
         )
         return try parseAnalysis(response, settings: settings)
     }
@@ -352,7 +382,7 @@ struct MeetingSummaryEngine: Sendable {
             }
         }
 
-        func makeRequest(streaming: Bool) throws -> URLRequest {
+        func makeRequest(streaming: Bool, maxTokens: Int?) throws -> URLRequest {
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.timeoutInterval = timeoutInterval
@@ -379,19 +409,39 @@ struct MeetingSummaryEngine: Sendable {
 
         try Task.checkCancellation()
 
-        var lastError: Error = SummaryEngineError.emptyResponse
-        for attempt in 0..<3 {
+        // max_tokens 是「思考链 + 正文」的总预算。推理模型会把额度先花在思考上，
+        // 预算不够时正文一个字都不吐（finish_reason=length）——这是实测踩到的坑：
+        // 1800 token 的预算被思考链整段吃光，接口 200 但 content 为空。
+        // 这不是用户配置错，加预算就能救，所以遇到就翻倍重来。
+        var budget = maxTokens
+        var attempt = 0
+        var escalations = 0
+        var lastError: Error = SummaryEngineError.emptyResponse(nil)
+
+        while attempt < 3 {
             try Task.checkCancellation()
             if attempt > 0 {
                 try await Task.sleep(nanoseconds: UInt64(attempt) * 1_200_000_000)
             }
+            attempt += 1
             do {
-                let text = try await performStreamingRequest(makeRequest(streaming: true))
+                let text = try await performStreamingRequest(
+                    makeRequest(streaming: true, maxTokens: budget),
+                    maxTokens: budget
+                )
                 if !text.isEmpty { return text }
-                lastError = SummaryEngineError.emptyResponse
+                lastError = SummaryEngineError.emptyResponse(nil)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as SummaryEngineError {
+                if case .budgetExhausted(let used) = error, escalations < 2 {
+                    escalations += 1
+                    budget = min(used * 2, 32_000)
+                    // 抬预算算「换个方式再试」，不占用正常的失败重试次数。
+                    attempt -= 1
+                    lastError = error
+                    continue
+                }
                 // 认证 / 地址 / 模型名这类确定性错误，重试没有意义。
                 if case .requestFailed(let status, _) = error,
                    (400..<500).contains(status), status != 429 {
@@ -406,7 +456,10 @@ struct MeetingSummaryEngine: Sendable {
         // 流式全军覆没（个别服务商就是不支持 SSE）→ 退回非流式再试一次。
         try Task.checkCancellation()
         do {
-            let text = try await performBufferedRequest(makeRequest(streaming: false))
+            let text = try await performBufferedRequest(
+                makeRequest(streaming: false, maxTokens: budget),
+                maxTokens: budget
+            )
             if !text.isEmpty { return text }
         } catch is CancellationError {
             throw CancellationError()
@@ -420,15 +473,27 @@ struct MeetingSummaryEngine: Sendable {
     }
 
     /// SSE 流式读取：逐行解析 `data: {...}`，把 `choices[].delta.content` 拼起来。
-    private func performStreamingRequest(_ request: URLRequest) async throws -> String {
+    private func performStreamingRequest(
+        _ request: URLRequest,
+        maxTokens: Int?
+    ) async throws -> String {
         struct StreamChunk: Decodable {
             struct Choice: Decodable {
                 struct Delta: Decodable {
                     let content: String?
+                    /// 推理模型把思考过程单独放在这个字段，它不算正文。
+                    let reasoning: String?
                 }
 
                 let delta: Delta?
                 let message: Delta?
+                let finishReason: String?
+
+                private enum CodingKeys: String, CodingKey {
+                    case delta
+                    case message
+                    case finishReason = "finish_reason"
+                }
             }
 
             let choices: [Choice]
@@ -447,7 +512,7 @@ struct MeetingSummaryEngine: Sendable {
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw SummaryEngineError.emptyResponse
+            throw SummaryEngineError.emptyResponse(nil)
         }
 
         // 非 2xx 时错误体通常不是 SSE，按普通 body 收一点拿服务商的错误文案。
@@ -468,34 +533,66 @@ struct MeetingSummaryEngine: Sendable {
         }
 
         var accumulated = ""
+        var rawTap = ""
+        var finishReason: String?
+        var sawReasoning = false
         for try await line in bytes.lines {
             try Task.checkCancellation()
             guard line.hasPrefix("data:") else { continue }
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             if payload.isEmpty { continue }
             if payload == "[DONE]" { break }
+            // 留一份原样回包（最多 300 字符），内容为空时用来还原现场。
+            if rawTap.count < 300 { rawTap += payload + " " }
             guard let data = payload.data(using: .utf8),
                   let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data) else {
                 continue
             }
             let choice = chunk.choices.first
+            if let reason = choice?.delta?.reasoning, !reason.isEmpty { sawReasoning = true }
+            if let reason = choice?.message?.reasoning, !reason.isEmpty { sawReasoning = true }
+            if let value = choice?.finishReason, !value.isEmpty { finishReason = value }
             let piece = choice?.delta?.content ?? choice?.message?.content
             if let piece, !piece.isEmpty {
                 accumulated += piece
             }
         }
-        return accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            // finish_reason=length 说明是被 token 上限截断的。推理模型在长材料上
+            // 会把预算整段烧在思考链上，此时 sawReasoning 为真、正文为空。
+            // 这不是配置错误，交给外层翻倍预算重试。
+            if finishReason == "length" {
+                throw SummaryEngineError.budgetExhausted(maxTokens ?? 0)
+            }
+            // 其余情况：服务商忽略 stream 回了普通 JSON，或回的是错误信封。
+            // 带出原样回包，外层还有非流式兜底。
+            let hint = sawReasoning ? "（模型只输出了思考过程，没有正文）" : ""
+            let detail = rawTap.isEmpty ? nil : hint + String(rawTap.prefix(300))
+            throw SummaryEngineError.emptyResponse(detail)
+        }
+        return trimmed
     }
 
     /// 非流式兜底：一次性等完整回复。
-    private func performBufferedRequest(_ request: URLRequest) async throws -> String {
+    private func performBufferedRequest(
+        _ request: URLRequest,
+        maxTokens: Int?
+    ) async throws -> String {
         struct ResponseBody: Decodable {
             struct Choice: Decodable {
                 struct Message: Decodable {
                     let content: String?
+                    let reasoning: String?
                 }
 
                 let message: Message
+                let finishReason: String?
+
+                private enum CodingKeys: String, CodingKey {
+                    case message
+                    case finishReason = "finish_reason"
+                }
             }
 
             let choices: [Choice]
@@ -514,7 +611,7 @@ struct MeetingSummaryEngine: Sendable {
         }
         try Task.checkCancellation()
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw SummaryEngineError.emptyResponse
+            throw SummaryEngineError.emptyResponse(nil)
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw SummaryEngineError.requestFailed(
@@ -522,13 +619,38 @@ struct MeetingSummaryEngine: Sendable {
                 responseMessage(from: data)
             )
         }
-        let decoded = try JSONDecoder().decode(ResponseBody.self, from: data)
-        guard let content = decoded.choices.first?.message.content?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !content.isEmpty else {
-            throw SummaryEngineError.emptyResponse
+        // 用 try? 而不是 try：服务商 200 回错误信封（没有 choices 键）时，
+        // 抛 DecodingError 对用户毫无意义，不如把原样回包带出去。
+        guard let decoded = try? JSONDecoder().decode(ResponseBody.self, from: data) else {
+            throw SummaryEngineError.emptyResponse(rawSnippet(from: data))
         }
-        return content
+        let first = decoded.choices.first
+        if let content = first?.message.content?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty {
+            return content
+        }
+        // 正文空 + length：同样是被 token 上限截断，按预算不足上报。
+        if first?.finishReason == "length" {
+            throw SummaryEngineError.budgetExhausted(maxTokens ?? 0)
+        }
+        if let reasoning = first?.message.reasoning, !reasoning.isEmpty {
+            throw SummaryEngineError.emptyResponse("（模型只输出了思考过程，没有正文）")
+        }
+        throw SummaryEngineError.emptyResponse(rawSnippet(from: data))
+    }
+
+    /// 服务商 200 但正文不可用时，把原样回包截一小段带出去。
+    /// 「没有返回内容」这句话本身没法排查，用户需要看到服务商到底回了什么。
+    private func rawSnippet(from data: Data, limit: Int = 300) -> String? {
+        guard !data.isEmpty else { return "（响应体为空）" }
+        guard let text = String(data: data, encoding: .utf8) else {
+            return "（非 UTF-8 响应体，\(data.count) 字节）"
+        }
+        let collapsed = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !collapsed.isEmpty else { return "（响应体为空）" }
+        return collapsed.count <= limit ? collapsed : String(collapsed.prefix(limit)) + "…"
     }
 
     private func responseMessage(from data: Data) -> String {
