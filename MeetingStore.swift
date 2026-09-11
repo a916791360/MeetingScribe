@@ -17,6 +17,9 @@ final class MeetingStore: ObservableObject {
     @Published var summaryAPIKeyInput: String = ""
     @Published var summaryAPIKeyStatus: String = ""
     @Published var summaryTestStatus: String = ""
+    @Published var availableSummaryModels: [String] = []
+    @Published var canEditSummaryModelManually = false
+    @Published var isLoadingSummaryModels = false
     @Published var statusText: String = "准备就绪"
     @Published var isRecording: Bool = false
     @Published var isProcessing: Bool = false
@@ -62,9 +65,9 @@ final class MeetingStore: ObservableObject {
         ) ?? .localRules
         let storedSummaryModel = UserDefaults.standard.string(forKey: Preferences.summaryModel)
         let storedSummaryEndpoint = UserDefaults.standard.string(forKey: Preferences.summaryEndpoint)
-        captureMode = CaptureMode(
-            rawValue: UserDefaults.standard.string(forKey: Preferences.captureMode) ?? ""
-        ) ?? .mixed
+        // New recordings always use the combined system-audio and microphone path.
+        // Keep CaptureMode on the model for backwards compatibility with old sessions.
+        captureMode = .mixed
         whisperCLIPath = storedCLIPath == nil || storedCLIPath == legacyDefaults.cliURL.path
             ? defaults.cliURL.path
             : storedCLIPath!
@@ -76,6 +79,7 @@ final class MeetingStore: ObservableObject {
             modelName: storedSummaryModel ?? summaryProvider.defaultModelName,
             endpoint: storedSummaryEndpoint ?? summaryProvider.defaultEndpoint
         )
+        canEditSummaryModelManually = summaryProvider != .custom
         summaryAPIKeyInput = keychain.string(for: summaryProvider) ?? ""
         summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
         reloadSessions()
@@ -87,12 +91,16 @@ final class MeetingStore: ObservableObject {
     }
 
     var selectedSession: MeetingSession? {
-        guard let selectedSessionID else { return sessions.first }
-        return sessions.first { $0.id == selectedSessionID }
+        guard let selectedSessionID else { return visibleSessions.first }
+        return visibleSessions.first { $0.id == selectedSessionID }
     }
 
     var workspaceSession: MeetingSession? {
-        selectedSession ?? sessions.first
+        selectedSession ?? visibleSessions.first
+    }
+
+    private var visibleSessions: [MeetingSession] {
+        sessions.filter { $0.status != .failed }
     }
 
     func reloadSessions() {
@@ -105,13 +113,8 @@ final class MeetingStore: ObservableObject {
                         loadedSessions[index].analysis.summaryModel == SummaryModelProvider.localRules.title
                 ) {
             let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].transcriptSegments)
-            let title = MeetingAnalysisBuilder.title(
-                for: loadedSessions[index],
-                segments: loadedSessions[index].transcriptSegments
-            )
-            if analysis != loadedSessions[index].analysis || title != loadedSessions[index].title {
+            if analysis != loadedSessions[index].analysis {
                 loadedSessions[index].analysis = analysis
-                loadedSessions[index].title = title
                 loadedSessions[index].updatedAt = Date()
                 try? storage.save(loadedSessions[index])
             }
@@ -125,23 +128,15 @@ final class MeetingStore: ObservableObject {
         }
 
         sessions = loadedSessions
-        if selectedSessionID == nil {
-            selectedSessionID = sessions.first?.id
-        } else if sessions.contains(where: { $0.id == selectedSessionID }) == false {
-            selectedSessionID = sessions.first?.id
-        }
+        normalizeSelection()
     }
 
     func startRecording() {
         guard !isRecording, !isProcessing else { return }
 
-        if captureMode == .imported {
-            importAudioPresented = true
-            statusText = "请选择要导入的音频。"
-            return
-        }
-
-        let draft = storage.createDraftSession(captureMode: captureMode)
+        // A single recording action captures both system audio and the Mac microphone.
+        captureMode = .mixed
+        let draft = storage.createDraftSession(captureMode: .mixed)
         sessions.insert(draft, at: 0)
         selectedSessionID = draft.id
         activeSessionID = draft.id
@@ -152,45 +147,24 @@ final class MeetingStore: ObservableObject {
         summaryRegenerationID = nil
         savePreferences()
 
-        switch captureMode {
-        case .microphone:
-            let recorder = MicrophoneRecordingSession(outputURL: storage.sourceURL(for: draft, preferredFileName: "source.wav"))
-            microphoneSession = recorder
-            Task {
-                do {
-                    try await recorder.start()
-                    await MainActor.run {
-                        self.isRecording = true
-                        self.statusText = "正在录音"
-                        self.updateSessionStatus(draft.id, status: .recording)
-                        self.startRecordingLimit(for: draft.id)
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.failSession(draft.id, message: error.localizedDescription)
-                    }
+        let recorder = MixedRecordingSession(
+            movieURL: storage.sourceURL(for: draft, preferredFileName: "source.mov")
+        )
+        mixedSession = recorder
+        Task {
+            do {
+                try await recorder.start()
+                await MainActor.run {
+                    self.isRecording = true
+                    self.statusText = "正在录音"
+                    self.updateSessionStatus(draft.id, status: .recording)
+                    self.startRecordingLimit(for: draft.id)
+                }
+            } catch {
+                await MainActor.run {
+                    self.failSession(draft.id, message: error.localizedDescription)
                 }
             }
-        case .mixed:
-            let recorder = MixedRecordingSession(movieURL: storage.sourceURL(for: draft, preferredFileName: "source.mov"))
-            mixedSession = recorder
-            Task {
-                do {
-                    try await recorder.start()
-                    await MainActor.run {
-                        self.isRecording = true
-                        self.statusText = "正在混录"
-                        self.updateSessionStatus(draft.id, status: .recording)
-                        self.startRecordingLimit(for: draft.id)
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.failSession(draft.id, message: error.localizedDescription)
-                    }
-                }
-            }
-        case .imported:
-            break
         }
     }
 
@@ -318,20 +292,27 @@ final class MeetingStore: ObservableObject {
         summaryAPIKeyInput = keychain.string(for: provider) ?? ""
         summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
         summaryTestStatus = ""
+        availableSummaryModels = []
+        canEditSummaryModelManually = provider != .custom
+        isLoadingSummaryModels = false
         savePreferences()
     }
 
-    func saveSummaryAPIKey() {
+    @discardableResult
+    func saveSummaryAPIKey() -> Bool {
         let value = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.isEmpty {
             keychain.delete(for: summarySettings.provider)
             summaryAPIKeyInput = ""
             summaryAPIKeyStatus = "未保存"
+            return true
         } else if keychain.save(value, for: summarySettings.provider) {
             summaryAPIKeyInput = value
             summaryAPIKeyStatus = "已保存到钥匙串"
+            return true
         } else {
             summaryAPIKeyStatus = "保存失败"
+            return false
         }
     }
 
@@ -340,23 +321,109 @@ final class MeetingStore: ObservableObject {
         summaryAPIKeyInput = ""
         summaryAPIKeyStatus = "未保存"
         summaryTestStatus = ""
+        availableSummaryModels = []
+        canEditSummaryModelManually = summarySettings.provider != .custom
     }
 
     func testSummaryModel() {
-        summaryTestStatus = "正在测试连接…"
+        guard !isLoadingSummaryModels else { return }
+        summaryTestStatus = "正在连接服务商…"
+        isLoadingSummaryModels = true
+        // Testing should use the same credentials that a later meeting will use.
+        // Persist the current field first so a successful test cannot be followed
+        // by a failed summary because the key was only held in the text field.
+        let enteredAPIKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = saveSummaryAPIKey()
+        savePreferences()
         let settings = summarySettings
-        let apiKey = summaryAPIKeyInput.isEmpty
-            ? keychain.string(for: settings.provider)
-            : summaryAPIKeyInput
+        let apiKey = keychain.string(for: settings.provider)
+            ?? (enteredAPIKey.isEmpty ? nil : enteredAPIKey)
 
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await summaryEngine.test(settings: settings, apiKey: apiKey)
-                summaryTestStatus = "连接正常"
+                if settings.provider == .custom {
+                    let discoveredModels = try await summaryEngine.discoverModels(
+                        settings: settings,
+                        apiKey: apiKey
+                    )
+
+                    if let models = discoveredModels, !models.isEmpty {
+                        availableSummaryModels = models
+                        canEditSummaryModelManually = false
+
+                        let currentModel = settings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let firstModel = models.first, !models.contains(currentModel) {
+                            summarySettings.modelName = firstModel
+                            savePreferences()
+                        }
+
+                        // A successful /models response is the provider test.
+                        // Do not send a second request with an arbitrary model.
+                        summaryTestStatus = "连接正常 · 已获取 \(models.count) 个模型"
+                    } else {
+                        availableSummaryModels = []
+                        canEditSummaryModelManually = true
+                        summaryTestStatus = "正在测试当前模型…"
+                        try await summaryEngine.test(settings: settings, apiKey: apiKey)
+                        summaryTestStatus = "连接正常 · 服务商未提供模型列表"
+                    }
+                } else {
+                    canEditSummaryModelManually = true
+                    try await summaryEngine.test(settings: settings, apiKey: apiKey)
+                    summaryTestStatus = "连接正常"
+                }
             } catch {
+                if settings.provider == .custom && availableSummaryModels.isEmpty {
+                    canEditSummaryModelManually = true
+                }
                 summaryTestStatus = error.localizedDescription
             }
+            isLoadingSummaryModels = false
+        }
+    }
+
+    func selectSummaryModel(_ model: String) {
+        let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanModel.isEmpty else { return }
+        summarySettings.modelName = cleanModel
+        canEditSummaryModelManually = false
+        summaryTestStatus = "已选择 \(cleanModel)，会后整理将使用它"
+        savePreferences()
+    }
+
+    func invalidateSummaryModels() {
+        availableSummaryModels = []
+        canEditSummaryModelManually = summarySettings.provider != .custom
+        if !summaryTestStatus.hasPrefix("正在") {
+            summaryTestStatus = ""
+        }
+    }
+
+    func renameSession(_ session: MeetingSession, to title: String) {
+        let cleanTitle = title
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        guard !cleanTitle.isEmpty else {
+            errorMessage = "会议名称不能为空。"
+            statusText = errorMessage ?? ""
+            return
+        }
+        guard cleanTitle != session.title else { return }
+
+        do {
+            var updated = try storage.session(with: session.id)
+            updated.title = cleanTitle
+            updated.updatedAt = Date()
+            try storage.save(updated)
+            replaceSession(updated)
+            selectedSessionID = updated.id
+        } catch {
+            errorMessage = error.localizedDescription
+            statusText = error.localizedDescription
         }
     }
 
@@ -478,6 +545,10 @@ final class MeetingStore: ObservableObject {
         if activeSessionID == session.id {
             processingTask?.cancel()
             recordingLimitTask?.cancel()
+            Task {
+                await transcriber.cancel()
+                await transcoder.cancel()
+            }
             activeSessionID = nil
             summaryRegenerationID = nil
             isRecording = false
@@ -487,7 +558,7 @@ final class MeetingStore: ObservableObject {
             try storage.delete(session)
             sessions.removeAll { $0.id == session.id }
             if selectedSessionID == session.id {
-                selectedSessionID = sessions.first?.id
+                selectedSessionID = visibleSessions.first?.id
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -655,6 +726,15 @@ final class MeetingStore: ObservableObject {
         sessions.removeAll { $0.id == session.id }
         sessions.insert(session, at: 0)
         sessions.sort { $0.createdAt > $1.createdAt }
+        normalizeSelection()
+    }
+
+    private func normalizeSelection() {
+        guard let selectedSessionID,
+              visibleSessions.contains(where: { $0.id == selectedSessionID }) else {
+            selectedSessionID = visibleSessions.first?.id
+            return
+        }
     }
 
     private func buildAnalysis(from segments: [TranscriptSegment]) async throws -> MeetingAnalysis {
@@ -664,7 +744,10 @@ final class MeetingStore: ObservableObject {
         }.value
         try Task.checkCancellation()
         let settings = summarySettings
-        let apiKey = keychain.string(for: settings.provider)
+        let enteredKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = enteredKey.isEmpty
+            ? keychain.string(for: settings.provider)
+            : enteredKey
 
         do {
             let analysis = try await summaryEngine.analyze(
@@ -923,7 +1006,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func savePreferences() {
-        UserDefaults.standard.set(captureMode.rawValue, forKey: Preferences.captureMode)
+        UserDefaults.standard.set(CaptureMode.mixed.rawValue, forKey: Preferences.captureMode)
         UserDefaults.standard.set(whisperCLIPath, forKey: Preferences.whisperCLIPath)
         UserDefaults.standard.set(whisperModelPath, forKey: Preferences.whisperModelPath)
         UserDefaults.standard.set(summarySettings.provider.rawValue, forKey: Preferences.summaryProvider)
@@ -1009,7 +1092,7 @@ struct SessionStorage {
         let session = MeetingSession(
             id: id,
             folderName: folderName,
-            title: Self.defaultTitle(for: createdAt, captureMode: captureMode),
+            title: Self.defaultTitle(for: createdAt),
             createdAt: createdAt,
             updatedAt: createdAt,
             captureMode: captureMode,
@@ -1126,12 +1209,12 @@ struct SessionStorage {
         return "\(stamp)_\(id.uuidString.prefix(8))"
     }
 
-    private static func defaultTitle(for date: Date, captureMode: CaptureMode) -> String {
+    private static func defaultTitle(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.timeZone = .current
         formatter.dateFormat = "MM-dd HH:mm"
-        return "会议 \(formatter.string(from: date)) · \(captureMode.shortTitle)"
+        return "会议 \(formatter.string(from: date))"
     }
 
     private static func sourceFileName(for captureMode: CaptureMode) -> String {

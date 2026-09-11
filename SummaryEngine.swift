@@ -1,10 +1,45 @@
 import Foundation
 
+private struct SummaryModelReference: Decodable {
+    let id: String
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let id = try? value.decode(String.self) {
+            self.id = id
+            return
+        }
+
+        struct ModelObject: Decodable {
+            let id: String?
+            let name: String?
+        }
+
+        let object = try value.decode(ModelObject.self)
+        guard let id = object.id ?? object.name else {
+            throw DecodingError.dataCorruptedError(
+                in: value,
+                debugDescription: "模型对象缺少 id 或 name"
+            )
+        }
+        self.id = id
+    }
+}
+
+private struct SummaryModelsResponse: Decodable {
+    let data: [SummaryModelReference]?
+    let models: [SummaryModelReference]?
+}
+
 enum SummaryEngineError: LocalizedError {
     case missingAPIKey
     case invalidEndpoint
+    case invalidModelName
+    case modelUnavailable(String, [String])
     case requestFailed(Int, String)
+    case networkFailed(String)
     case emptyResponse
+    case invalidModelList
     case invalidStructuredResponse
 
     var errorDescription: String? {
@@ -12,11 +47,29 @@ enum SummaryEngineError: LocalizedError {
         case .missingAPIKey:
             return "当前总结模型需要 API Key，请先在设置中保存。"
         case .invalidEndpoint:
-            return "总结模型地址无效，请检查设置中的接口地址。"
+            return "总结模型地址无效。请填写服务商 API 根地址，例如 https://xtapi.site/v1。应用会自动补全 /chat/completions。"
+        case .invalidModelName:
+            return "模型 ID 不能为空。请填写服务商提供的真实模型 ID，不要填写服务商名称。"
+        case .modelUnavailable(let requested, let available):
+            let preview = available.prefix(8).joined(separator: "、")
+            if preview.isEmpty {
+                return "找不到模型“\(requested)”。请填写服务商提供的真实模型 ID。"
+            }
+            return "找不到模型“\(requested)”。可用模型：\(preview)。请在设置中改成其中一个真实模型 ID。"
         case .requestFailed(let status, let message):
+            if status == 401 || status == 403 {
+                return "总结模型认证失败（\(status)）。请确认 API Key 有效，并点击“保存并测试”。"
+            }
+            if status == 404 {
+                return "总结模型接口不存在（404）。请填写服务商 API 根地址，例如 https://xtapi.site/v1；应用会自动补全 /chat/completions。"
+            }
             return "总结模型请求失败（\(status)）：\(message)"
+        case .networkFailed(let message):
+            return "总结模型连接失败：\(message)"
         case .emptyResponse:
             return "总结模型没有返回内容。"
+        case .invalidModelList:
+            return "服务商返回的模型列表格式无法识别。可以检查 API 地址，或使用手动模型 ID 兜底。"
         case .invalidStructuredResponse:
             return "总结模型返回格式无法识别。"
         }
@@ -37,15 +90,14 @@ struct MeetingSummaryEngine: Sendable {
             return MeetingAnalysisBuilder.build(from: segments)
         }
 
-        guard let endpoint = URL(string: settings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
-              endpoint.scheme != nil,
-              endpoint.host != nil else {
-            throw SummaryEngineError.invalidEndpoint
-        }
+        let endpoint = try chatCompletionsURL(from: settings.endpoint)
 
         if settings.provider.requiresAPIKey &&
             (apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             throw SummaryEngineError.missingAPIKey
+        }
+        guard !settings.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SummaryEngineError.invalidModelName
         }
 
         try Task.checkCancellation()
@@ -84,14 +136,14 @@ struct MeetingSummaryEngine: Sendable {
         apiKey: String?
     ) async throws {
         guard settings.provider != .localRules else { return }
-        guard let endpoint = URL(string: settings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
-              endpoint.scheme != nil,
-              endpoint.host != nil else {
-            throw SummaryEngineError.invalidEndpoint
-        }
+        let endpoint = try chatCompletionsURL(from: settings.endpoint)
         if settings.provider.requiresAPIKey &&
             (apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             throw SummaryEngineError.missingAPIKey
+        }
+        let requestedModel = settings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !requestedModel.isEmpty else {
+            throw SummaryEngineError.invalidModelName
         }
 
         _ = try await requestText(
@@ -101,8 +153,136 @@ struct MeetingSummaryEngine: Sendable {
             system: "你是一个接口连通性测试器。",
             endpoint: endpoint,
             settings: settings,
+            apiKey: apiKey,
+            maxTokens: 16,
+            timeoutInterval: 60
+        )
+    }
+
+    func discoverModels(
+        settings: SummaryModelSettings,
+        apiKey: String?
+    ) async throws -> [String]? {
+        guard settings.provider == .custom else { return nil }
+        let endpoint = try chatCompletionsURL(from: settings.endpoint)
+        guard let modelsEndpoint = modelsURL(from: endpoint) else {
+            return nil
+        }
+        return try await requestModels(
+            endpoint: modelsEndpoint,
             apiKey: apiKey
         )
+    }
+
+    private func chatCompletionsURL(from rawEndpoint: String) throws -> URL {
+        let value = rawEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              var components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host != nil else {
+            throw SummaryEngineError.invalidEndpoint
+        }
+
+        var path = components.path
+        while path.count > 1 && path.hasSuffix("/") {
+            path.removeLast()
+        }
+
+        let lowercasedPath = path.lowercased()
+        let isKnownChatEndpoint = [
+            "/chat/completions",
+            "/text/chatcompletion_v2"
+        ].contains { lowercasedPath.hasSuffix($0) }
+        if !isKnownChatEndpoint {
+            path = path.isEmpty
+                ? "/v1/chat/completions"
+                : "\(path)/chat/completions"
+        }
+
+        components.path = path
+        guard let endpoint = components.url else {
+            throw SummaryEngineError.invalidEndpoint
+        }
+        return endpoint
+    }
+
+    private func modelsURL(from chatEndpoint: URL) -> URL? {
+        guard var components = URLComponents(
+            url: chatEndpoint,
+            resolvingAgainstBaseURL: false
+        ) else {
+            return nil
+        }
+
+        let suffix = "/chat/completions"
+        guard components.path.lowercased().hasSuffix(suffix) else {
+            return nil
+        }
+
+        let basePath = String(components.path.dropLast(suffix.count))
+        components.path = (basePath.isEmpty ? "" : basePath) + "/models"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private func requestModels(endpoint: URL, apiKey: String?) async throws -> [String]? {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        if let apiKey, !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            throw SummaryEngineError.networkFailed(networkMessage(for: error))
+        } catch {
+            throw SummaryEngineError.networkFailed(error.localizedDescription)
+        }
+        try Task.checkCancellation()
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SummaryEngineError.emptyResponse
+        }
+
+        if httpResponse.statusCode == 404 {
+            // Some compatible gateways do not expose /models. Let the chat
+            // request remain the source of truth in that case.
+            return []
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw SummaryEngineError.requestFailed(
+                httpResponse.statusCode,
+                responseMessage(from: data)
+            )
+        }
+
+        let decoder = JSONDecoder()
+        let modelReferences: [SummaryModelReference]
+        if let decoded = try? decoder.decode(SummaryModelsResponse.self, from: data) {
+            modelReferences = decoded.data ?? decoded.models ?? []
+        } else if let decoded = try? decoder.decode([SummaryModelReference].self, from: data) {
+            modelReferences = decoded
+        } else {
+            throw SummaryEngineError.invalidModelList
+        }
+
+        return Array(
+            Set(
+                modelReferences
+                    .map(\.id)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        )
+        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     private func summarizeChapters(
@@ -146,7 +326,8 @@ struct MeetingSummaryEngine: Sendable {
                             system: Self.systemPrompt,
                             endpoint: endpoint,
                             settings: settings,
-                            apiKey: apiKey
+                            apiKey: apiKey,
+                            maxTokens: 1_800
                         )
                         return (index, result)
                     }
@@ -213,7 +394,8 @@ struct MeetingSummaryEngine: Sendable {
             system: Self.systemPrompt,
             endpoint: endpoint,
             settings: settings,
-            apiKey: apiKey
+            apiKey: apiKey,
+            maxTokens: 6_000
         )
         return try parseAnalysis(response, settings: settings)
     }
@@ -223,7 +405,9 @@ struct MeetingSummaryEngine: Sendable {
         system: String,
         endpoint: URL,
         settings: SummaryModelSettings,
-        apiKey: String?
+        apiKey: String?,
+        maxTokens: Int? = nil,
+        timeoutInterval: TimeInterval = 10 * 60
     ) async throws -> String {
         struct Message: Encodable {
             let role: String
@@ -234,13 +418,23 @@ struct MeetingSummaryEngine: Sendable {
             let model: String
             let messages: [Message]
             let temperature: Double
+            let maxTokens: Int?
+            let stream: Bool
+
+            private enum CodingKeys: String, CodingKey {
+                case model
+                case messages
+                case temperature
+                case maxTokens = "max_tokens"
+                case stream
+            }
         }
 
         try Task.checkCancellation()
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10 * 60
+        request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let apiKey, !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -252,21 +446,32 @@ struct MeetingSummaryEngine: Sendable {
                 Message(role: "system", content: system),
                 Message(role: "user", content: prompt)
             ],
-            temperature: 0.1
+            temperature: 0.1,
+            maxTokens: maxTokens,
+            stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            throw SummaryEngineError.networkFailed(networkMessage(for: error))
+        } catch {
+            throw SummaryEngineError.networkFailed(error.localizedDescription)
+        }
         try Task.checkCancellation()
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SummaryEngineError.emptyResponse
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let message = String(decoding: data, as: UTF8.self)
             throw SummaryEngineError.requestFailed(
                 httpResponse.statusCode,
-                message.isEmpty ? "服务端没有提供错误信息。" : String(message.prefix(500))
+                responseMessage(from: data)
             )
         }
 
@@ -289,6 +494,50 @@ struct MeetingSummaryEngine: Sendable {
             throw SummaryEngineError.emptyResponse
         }
         return content
+    }
+
+    private func responseMessage(from data: Data) -> String {
+        struct ErrorEnvelope: Decodable {
+            struct APIError: Decodable {
+                let message: String?
+                let code: String?
+                let type: String?
+            }
+
+            let error: APIError?
+        }
+
+        if let envelope = try? JSONDecoder().decode(ErrorEnvelope.self, from: data),
+           let apiError = envelope.error {
+            let parts: [String] = [apiError.message, apiError.code, apiError.type]
+                .compactMap { value in
+                    guard let value else { return nil }
+                    let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return clean.isEmpty ? nil : clean
+                }
+            if !parts.isEmpty {
+                return String(parts.joined(separator: " · ").prefix(500))
+            }
+        }
+
+        let raw = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.isEmpty ? "服务端没有提供错误信息。" : String(raw.prefix(500))
+    }
+
+    private func networkMessage(for error: URLError) -> String {
+        switch error.code {
+        case .timedOut:
+            return "请求超时，服务商在限定时间内没有返回。可以换一个模型，或稍后重试。"
+        case .notConnectedToInternet:
+            return "当前没有可用网络。"
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            return "无法连接服务商地址，请检查网络和 API 地址。"
+        case .secureConnectionFailed, .serverCertificateUntrusted:
+            return "HTTPS 安全连接失败，请检查服务商证书或地址。"
+        default:
+            return error.localizedDescription
+        }
     }
 
     private func parseAnalysis(

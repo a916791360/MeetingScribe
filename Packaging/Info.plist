@@ -21,11 +21,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.3.0</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.business</string>
 	<key>LSMinimumSystemVersion</key>
@@ -35,6 +35,6 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用于录制会议音频并在本地生成转写与纪要。</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>用于混录线上会议声音，所有录音和处理结果都保留在本机。</string>
+	<string>用于录制会议期间的系统声音和麦克风，所有录音和处理结果都保留在本机。</string>
 </dict>
 </plist>

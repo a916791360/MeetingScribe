@@ -74,7 +74,6 @@ struct ContentView: View {
 
 struct WorkbenchSidebarView: View {
     @EnvironmentObject private var store: MeetingStore
-    @State private var showFailedSessions = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,71 +93,40 @@ struct WorkbenchSidebarView: View {
                     .padding(.horizontal, AppTheme.space4)
                     .padding(.top, AppTheme.space4)
 
-                    WorkbenchSidebarSection(
-                        title: "最近会议",
-                        subtitle: "",
-                        count: successfulSessions.count
-                    ) {
-                        VStack(spacing: 4) {
-                            ForEach(successfulSessions) { session in
-                                WorkbenchSessionRowView(
-                                    session: session,
-                                    isSelected: store.selectedSessionID == session.id
-                                ) {
-                                    store.selectedSessionID = session.id
-                                }
-                            }
+                    if successfulSessions.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("还没有可查看的会议")
+                                .font(.headline)
+                                .foregroundStyle(AppTheme.ink)
+                            Text("开始录音或导入音频，结果会显示在这里。")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
-
-                    if !failedSessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Button {
-                                showFailedSessions.toggle()
-                            } label: {
-                                WorkbenchSidebarDisclosureLabel(
-                                    title: "失败会话",
-                                    subtitle: "转写或整理未完成",
-                                    count: failedSessions.count,
-                                    isExpanded: showFailedSessions
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            if showFailedSessions {
-                                VStack(spacing: 4) {
-                                    ForEach(failedSessions) { session in
-                                        WorkbenchSessionRowView(
-                                            session: session,
-                                            isSelected: store.selectedSessionID == session.id
-                                        ) {
-                                            store.selectedSessionID = session.id
-                                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, AppTheme.space4)
+                    } else {
+                        WorkbenchSidebarSection(
+                            title: "最近会议",
+                            subtitle: "",
+                            count: successfulSessions.count
+                        ) {
+                            VStack(spacing: 4) {
+                                ForEach(successfulSessions) { session in
+                                    WorkbenchSessionRowView(
+                                        session: session,
+                                        isSelected: store.selectedSessionID == session.id
+                                    ) {
+                                        store.selectedSessionID = session.id
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, AppTheme.space4)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, AppTheme.space4)
             }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(store.statusText)
-                    .font(.callout)
-                    .foregroundStyle(AppTheme.ink)
-                    .lineLimit(2)
-                Text("结果只保留在这台 Mac 上。")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(AppTheme.space4)
-            .background(AppTheme.paperSoft)
         }
         .frame(minWidth: 274, idealWidth: 288, maxWidth: 330)
         .background(AppTheme.paper)
@@ -168,15 +136,16 @@ struct WorkbenchSidebarView: View {
         store.sessions.filter { $0.status != .failed }
     }
 
-    private var failedSessions: [MeetingSession] {
-        store.sessions.filter { $0.status == .failed }
-    }
 }
 
 struct WorkbenchSessionRowView: View {
     let session: MeetingSession
     let isSelected: Bool
     let action: () -> Void
+    @EnvironmentObject private var store: MeetingStore
+    @State private var isHovering = false
+    @State private var isRenamePresented = false
+    @State private var isDeleteConfirmationPresented = false
 
     var body: some View {
         Button(action: action) {
@@ -197,12 +166,10 @@ struct WorkbenchSessionRowView: View {
                     .foregroundStyle(subtitleColor)
 
                 HStack(spacing: 6) {
-                    Text(session.captureMode.shortTitle)
                     if let duration = session.duration {
-                        Text("·")
                         Text(duration.clockLabel)
+                        Text("·")
                     }
-                    Text("·")
                     Text(session.status.title)
                 }
                 .font(.caption)
@@ -222,11 +189,41 @@ struct WorkbenchSessionRowView: View {
             }
         }
         .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .contextMenu {
+            Button {
+                isRenamePresented = true
+            } label: {
+                Label("重命名", systemImage: "pencil")
+            }
+
+            Button(role: .destructive) {
+                isDeleteConfirmationPresented = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .sheet(isPresented: $isRenamePresented) {
+            WorkbenchRenameSessionSheet(initialTitle: session.title) { title in
+                store.renameSession(session, to: title)
+            }
+        }
+        .alert("删除这场会议？", isPresented: $isDeleteConfirmationPresented) {
+            Button("删除", role: .destructive) {
+                store.deleteSession(session)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("录音、逐字稿和纪要会一并从这台 Mac 删除，且无法恢复。")
+        }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var titleColor: Color {
-        AppTheme.ink
+        isSelected ? AppTheme.accent : AppTheme.ink
     }
 
     private var subtitleColor: Color {
@@ -234,7 +231,70 @@ struct WorkbenchSessionRowView: View {
     }
 
     private var backgroundColor: Color {
-        isSelected ? AppTheme.accentSoft : Color.clear
+        if isSelected {
+            return AppTheme.accentSoft
+        }
+        return isHovering ? AppTheme.paperSoft : Color.clear
+    }
+}
+
+struct WorkbenchRenameSessionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isTitleFocused: Bool
+    @State private var title: String
+    let onSave: (String) -> Void
+
+    init(initialTitle: String, onSave: @escaping (String) -> Void) {
+        _title = State(initialValue: initialTitle)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("重命名会议")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppTheme.ink)
+                Text("名称只用于左侧会话列表和会议页标题。")
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.muted)
+            }
+
+            TextField("会议名称", text: $title)
+                .textFieldStyle(.roundedBorder)
+                .focused($isTitleFocused)
+                .onSubmit(save)
+
+            HStack {
+                Spacer(minLength: 0)
+
+                Button("取消", role: .cancel) {
+                    dismiss()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.muted)
+
+                Button("保存") {
+                    save()
+                }
+                .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
+                .keyboardShortcut(.defaultAction)
+                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+        .background(AppTheme.paper)
+        .onAppear {
+            isTitleFocused = true
+        }
+    }
+
+    private func save() {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return }
+        onSave(cleanTitle)
+        dismiss()
     }
 }
 
@@ -272,42 +332,6 @@ struct WorkbenchSidebarSection<Content: View>: View {
             content()
         }
         .padding(.horizontal, AppTheme.space4)
-    }
-}
-
-struct WorkbenchSidebarDisclosureLabel: View {
-    let title: String
-    let subtitle: String
-    let count: Int
-    let isExpanded: Bool
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(AppTheme.ink)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Text("\(count)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.muted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(AppTheme.accentSoft, in: Capsule())
-
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(AppTheme.muted)
-        }
     }
 }
 
@@ -395,12 +419,6 @@ struct WorkbenchGlobalActionBar: View {
             .buttonStyle(WorkbenchLightButtonStyle())
             .disabled(store.isRecording || store.isProcessing)
 
-            WorkbenchCaptureSourceMenu(
-                selection: $store.captureMode,
-                isDisabled: store.isRecording || store.isProcessing,
-                compact: true
-            )
-
             Button {
                 toggleRecording()
             } label: {
@@ -422,12 +440,6 @@ struct WorkbenchGlobalActionBar: View {
             }
             .buttonStyle(WorkbenchLightButtonStyle())
             .disabled(store.isRecording || store.isProcessing)
-
-            WorkbenchCaptureSourceMenu(
-                selection: $store.captureMode,
-                isDisabled: store.isRecording || store.isProcessing,
-                compact: true
-            )
 
             Button {
                 toggleRecording()
@@ -460,7 +472,7 @@ struct WorkbenchGlobalActionBar: View {
         if store.isProcessing {
             return "\(store.processingStage) · \(store.processingProgress.percentLabel)"
         }
-        return "下一次录音：\(store.captureMode.title) · \(store.captureMode.subtitle)"
+        return "结束后自动生成逐字稿、速览和纪要"
     }
 
     private var primaryTitle: String {
@@ -485,74 +497,6 @@ struct WorkbenchGlobalActionBar: View {
         } else {
             store.startRecording()
         }
-    }
-}
-
-struct WorkbenchCaptureSourceMenu: View {
-    @Binding var selection: CaptureMode
-    let isDisabled: Bool
-    var compact: Bool = false
-
-    var body: some View {
-        Menu {
-            Section("下一次录音来源") {
-                ForEach(CaptureMode.recordingModes) { mode in
-                    Button {
-                        selection = mode
-                    } label: {
-                        Label {
-                            Text(mode.selectionLabel)
-                        } icon: {
-                            Image(systemName: mode.icon)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            Text("当前：\(selection.title) · \(selection.subtitle)")
-            Text("下次会沿用这个来源。")
-        } label: {
-            Group {
-                if compact {
-                    HStack(spacing: 6) {
-                        Image(systemName: selection.icon)
-                            .font(.caption.weight(.semibold))
-                        Text(selection.title)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .frame(minWidth: 92, minHeight: 20, alignment: .leading)
-                } else {
-                    HStack(spacing: 9) {
-                        Image(systemName: selection.icon)
-                            .font(.callout.weight(.semibold))
-                        Text(selection.selectionLabel)
-                            .font(.callout.weight(.semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2.weight(.semibold))
-                    }
-                }
-            }
-            .foregroundStyle(compact ? AppTheme.ink : AppTheme.accent)
-            .frame(minWidth: compact ? 108 : 220, minHeight: 20, alignment: .leading)
-            .padding(.horizontal, compact ? 8 : 12)
-            .padding(.vertical, compact ? 8 : 7)
-            .background(AppTheme.paperSoft, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                    .stroke(AppTheme.rule, lineWidth: 1)
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .disabled(isDisabled)
-        .accessibilityLabel("录音来源")
-        .accessibilityValue(selection.selectionLabel)
-        .help(isDisabled ? "录音或处理进行中，暂不能切换来源" : "当前为 \(selection.selectionLabel)，更改下一次录音来源")
     }
 }
 
@@ -644,8 +588,8 @@ struct WorkbenchSessionHeader: View {
                         WorkbenchSessionMeta(text: duration.clockLabel, systemImage: "clock")
                     }
                     WorkbenchSessionMeta(
-                        text: session.captureMode.shortTitle,
-                        systemImage: session.captureMode.icon
+                        text: session.status.title,
+                        systemImage: session.status.icon
                     )
                     if let summaryModel = session.analysis.summaryModel {
                         WorkbenchSessionMeta(text: summaryModel, systemImage: "wand.and.stars")
@@ -1258,7 +1202,7 @@ struct WorkbenchFailureState: View {
                 }
             }
 
-            Text("失败记录会留在侧栏折叠区，新的录音不会和它们混在一起。")
+            Text("原始录音仍然保留在这台 Mac 上。")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.72))
         }
@@ -1371,7 +1315,6 @@ struct WorkbenchSnapshotBand: View {
                         if let duration = session.duration {
                             WorkbenchDarkChip(text: duration.clockLabel, systemImage: "clock")
                         }
-                        WorkbenchDarkChip(text: session.captureMode.selectionLabel, systemImage: session.captureMode.icon)
                         WorkbenchDarkChip(text: "置信度 \(session.analysis.confidence.confidenceLabel)", systemImage: "scope")
                     }
 
@@ -1831,7 +1774,7 @@ struct WorkbenchSettingsPane: View {
                 VStack(alignment: .leading, spacing: 24) {
                     WorkbenchSettingsGroup(
                         title: "会议整理模型",
-                        subtitle: "只负责会后生成速览、纪要、决策和待办。中文逐字稿始终使用本机 Whisper，与这里的选择互不影响。"
+                        subtitle: "只负责会后生成速览、纪要、决策和待办。中文逐字稿始终由本机 Whisper 完成。"
                     ) {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(alignment: .center, spacing: 12) {
@@ -1920,14 +1863,100 @@ struct WorkbenchSettingsPane: View {
                             } else {
                                 VStack(alignment: .leading, spacing: 12) {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text("模型名称")
+                                        Text(store.availableSummaryModels.isEmpty ? "模型 ID" : "服务商模型")
                                             .font(.callout.weight(.semibold))
                                             .foregroundStyle(AppTheme.ink)
-                                        TextField(
-                                            "例如 qwen2.5:7b",
-                                            text: $store.summarySettings.modelName
+                                        Text(
+                                            store.availableSummaryModels.isEmpty
+                                                ? (
+                                                    store.canEditSummaryModelManually
+                                                        ? "服务商未提供模型列表时，可手动填写模型 ID。"
+                                                        : "先保存并测试，成功后选择服务商提供的模型。"
+                                                )
+                                                : "连接通过，选择一个用于会后整理。"
                                         )
-                                        .textFieldStyle(.roundedBorder)
+                                            .font(.caption)
+                                            .foregroundStyle(AppTheme.muted)
+
+                                        if store.availableSummaryModels.isEmpty {
+                                            if store.canEditSummaryModelManually {
+                                                TextField(
+                                                    "服务商提供的模型 ID",
+                                                    text: $store.summarySettings.modelName
+                                                )
+                                                .textFieldStyle(.roundedBorder)
+                                            } else {
+                                                Label(
+                                                    "测试通过后，这里会出现模型选择菜单",
+                                                    systemImage: "list.bullet.rectangle"
+                                                )
+                                                .font(.callout)
+                                                .foregroundStyle(AppTheme.muted)
+                                            }
+                                        } else {
+                                            HStack(spacing: 8) {
+                                                Menu {
+                                                    ForEach(store.availableSummaryModels, id: \.self) { model in
+                                                        Button {
+                                                            store.selectSummaryModel(model)
+                                                        } label: {
+                                                            if model == store.summarySettings.modelName {
+                                                                Label(model, systemImage: "checkmark")
+                                                            } else {
+                                                                Text(model)
+                                                            }
+                                                        }
+                                                    }
+                                                } label: {
+                                                    HStack(spacing: 8) {
+                                                        Text(
+                                                            store.summarySettings.modelName.isEmpty
+                                                                ? "选择模型"
+                                                                : store.summarySettings.modelName
+                                                        )
+                                                        .lineLimit(1)
+                                                        .truncationMode(.middle)
+                                                        Spacer(minLength: 8)
+                                                        Image(systemName: "chevron.up.chevron.down")
+                                                            .font(.caption2.weight(.semibold))
+                                                    }
+                                                    .foregroundStyle(AppTheme.ink)
+                                                    .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 9)
+                                                    .background(
+                                                        AppTheme.paper,
+                                                        in: RoundedRectangle(
+                                                            cornerRadius: AppTheme.radiusSmall,
+                                                            style: .continuous
+                                                        )
+                                                    )
+                                                    .overlay(
+                                                        RoundedRectangle(
+                                                            cornerRadius: AppTheme.radiusSmall,
+                                                            style: .continuous
+                                                        )
+                                                        .stroke(AppTheme.rule, lineWidth: 1)
+                                                    )
+                                                }
+                                                .menuStyle(.borderlessButton)
+                                                .help("选择服务商提供的总结模型")
+                                                .accessibilityLabel("服务商模型")
+                                                .accessibilityValue(store.summarySettings.modelName)
+
+                                                Button {
+                                                    store.testSummaryModel()
+                                                } label: {
+                                                    Image(systemName: "arrow.clockwise")
+                                                        .font(.callout.weight(.semibold))
+                                                        .frame(width: 20, height: 20)
+                                                }
+                                                .buttonStyle(WorkbenchToolbarIconButtonStyle())
+                                                .help("重新获取模型列表")
+                                                .accessibilityLabel("重新获取模型列表")
+                                                .disabled(store.isLoadingSummaryModels)
+                                            }
+                                        }
                                     }
 
                                     if store.summarySettings.provider.requiresAPIKey {
@@ -1960,40 +1989,42 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     }
 
-                                    DisclosureGroup("接口地址（高级设置）") {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("API 地址")
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(AppTheme.ink)
+                                        Text("填写服务商 API 根地址即可，例如 https://xtapi.site/v1。应用会自动补全 /chat/completions，也兼容直接填写完整接口地址。")
+                                            .font(.caption)
+                                            .foregroundStyle(AppTheme.muted)
+                                            .fixedSize(horizontal: false, vertical: true)
+
                                         TextField(
-                                            "OpenAI 兼容的 chat completions 地址",
+                                            "https://服务商域名/v1",
                                             text: $store.summarySettings.endpoint
                                         )
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .monospaced))
-                                        .padding(.top, 6)
                                     }
-                                    .font(.callout.weight(.semibold))
-                                    .foregroundStyle(AppTheme.ink)
 
                                     HStack(spacing: 12) {
                                         Button {
                                             store.testSummaryModel()
                                         } label: {
-                                            Label("测试连接", systemImage: "bolt.horizontal")
+                                            Label("保存并测试", systemImage: "bolt.horizontal")
                                         }
                                         .buttonStyle(WorkbenchLightButtonStyle())
                                         .disabled(
-                                            store.summarySettings.modelName
+                                            store.summarySettings.endpoint
                                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                                                 .isEmpty ||
-                                                store.summarySettings.endpoint
-                                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                                .isEmpty ||
-                                                store.summaryTestStatus == "正在测试连接…"
+                                                store.isLoadingSummaryModels
                                         )
 
                                         if !store.summaryTestStatus.isEmpty {
                                             Text(store.summaryTestStatus)
                                                 .font(.caption)
                                                 .foregroundStyle(
-                                                    store.summaryTestStatus == "连接正常"
+                                                    store.summaryTestStatus.hasPrefix("连接正常")
                                                         ? AppTheme.success
                                                         : AppTheme.muted
                                                 )
@@ -2094,6 +2125,7 @@ struct WorkbenchSettingsPane: View {
             store.refreshPreferences()
         }
         .onChange(of: store.summarySettings.endpoint) { _, _ in
+            store.invalidateSummaryModels()
             store.refreshPreferences()
         }
     }

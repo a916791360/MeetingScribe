@@ -9,10 +9,8 @@ enum CaptureMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .microphone:
-            return "线下会议"
-        case .mixed:
-            return "线上会议"
+        case .microphone, .mixed:
+            return "会议录音"
         case .imported:
             return "导入音频"
         }
@@ -20,10 +18,8 @@ enum CaptureMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var shortTitle: String {
         switch self {
-        case .microphone:
-            return "线下"
-        case .mixed:
-            return "线上"
+        case .microphone, .mixed:
+            return "录音"
         case .imported:
             return "音频文件"
         }
@@ -31,10 +27,8 @@ enum CaptureMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var subtitle: String {
         switch self {
-        case .microphone:
-            return "Mac 麦克风"
-        case .mixed:
-            return "钉钉混录"
+        case .microphone, .mixed:
+            return "系统声音与 Mac 麦克风"
         case .imported:
             return "已有音频"
         }
@@ -173,7 +167,7 @@ enum SummaryModelProvider: String, Codable, CaseIterable, Identifiable, Sendable
         case .deepSeek, .kimi, .zhipu, .miniMax:
             return "调用对应厂商的 OpenAI 兼容接口"
         case .custom:
-            return "填写自己的模型地址和模型名"
+            return "填写服务商地址，测试后选择模型"
         }
     }
 

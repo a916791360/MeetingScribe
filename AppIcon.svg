@@ -1,70 +1,83 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
   <defs>
-    <linearGradient id="bg" x1="96" y1="84" x2="920" y2="944" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#314a6e"/>
-      <stop offset="0.54" stop-color="#13233e"/>
-      <stop offset="1" stop-color="#07111d"/>
+    <linearGradient id="background" x1="126" y1="72" x2="898" y2="968" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27313B"/>
+      <stop offset="0.48" stop-color="#151C25"/>
+      <stop offset="1" stop-color="#0B1016"/>
     </linearGradient>
-    <linearGradient id="bgGlow" x1="176" y1="126" x2="858" y2="784" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8ec5ff" stop-opacity="0.18"/>
-      <stop offset="0.5" stop-color="#38bdf8" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    <linearGradient id="backgroundSheen" x1="122" y1="96" x2="878" y2="438" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8FE9D7" stop-opacity="0.18"/>
+      <stop offset="0.46" stop-color="#5BC8C2" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#5BC8C2" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="bgShade" x1="190" y1="744" x2="844" y2="888" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0d1728" stop-opacity="0.72"/>
-      <stop offset="1" stop-color="#0d1728" stop-opacity="0.98"/>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientTransform="translate(512 474) rotate(90) scale(322)">
+      <stop offset="0" stop-color="#FFB36B" stop-opacity="0.34"/>
+      <stop offset="0.58" stop-color="#F26B5B" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#F26B5B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="microphone" x1="372" y1="208" x2="648" y2="774" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD294"/>
+      <stop offset="0.28" stop-color="#FF9B6B"/>
+      <stop offset="0.7" stop-color="#EF5E59"/>
+      <stop offset="1" stop-color="#C43F4D"/>
     </linearGradient>
-    <linearGradient id="sheet" x1="260" y1="228" x2="744" y2="812" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f4f8fd"/>
-      <stop offset="0.56" stop-color="#e5edf7"/>
-      <stop offset="1" stop-color="#d5e0ee"/>
+    <linearGradient id="microphoneShade" x1="368" y1="300" x2="624" y2="728" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE3B6" stop-opacity="0.52"/>
+      <stop offset="0.5" stop-color="#FF9D73" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#8C2D46" stop-opacity="0.32"/>
     </linearGradient>
-    <linearGradient id="sheetFold" x1="668" y1="228" x2="770" y2="330" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#edf4fb"/>
-      <stop offset="1" stop-color="#d8e2ef"/>
+    <linearGradient id="stand" x1="420" y1="674" x2="606" y2="814" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB875"/>
+      <stop offset="1" stop-color="#D34A50"/>
     </linearGradient>
-    <linearGradient id="mic" x1="426" y1="308" x2="592" y2="706" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7dd3fc"/>
-      <stop offset="0.45" stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#1d4ed8"/>
-    </linearGradient>
-    <linearGradient id="micSoft" x1="446" y1="300" x2="574" y2="448" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f4f9ff"/>
-      <stop offset="1" stop-color="#d9e7fb"/>
-    </linearGradient>
-    <filter id="shadow" x="164" y="168" width="696" height="748" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.34"/>
+    <filter id="shadow" x="244" y="156" width="536" height="720" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#000000" flood-opacity="0.38"/>
     </filter>
-    <filter id="micShadow" x="360" y="270" width="304" height="494" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000000" flood-opacity="0.24"/>
+    <filter id="smallShadow" x="700" y="68" width="176" height="176" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.35"/>
     </filter>
   </defs>
 
-  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bg)"/>
-  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bgGlow)"/>
-  <path d="M 170 146 C 330 78, 640 82, 854 220 C 732 190, 566 194, 410 224 C 294 246, 210 234, 170 146 Z" fill="#ffffff" fill-opacity="0.05"/>
-  <path d="M 132 822 C 302 746, 618 716, 894 780 C 744 866, 474 898, 256 882 C 182 876, 144 862, 132 822 Z" fill="url(#bgShade)"/>
+  <rect x="16" y="16" width="992" height="992" rx="230" fill="url(#background)"/>
+  <rect x="16" y="16" width="992" height="992" rx="230" fill="url(#backgroundSheen)"/>
 
-  <g filter="url(#shadow)" transform="rotate(-7 512 512)">
-    <rect x="246" y="214" width="532" height="596" rx="82" fill="url(#sheet)"/>
-    <path d="M 676 214 L 778 316 L 676 316 Z" fill="url(#sheetFold)"/>
-    <path d="M 676 214 L 778 316" stroke="#bfd0e2" stroke-opacity="0.75" stroke-width="2"/>
-    <rect x="310" y="308" width="194" height="20" rx="10" fill="#c7d3e3"/>
-    <rect x="310" y="354" width="250" height="20" rx="10" fill="#d3deeb"/>
-    <rect x="310" y="400" width="224" height="20" rx="10" fill="#cad6e5"/>
-    <rect x="310" y="446" width="260" height="20" rx="10" fill="#d3deeb"/>
-    <rect x="310" y="492" width="206" height="20" rx="10" fill="#cad6e5"/>
-    <rect x="310" y="610" width="154" height="18" rx="9" fill="#aebed1" fill-opacity="0.92"/>
-    <rect x="310" y="644" width="230" height="18" rx="9" fill="#cad6e5"/>
+  <path
+    d="M92 258C224 130 420 70 624 96C790 118 906 202 944 290C790 226 604 202 420 238C286 264 174 296 92 258Z"
+    fill="#D7FFF4"
+    fill-opacity="0.05"
+  />
+  <path
+    d="M92 784C262 710 492 720 764 786C824 800 878 820 924 850C760 952 478 968 274 908C190 884 130 842 92 784Z"
+    fill="#05080D"
+    fill-opacity="0.46"
+  />
+
+  <circle cx="512" cy="474" r="320" fill="url(#halo)"/>
+  <circle cx="512" cy="474" r="274" stroke="#A8F0DF" stroke-opacity="0.17" stroke-width="14"/>
+  <circle cx="512" cy="474" r="224" stroke="#FFAE72" stroke-opacity="0.14" stroke-width="6"/>
+
+  <g stroke="#8DE8D6" stroke-linecap="round" fill="none">
+    <path d="M280 386C248 438 248 510 280 562" stroke-width="18" stroke-opacity="0.72"/>
+    <path d="M228 344C176 426 176 522 228 604" stroke-width="12" stroke-opacity="0.42"/>
+    <path d="M744 386C776 438 776 510 744 562" stroke-width="18" stroke-opacity="0.72"/>
+    <path d="M796 344C848 426 848 522 796 604" stroke-width="12" stroke-opacity="0.42"/>
   </g>
 
-  <g filter="url(#micShadow)">
-    <ellipse cx="512" cy="364" rx="148" ry="120" fill="url(#micSoft)"/>
-    <ellipse cx="512" cy="364" rx="148" ry="120" fill="#ffffff" fill-opacity="0.08"/>
-    <rect x="414" y="408" width="196" height="266" rx="98" fill="url(#mic)"/>
-    <rect x="488" y="326" width="28" height="236" rx="14" fill="#f5fbff" fill-opacity="0.23"/>
-    <rect x="488" y="326" width="14" height="154" rx="7" fill="#8edaff" fill-opacity="0.26"/>
-    <rect x="476" y="646" width="72" height="96" rx="36" fill="url(#mic)"/>
-    <rect x="430" y="730" width="164" height="30" rx="15" fill="#c1d0e2"/>
+  <g filter="url(#shadow)">
+    <rect x="346" y="214" width="332" height="474" rx="166" fill="url(#microphone)"/>
+    <rect x="370" y="238" width="284" height="426" rx="142" fill="url(#microphoneShade)"/>
+    <path d="M416 302C416 272 440 248 470 248H500V574C500 604 476 628 446 628C430 628 416 615 416 598V302Z" fill="#FFF3D9" fill-opacity="0.24"/>
+    <path d="M390 466C390 578 444 652 512 652C580 652 634 578 634 466" stroke="#8B3046" stroke-opacity="0.3" stroke-width="13" stroke-linecap="round"/>
+
+    <path d="M306 492C306 638 398 730 512 730C626 730 718 638 718 492" stroke="#FFE0B0" stroke-opacity="0.68" stroke-width="24" stroke-linecap="round"/>
+    <rect x="478" y="712" width="68" height="102" rx="34" fill="url(#stand)"/>
+    <rect x="368" y="796" width="288" height="42" rx="21" fill="#E7C5A4"/>
+    <rect x="380" y="800" width="264" height="24" rx="12" fill="#FFF0D1" fill-opacity="0.28"/>
+  </g>
+
+  <g filter="url(#smallShadow)">
+    <circle cx="792" cy="168" r="54" fill="#111923" fill-opacity="0.88"/>
+    <circle cx="792" cy="168" r="36" fill="#FF5D5B"/>
+    <circle cx="780" cy="156" r="11" fill="#FFD4A3" fill-opacity="0.7"/>
   </g>
 </svg>
