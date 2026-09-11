@@ -47,7 +47,9 @@ final class MeetingStore: ObservableObject {
 
     private static let chunkDuration: TimeInterval = 10 * 60
     private static let chunkOverlap: TimeInterval = 2
-    private static let maxRecordingDuration: UInt64 = 3 * 60 * 60 * 1_000_000_000
+    /// 录音上限（秒）。界面拿它来做「快到点了」的提前预警。
+    static let maxRecordingSeconds: TimeInterval = 3 * 60 * 60
+    private static let maxRecordingDuration: UInt64 = UInt64(maxRecordingSeconds) * 1_000_000_000
 
     private enum Preferences {
         static let captureMode = "meetingScribe.captureMode"
@@ -74,7 +76,10 @@ final class MeetingStore: ObservableObject {
         whisperCLIPath = storedCLIPath == nil || storedCLIPath == legacyDefaults.cliURL.path
             ? defaults.cliURL.path
             : storedCLIPath!
-        whisperModelPath = storedModelPath == nil || storedModelPath == legacyDefaults.modelURL.path
+        // 模型路径只在「用户没自己挑过模型」时才跟着默认值走。
+        // 判定依据是存的值等于某个内置默认路径（内置 small / 历史外部路径 / 上一次自动选定）——
+        // 只要用户在设置里指过别的文件，这里就一个字都不动。
+        whisperModelPath = storedModelPath == nil || Self.isImplicitModelPath(storedModelPath!)
             ? defaults.modelURL.path
             : storedModelPath!
         summarySettings = SummaryModelSettings(
@@ -1146,17 +1151,80 @@ final class MeetingStore: ObservableObject {
     }
 
     static func defaultRuntimePaths() -> (cliURL: URL, modelURL: URL) {
-        if let resourceURL = Bundle.main.resourceURL {
-            let bundledRoot = resourceURL.appendingPathComponent("whisper", isDirectory: true)
-            let bundledCLI = bundledRoot.appendingPathComponent("bin/whisper-cli")
-            let bundledModel = bundledRoot.appendingPathComponent("models/ggml-small.bin")
-            if FileManager.default.isExecutableFile(atPath: bundledCLI.path),
-               FileManager.default.fileExists(atPath: bundledModel.path) {
-                return (bundledCLI, bundledModel)
-            }
-        }
+        let legacy = legacyRuntimePaths()
+        // CLI 与模型分开解析，别再用「两个都在才算数」的捆绑判断。
+        let cli = bundledCLIURL() ?? legacy.cliURL
+        // 模型按质量优先级挑：用户模型目录里的更强模型 > 内置 small > 历史外部路径。
+        // 这样把 ggml-*.bin 丢进模型目录、重启就能用上，不必手动改设置。
+        let model = preferredManagedModelURL() ?? bundledModelURL() ?? legacy.modelURL
+        return (cli, model)
+    }
 
-        return legacyRuntimePaths()
+    /// 应用包内自带的 whisper-cli。
+    private static func bundledCLIURL() -> URL? {
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+        let url = resourceURL
+            .appendingPathComponent("whisper", isDirectory: true)
+            .appendingPathComponent("bin/whisper-cli")
+        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+    }
+
+    /// 应用包内自带的 whisper 模型（small）。
+    private static func bundledModelURL() -> URL? {
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+        let url = resourceURL
+            .appendingPathComponent("whisper", isDirectory: true)
+            .appendingPathComponent("models/ggml-small.bin")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// 用户级模型目录。把 ggml-*.bin 放进这里就会被自动发现。
+    /// 它和会话目录同级，但 `SessionStorage.loadSession` 找不到 session.json 会返回 nil，
+    /// 所以多出这个子目录不会影响会话扫描。
+    static func modelsDirectoryURL() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
+        return base
+            .appendingPathComponent("MeetingScribe", isDirectory: true)
+            .appendingPathComponent("models", isDirectory: true)
+    }
+
+    /// 质量优先级。turbo 用的是 large-v3 的编码器 + 蒸馏后的浅解码器，
+    /// 中文准确率接近 large-v3、速度快好几倍，所以排第一。
+    private static let modelPriority = [
+        "ggml-large-v3-turbo.bin",
+        "ggml-large-v3.bin",
+        "ggml-medium.bin",
+        "ggml-small.bin",
+        "ggml-base.bin",
+        "ggml-tiny.bin"
+    ]
+
+    /// 模型目录里质量最高的那个模型。
+    static func preferredManagedModelURL() -> URL? {
+        let directory = modelsDirectoryURL()
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for preferred in modelPriority where names.contains(preferred) {
+            return directory.appendingPathComponent(preferred)
+        }
+        // 名字不认识时，退而求其次取任意一个 ggml-*.bin。
+        if let fallback = names
+            .filter({ $0.hasPrefix("ggml-") && $0.hasSuffix(".bin") })
+            .sorted()
+            .first {
+            return directory.appendingPathComponent(fallback)
+        }
+        return nil
+    }
+
+    /// 是否是「应用自己选定的」模型路径，即用户没表达过偏好。
+    private static func isImplicitModelPath(_ path: String) -> Bool {
+        var implicit = [legacyRuntimePaths().modelURL.path, defaultRuntimePaths().modelURL.path]
+        if let bundled = bundledModelURL() {
+            implicit.append(bundled.path)
+        }
+        return implicit.contains(path)
     }
 
     private static func legacyRuntimePaths() -> (cliURL: URL, modelURL: URL) {

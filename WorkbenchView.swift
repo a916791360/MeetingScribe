@@ -413,8 +413,8 @@ struct WorkbenchDetailView: View {
                     Label("导入音频", systemImage: "square.and.arrow.down")
                 }
                 .labelStyle(.titleAndIcon)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
+                .buttonStyle(WorkbenchToolbarButtonStyle())
                 .help("导入一段已有音频")
                 .disabled(store.isRecording || store.isProcessing)
             }
@@ -426,10 +426,8 @@ struct WorkbenchDetailView: View {
                     Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
                 }
                 .labelStyle(.titleAndIcon)
-                // 实底 + 着色：占满一行里唯一的高权重，录制/处理中整体转为危险色。
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(primaryTint)
+                // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
+                .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
                 .help(primaryTitle(for: session))
             }
 
@@ -439,8 +437,7 @@ struct WorkbenchDetailView: View {
                 } label: {
                     Image(systemName: "gearshape")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
                 .help("设置")
                 .accessibilityLabel("设置")
             }
@@ -999,10 +996,20 @@ struct WorkbenchSummaryFallbackNotice: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "info.circle")
                 .foregroundStyle(AppTheme.warning)
-            Text("整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。")
-                .font(.callout)
-                .foregroundStyle(AppTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。")
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 真实原因要看得见。原来它只喂给了 `.help`（鼠标悬停才出），
+                // 于是界面上永远只有一句"未返回"，用户根本不知道为什么。
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
         }
         .padding(.vertical, 12)
@@ -1319,146 +1326,404 @@ struct WorkbenchFailureState: View {
 ///    看着像卡死。现在录音阶段改走每秒一格的已用时长，进度条只在转写阶段出现。
 ///
 /// 4. **进度区不再重复右上角的已用时长，也不再重复段号。** 详见 `progressBox` 的注释。
+/// 录音 / 转写进行中的界面。
+///
+/// **为什么从深色改成浅色。** 第七轮把它做成了占满内容区的深色面板，但整个应用是
+/// Cobalt 浅色工作台——纸面、墨字、一条品牌蓝。深色面板是全应用唯一的例外，
+/// 读起来像在浅色纸上贴了一块黑板，正是「太土」「黑色部分」的来源。这里回到
+/// 纸面 + 墨字，彩色只留给真正"活着"的信号：录音红点、音源波形、进度条。
+///
+/// **为什么信息变多了。** 原来只有：状态胶囊、计时、一段波形、一句话、一条进度。
+/// 参考通义听悟的「实时记录」和钉钉 AI 听记的会中界面，两者都把**实时逐字稿**当主体
+/// ——文字一行行滚出来、时间戳挂在左侧，用户随时能看到"它到底听清了什么"，
+/// 这才是有信息量的等待。本项目管线本来就是分段转写、每段完成即写回
+/// `session.transcriptSegments`（见 `MeetingStore` 的分段循环），所以直接把它们
+/// 实时列出来即可，不必改管线。
+///
+/// 两阶段共用同一骨架（状态条 / 主体 / 页脚），只换主体：
+/// - **录音中**：大号计时器当主角 + 两路音源在采集
+/// - **转写中**：实时逐字稿当主角 + 段进度与预计剩余
 struct WorkbenchProcessingState: View {
     let session: MeetingSession
 
     private var isRecordingPhase: Bool { session.status == .recording }
 
+    private var segments: [TranscriptSegment] {
+        session.transcriptSegments.sorted { $0.start < $1.start }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: AppTheme.space3) {
-                WorkbenchDarkChip(
-                    text: isRecordingPhase ? "录音中" : "正在转写",
-                    systemImage: isRecordingPhase ? "record.circle.fill" : "waveform"
+        VStack(alignment: .leading, spacing: 0) {
+            statusBar
+            hairline
+            content
+            hairline
+            footer
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.paperSoft)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                .stroke(AppTheme.rule, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+    }
+
+    private var hairline: some View {
+        Rectangle()
+            .fill(AppTheme.rule)
+            .frame(height: 1)
+    }
+
+    // MARK: - 状态条
+
+    private var statusBar: some View {
+        HStack(spacing: AppTheme.space3) {
+            if isRecordingPhase {
+                WorkbenchLiveDot()
+            } else {
+                Image(systemName: "waveform")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.accent)
+            }
+
+            Text(isRecordingPhase ? "录音中" : "正在转写")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text(session.captureMode.subtitle)
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.muted)
+
+            Spacer(minLength: AppTheme.space4)
+
+            if !isRecordingPhase, let total = session.processingTotalChunks, total > 0 {
+                Text("第 \(min(completedChunks + 1, total))/\(total) 段")
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.muted)
+            }
+        }
+        .padding(.horizontal, AppTheme.space5)
+        .padding(.vertical, AppTheme.space4)
+    }
+
+    // MARK: - 主体
+
+    @ViewBuilder
+    private var content: some View {
+        if isRecordingPhase {
+            recordingBody
+        } else {
+            transcriptionBody
+        }
+    }
+
+    /// 录音中：计时器是主角，两路音源各给一张卡。
+    private var recordingBody: some View {
+        VStack(spacing: AppTheme.space5) {
+            Spacer(minLength: AppTheme.space4)
+
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(spacing: AppTheme.space3) {
+                    Text(elapsedClock(now: context.date))
+                        .font(.system(size: 52, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(AppTheme.ink)
+
+                    Text("正在采集，结束后自动在本地转写")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.muted)
+                }
+            }
+
+            HStack(spacing: AppTheme.space3) {
+                WorkbenchCaptureSourceCard(
+                    title: "麦克风",
+                    systemImage: "mic.fill",
+                    detail: "这台 Mac 的输入设备"
                 )
+                WorkbenchCaptureSourceCard(
+                    title: "系统声音",
+                    systemImage: "speaker.wave.2.fill",
+                    detail: "应用里播放的声音"
+                )
+            }
+            .frame(maxWidth: 560)
+
+            Spacer(minLength: AppTheme.space4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, AppTheme.space5)
+    }
+
+    /// 转写中：实时逐字稿是主角。
+    private var transcriptionBody: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            HStack(spacing: AppTheme.space3) {
+                Text("实时逐字稿")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.muted)
 
                 Spacer(minLength: AppTheme.space3)
 
-                elapsedBadge
-            }
-
-            Spacer(minLength: AppTheme.space6)
-
-            VStack(spacing: AppTheme.space4) {
-                WorkbenchWaveform()
-                    .frame(height: 88)
-
-                Text(stageText)
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.86))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: AppTheme.space6)
-
-            if !isRecordingPhase {
-                progressBox
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .workbenchDarkPanel()
-    }
-
-    private var stageText: String {
-        if isRecordingPhase {
-            return "正在同时录制系统声音和这台 Mac 的麦克风。结束后会自动转写，原始录音一直保存在本机。"
-        }
-        return session.processingStage ?? "正在准备转写..."
-    }
-
-    /// 已用时长每秒走一格。录音阶段的起点取 `createdAt`——草稿会话就是按下录音那一刻建的；
-    /// 转写阶段取 `processingStartedAt`。
-    private var elapsedBadge: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            Text(elapsedText(now: context.date))
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.68))
-                .monospacedDigit()
-        }
-    }
-
-    private func elapsedText(now: Date) -> String {
-        let startedAt = isRecordingPhase ? session.createdAt : session.processingStartedAt
-        guard let startedAt else {
-            return "刚刚开始"
-        }
-        return "已用时 \(max(0, now.timeIntervalSince(startedAt)).clockLabel)"
-    }
-
-    /// 进度区：只剩「进度条 + 百分比」。
-    ///
-    /// 这里原来有两处重复，都去掉了：
-    ///
-    /// - **又写了一遍「已用时 XX:XX」。** 它和右上角那个是**同一个值**，
-    ///   但右上角走 `TimelineView` 每秒刷新，这个只是在 body 求值那一刻取了一次快照 ——
-    ///   于是它**只在进度发生变化时才动**，中间一直停着，看着像卡死。
-    ///   同一个数显示两遍、其中一个还是死的，纯属自找麻烦：时间只保留右上角那一个。
-    /// - **又写了一遍段号。** 上一行 `stageText` 已经写了「正在转写第 1/2 段」，
-    ///   这里再来一次「第 1/2 段」。段号归 `stageText`，这里只报百分比。
-    private var progressBox: some View {
-        VStack(alignment: .leading, spacing: AppTheme.space3) {
-            HStack(alignment: .center, spacing: AppTheme.space4) {
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                    .tint(AppTheme.accent)
-
-                Text(percentText)
+                Text(segments.isEmpty ? "正在识别第一段…" : "已识别 \(segments.count) 句")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.86))
                     .monospacedDigit()
-                    .fixedSize()
+                    .foregroundStyle(AppTheme.muted)
             }
+            .padding(.horizontal, AppTheme.space5)
+            .padding(.top, AppTheme.space4)
 
-            Text("每段完成后会立即保存，应用重新打开后会从未完成的段继续。")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.68))
+            liveTranscript
         }
-        .padding(AppTheme.space4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color.white.opacity(0.07),
-            in: RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// 音频/活动波形。把原来上下两块大白纸填满，让「转写中」有正在干活的视觉反馈。
-    private struct WorkbenchWaveform: View {
-        private let barCount = 7
+    private var liveTranscript: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AppTheme.space3) {
+                    if segments.isEmpty {
+                        Text("它一边听一边转，第一批句子很快就会出现。")
+                            .font(.callout)
+                            .foregroundStyle(AppTheme.muted)
+                    }
 
-        var body: some View {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
-                HStack(alignment: .center, spacing: 6) {
-                    ForEach(0..<barCount, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(AppTheme.accent.opacity(barOpacity(for: index, at: context.date)))
-                            .frame(width: 6, height: barHeight(for: index, at: context.date))
+                    ForEach(segments) { segment in
+                        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                            Text(segment.start.clockLabel)
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(AppTheme.muted)
+                                .frame(width: 46, alignment: .leading)
+
+                            Text(segment.text)
+                                .font(.callout)
+                                .foregroundStyle(AppTheme.ink)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .id(segment.id)
+                    }
+
+                    HStack(spacing: AppTheme.space3) {
+                        Color.clear.frame(width: 46, height: 1)
+                        WorkbenchTypingDots()
+                    }
+                    .id(Self.transcriptTailID)
+                }
+                .padding(.horizontal, AppTheme.space5)
+                .padding(.bottom, AppTheme.space4)
+            }
+            .onChange(of: segments.count) { _, _ in
+                withAnimation(.easeOut(duration: 0.22)) {
+                    proxy.scrollTo(Self.transcriptTailID, anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    private static let transcriptTailID = "workbench-transcript-tail"
+
+    // MARK: - 页脚
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space3) {
+            if isRecordingPhase {
+                // 录音没有"进度"可言，用不确定进度条表达"在跑"，不假装一个百分比。
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.danger)
+            } else {
+                HStack(spacing: AppTheme.space4) {
+                    ProgressView(value: progress)
+                        .progressViewStyle(.linear)
+                        .tint(AppTheme.accent)
+
+                    Text(percentText)
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(AppTheme.ink)
+                        .fixedSize()
+                }
+            }
+
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                    Text(footerNote(now: context.date))
+                        .font(.caption)
+                        .foregroundStyle(isNearRecordingLimit(now: context.date) ? AppTheme.danger : AppTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: AppTheme.space3)
+
+                    if !isRecordingPhase, let eta = etaText(now: context.date) {
+                        Text(eta)
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(AppTheme.muted)
+                            .fixedSize()
                     }
                 }
             }
         }
+        .padding(.horizontal, AppTheme.space5)
+        .padding(.vertical, AppTheme.space4)
+    }
 
-        private func barHeight(for index: Int, at date: Date) -> CGFloat {
-            let t = date.timeIntervalSinceReferenceDate
-            let phase = Double(index) * 0.9
-            let value = (sin(t * 4 + phase) * 0.5 + 0.5)
-            return 24 + value * 56
+    /// 页脚一句话。录音阶段在临近上限时改报倒计时——
+    /// 录音到点是**直接 `stopRecording()`**、没有任何预告的（原来的 B6），
+    /// 主计时器旁边随时能看到"还剩多久"是这里唯一能做的补救。
+    private func footerNote(now: Date) -> String {
+        guard isRecordingPhase else {
+            return "每段完成后立即保存，重开应用会从未完成的段继续。"
         }
+        let remaining = MeetingStore.maxRecordingSeconds - max(0, now.timeIntervalSince(session.createdAt))
+        if remaining <= Self.recordingLimitWarningWindow {
+            let minutes = max(1, Int((remaining / 60).rounded(.up)))
+            return "录音会在约 \(minutes) 分钟后自动停止，请及时结束并保存。"
+        }
+        return "原始录音实时写入本机，不会上传。"
+    }
 
-        private func barOpacity(for index: Int, at date: Date) -> CGFloat {
-            let t = date.timeIntervalSinceReferenceDate
-            let phase = Double(index) * 0.7
-            return 0.55 + 0.45 * (sin(t * 3 + phase) * 0.5 + 0.5)
-        }
+    private static let recordingLimitWarningWindow: TimeInterval = 15 * 60
+
+    private func isNearRecordingLimit(now: Date) -> Bool {
+        guard isRecordingPhase else { return false }
+        let elapsed = max(0, now.timeIntervalSince(session.createdAt))
+        return MeetingStore.maxRecordingSeconds - elapsed <= Self.recordingLimitWarningWindow
+    }
+
+    // MARK: - 取值
+
+    private var completedChunks: Int {
+        max(0, session.processingCompletedChunks ?? 0)
     }
 
     private var progress: Double {
         max(0, min(1, session.processingProgress ?? 0))
     }
 
-    /// 单纯一个百分比。**段号不在这里**——它已经在上一行 `stageText` 里了。
     private var percentText: String {
         "\(Int((progress * 100).rounded()))%"
+    }
+
+    private func elapsedClock(now: Date) -> String {
+        let startedAt = isRecordingPhase ? session.createdAt : session.processingStartedAt
+        guard let startedAt else { return "00:00" }
+        return max(0, now.timeIntervalSince(startedAt)).clockLabel
+    }
+
+    /// 预计剩余：按「已完成段的平均耗时」外推。
+    /// 一段都还没完成时不报数——宁可不说，也不要给一个每次都乱跳的假数。
+    private func etaText(now: Date) -> String? {
+        let done = Double(completedChunks)
+        let total = Double(session.processingTotalChunks ?? 0)
+        guard done >= 1, total > done, let startedAt = session.processingStartedAt else {
+            return nil
+        }
+        let perChunk = now.timeIntervalSince(startedAt) / done
+        let remaining = perChunk * (total - done)
+        guard remaining.isFinite, remaining > 0 else { return nil }
+        return "约剩 \(remaining.clockLabel)"
+    }
+}
+
+/// 录音中的呼吸红点。用 `TimelineView` 驱动而不是 `repeatForever` 动画：
+/// 后者在视图被复用/重建时容易停在半透明那一帧，读起来像"坏了"。
+struct WorkbenchLiveDot: View {
+    var color: Color = AppTheme.danger
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let bright = Int(context.date.timeIntervalSinceReferenceDate / 0.5) % 2 == 0
+            Circle()
+                .fill(color)
+                .frame(width: 9, height: 9)
+                .opacity(bright ? 1 : 0.32)
+        }
+    }
+}
+
+/// 一路音源（麦克风 / 系统声音）的采集卡片。
+struct WorkbenchCaptureSourceCard: View {
+    let title: String
+    let systemImage: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space3) {
+            HStack(spacing: AppTheme.space2) {
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.accent)
+
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.ink)
+            }
+
+            WorkbenchLevelBars()
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
+        }
+        .padding(AppTheme.space4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            AppTheme.paper,
+            in: RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
+                .stroke(AppTheme.rule, lineWidth: 1)
+        )
+    }
+}
+
+/// 采集电平柱。**这是装饰性的活动指示，不是真实电平表**——
+/// 真正的电平需要从录音引擎拉 tap，本轮没动引擎，所以这里不谎报数值，
+/// 只表达"有信号在进来"。
+struct WorkbenchLevelBars: View {
+    private let barCount = 22
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    Capsule()
+                        .fill(AppTheme.accent.opacity(0.78))
+                        .frame(width: 3, height: barHeight(for: index, at: context.date))
+                }
+            }
+            .frame(height: 26, alignment: .center)
+        }
+    }
+
+    private func barHeight(for index: Int, at date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+        let slow = sin(t * 1.7 + Double(index) * 0.9) * 0.5 + 0.5
+        let fast = sin(t * 3.1 + Double(index) * 0.55) * 0.5 + 0.5
+        return 5 + (slow * 0.4 + fast * 0.6) * 21
+    }
+}
+
+/// 「还在继续」的三个点，替代光标。
+struct WorkbenchTypingDots: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { context in
+            let step = Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 3
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(AppTheme.accent.opacity(index == step ? 0.95 : 0.28))
+                        .frame(width: 5, height: 5)
+                }
+            }
+        }
     }
 }
 
@@ -2759,5 +3024,46 @@ private extension Float {
         return String(format: "%.2f", self)
             .replacingOccurrences(of: "0", with: "")
             .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+    }
+}
+
+
+/// 标题栏动作按钮的**统一底盘**：实底、无描边、胶囊。
+///
+/// **为什么三个动作必须共用一套底盘。** 原来只给主操作铺底、另外两个用 `.bordered`
+/// 的发丝描边，标题栏上就成了「一个真按钮 + 两个空心框」——空心框挂在灰底上读起来
+/// 像占位符、不像能点的东西，整条也就没了质感（用户第九轮原话「没质感了」）。
+/// 统一成实底后，主次只由**填充色**一档表达（纸白 → 品牌蓝），不再混用「有底 / 没底」。
+///
+/// **为什么都用胶囊。** `.bordered` 的圆角约 6pt，自绘胶囊是 17pt，两种圆角并排
+/// 就是两套语言。统一取胶囊，与 macOS 26 强调按钮的口径一致；方形图标钮也因此
+/// 自然收成一个正圆，和两颗胶囊同属一族。
+///
+/// **为什么不用 `.borderedProminent` + `.tint`。** 系统只在「窗口是最前面那个」时
+/// 才给它上色，窗口一失活就被抹成灰描边——实测那一版标题栏的蓝色像素是 **0**。
+/// 这里自己画底，颜色不看窗口活跃状态。
+///
+/// 自定义 `ButtonStyle` 不会自动响应 `.disabled()`，所以外面包 `WorkbenchDisabledDim`。
+struct WorkbenchToolbarButtonStyle: ButtonStyle {
+    /// 底盘填充色。传 `nil` 表示次级动作：铺纸白底、配墨色字。
+    var tint: Color?
+    /// 纯图标按钮（设置）：收成正方形，不横向撑开。
+    var iconOnly: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        WorkbenchDisabledDim {
+            let fill = tint ?? AppTheme.paper
+            configuration.label
+                .font(.system(size: 13, weight: tint == nil ? .medium : .semibold))
+                .foregroundStyle(tint == nil ? AppTheme.ink : Color.white)
+                .padding(.horizontal, iconOnly ? 0 : AppTheme.space3)
+                .frame(
+                    width: iconOnly ? AppTheme.controlRegular : nil,
+                    height: AppTheme.controlRegular
+                )
+                .background(fill, in: Capsule(style: .continuous))
+                .opacity(configuration.isPressed ? 0.72 : 1)
+                .contentShape(Capsule(style: .continuous))
+        }
     }
 }

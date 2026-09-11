@@ -310,6 +310,18 @@ struct MeetingSummaryEngine: Sendable {
         return try parseAnalysis(response, settings: settings)
     }
 
+    /// 请求总结模型并取回纯文本。
+    ///
+    /// **为什么改成流式**：非流式请求在服务端生成完之前本机收不到任何字节，
+    /// 这条"长时间静默"的连接会被中间任何一环按空闲超时掐掉——系统代理、
+    /// FlClash 这类本地代理、服务商网关都算。实测本机两场会议的 `summaryError`
+    /// 都是同一句「网络连接已中断」（`NSURLErrorNetworkConnectionLost`），
+    /// 逐字稿本身好好的，就是这一步被掐的。
+    /// 改成 SSE 之后 token 是持续吐出来的，连接始终有流量，空闲超时不成立；
+    /// 超时口径也从"整段回复"变成"两个 token 之间"，对长文总结友好得多。
+    ///
+    /// **为什么要重试**：网络抖动不该让整场会议的整理白跑。重试 2 次、1.2s 起步
+    /// 退避；401/403/404 这类确定性错误不重试，重试只会让用户多等一遍同样的报错。
     private func requestText(
         prompt: String,
         system: String,
@@ -340,27 +352,154 @@ struct MeetingSummaryEngine: Sendable {
             }
         }
 
-        try Task.checkCancellation()
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = timeoutInterval
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let apiKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        func makeRequest(streaming: Bool) throws -> URLRequest {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.timeoutInterval = timeoutInterval
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if streaming {
+                request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            }
+            if let apiKey, !apiKey.isEmpty {
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            let body = RequestBody(
+                model: settings.modelName,
+                messages: [
+                    Message(role: "system", content: system),
+                    Message(role: "user", content: prompt)
+                ],
+                temperature: 0.1,
+                maxTokens: maxTokens,
+                stream: streaming
+            )
+            request.httpBody = try JSONEncoder().encode(body)
+            return request
         }
 
-        let body = RequestBody(
-            model: settings.modelName,
-            messages: [
-                Message(role: "system", content: system),
-                Message(role: "user", content: prompt)
-            ],
-            temperature: 0.1,
-            maxTokens: maxTokens,
-            stream: false
-        )
-        request.httpBody = try JSONEncoder().encode(body)
+        try Task.checkCancellation()
+
+        var lastError: Error = SummaryEngineError.emptyResponse
+        for attempt in 0..<3 {
+            try Task.checkCancellation()
+            if attempt > 0 {
+                try await Task.sleep(nanoseconds: UInt64(attempt) * 1_200_000_000)
+            }
+            do {
+                let text = try await performStreamingRequest(makeRequest(streaming: true))
+                if !text.isEmpty { return text }
+                lastError = SummaryEngineError.emptyResponse
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as SummaryEngineError {
+                // 认证 / 地址 / 模型名这类确定性错误，重试没有意义。
+                if case .requestFailed(let status, _) = error,
+                   (400..<500).contains(status), status != 429 {
+                    throw error
+                }
+                lastError = error
+            } catch {
+                lastError = error
+            }
+        }
+
+        // 流式全军覆没（个别服务商就是不支持 SSE）→ 退回非流式再试一次。
+        try Task.checkCancellation()
+        do {
+            let text = try await performBufferedRequest(makeRequest(streaming: false))
+            if !text.isEmpty { return text }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SummaryEngineError {
+            if case .requestFailed = error { throw error }
+        } catch {
+            // 非流式也失败 → 最终抛流式那次的错，它更贴近真实原因。
+        }
+
+        throw lastError
+    }
+
+    /// SSE 流式读取：逐行解析 `data: {...}`，把 `choices[].delta.content` 拼起来。
+    private func performStreamingRequest(_ request: URLRequest) async throws -> String {
+        struct StreamChunk: Decodable {
+            struct Choice: Decodable {
+                struct Delta: Decodable {
+                    let content: String?
+                }
+
+                let delta: Delta?
+                let message: Delta?
+            }
+
+            let choices: [Choice]
+        }
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await URLSession.shared.bytes(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            throw SummaryEngineError.networkFailed(networkMessage(for: error))
+        } catch {
+            throw SummaryEngineError.networkFailed(error.localizedDescription)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SummaryEngineError.emptyResponse
+        }
+
+        // 非 2xx 时错误体通常不是 SSE，按普通 body 收一点拿服务商的错误文案。
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            var buffer = Data()
+            do {
+                for try await byte in bytes {
+                    buffer.append(byte)
+                    if buffer.count > 8_192 { break }
+                }
+            } catch {
+                // 读错误体失败不影响抛出状态码本身。
+            }
+            throw SummaryEngineError.requestFailed(
+                httpResponse.statusCode,
+                responseMessage(from: buffer)
+            )
+        }
+
+        var accumulated = ""
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            if payload.isEmpty { continue }
+            if payload == "[DONE]" { break }
+            guard let data = payload.data(using: .utf8),
+                  let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data) else {
+                continue
+            }
+            let choice = chunk.choices.first
+            let piece = choice?.delta?.content ?? choice?.message?.content
+            if let piece, !piece.isEmpty {
+                accumulated += piece
+            }
+        }
+        return accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 非流式兜底：一次性等完整回复。
+    private func performBufferedRequest(_ request: URLRequest) async throws -> String {
+        struct ResponseBody: Decodable {
+            struct Choice: Decodable {
+                struct Message: Decodable {
+                    let content: String?
+                }
+
+                let message: Message
+            }
+
+            let choices: [Choice]
+        }
 
         let data: Data
         let response: URLResponse
@@ -377,26 +516,12 @@ struct MeetingSummaryEngine: Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SummaryEngineError.emptyResponse
         }
-
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw SummaryEngineError.requestFailed(
                 httpResponse.statusCode,
                 responseMessage(from: data)
             )
         }
-
-        struct ResponseBody: Decodable {
-            struct Choice: Decodable {
-                struct Message: Decodable {
-                    let content: String?
-                }
-
-                let message: Message
-            }
-
-            let choices: [Choice]
-        }
-
         let decoded = try JSONDecoder().decode(ResponseBody.self, from: data)
         guard let content = decoded.choices.first?.message.content?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -445,6 +570,8 @@ struct MeetingSummaryEngine: Sendable {
             return "无法连接服务商地址，请检查网络和 API 地址。"
         case .secureConnectionFailed, .serverCertificateUntrusted:
             return "HTTPS 安全连接失败，请检查服务商证书或地址。"
+        case .networkConnectionLost:
+            return "连接被中途断开（长时间没有数据往来时，网络或代理容易掐掉这种连接）。已自动重试；若反复出现，请检查代理设置。"
         default:
             return error.localizedDescription
         }

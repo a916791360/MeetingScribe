@@ -319,6 +319,43 @@ struct AudioDurationReader {
 actor WhisperCLIRunner {
     private let processRunner = LocalProcessRunner()
 
+    /// 起始提示词（initial prompt）。它会被当成「上一句」喂给解码器，
+    /// 所以只说语言和场合，不猜话题——猜偏了会把无关词汇带进转写结果。
+    static let initialPrompt = "以下是一场中文普通话商务会议的录音转写。"
+
+    /// 这些是每次转写都一样的参数，单独抽出来方便在 GPU 失败后用 CPU 重跑。
+    private static func baseArguments(
+        modelURL: URL,
+        audioURL: URL,
+        language: String,
+        outputPrefix: URL,
+        offset: TimeInterval,
+        duration: TimeInterval?
+    ) -> [String] {
+        var arguments = [
+            "-m", modelURL.path,
+            "-f", audioURL.path,
+            "-l", language,
+            "-t", "\(min(8, max(4, ProcessInfo.processInfo.activeProcessorCount - 2)))",
+            // 束搜索。whisper.cpp 默认是贪心解码，中文里同音误判很多
+            //（客户→课考、拜访→败网、罐头→灌投 这类），束宽 5 能明显压下去。
+            "-bs", "5",
+            "-oj",
+            "-ojf",
+            "-np",
+            "--prompt", initialPrompt,
+            "-of", outputPrefix.path
+        ]
+
+        if offset > 0 {
+            arguments.append(contentsOf: ["-ot", "\(Int((offset * 1000).rounded()))"])
+        }
+        if let duration, duration > 0 {
+            arguments.append(contentsOf: ["-d", "\(Int((duration * 1000).rounded()))"])
+        }
+        return arguments
+    }
+
     func transcribe(
         audioURL: URL,
         cliURL: URL,
@@ -349,35 +386,33 @@ actor WhisperCLIRunner {
             try FileManager.default.removeItem(at: textURL)
         }
 
-        var arguments = [
-            "-m", modelURL.path,
-            "-f", audioURL.path,
-            "-l", language,
-            "-t", "\(min(8, max(4, ProcessInfo.processInfo.activeProcessorCount - 2)))",
-            // The bundled whisper.cpp Metal backend crashes on this machine.
-            // Keep transcription on the stable Apple Silicon CPU path for now.
-            "-ng",
-            "-oj",
-            "-ojf",
-            "-np",
-            "--prompt", "这是一场中文工作会议，内容涉及产品、技术、需求、项目和业务讨论。",
-            "-of", outputPrefix.path
-        ]
-
-        if offset > 0 {
-            arguments.append(contentsOf: ["-ot", "\(Int((offset * 1000).rounded()))"])
-        }
-        if let duration, duration > 0 {
-            arguments.append(contentsOf: ["-d", "\(Int((duration * 1000).rounded()))"])
-        }
-
-        let result = try await processRunner.run(
+        // 走 GPU。本机实测 Metal 可用，100 秒音频 4 秒转完（CPU 要 7 秒）。
+        var arguments = Self.baseArguments(
+            modelURL: modelURL,
+            audioURL: audioURL,
+            language: language,
+            outputPrefix: outputPrefix,
+            offset: offset,
+            duration: duration
+        )
+        let environment = ["DYLD_LIBRARY_PATH": cliURL.deletingLastPathComponent().path]
+        var result = try await processRunner.run(
             executableURL: cliURL,
             arguments: arguments,
-            environment: [
-                "DYLD_LIBRARY_PATH": cliURL.deletingLastPathComponent().path
-            ]
+            environment: environment
         )
+
+        // ggml-metal 在这个项目里崩过，所以真出问题时退一步用纯 CPU 再跑一次，
+        // 而不是让整场录音的转写直接失败。
+        if result.status != 0 && !Task.isCancelled {
+            try? FileManager.default.removeItem(at: jsonURL)
+            arguments.append("-ng")
+            result = try await processRunner.run(
+                executableURL: cliURL,
+                arguments: arguments,
+                environment: environment
+            )
+        }
 
         if result.status != 0 {
             if Task.isCancelled {
