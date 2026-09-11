@@ -1325,7 +1325,7 @@ struct WorkbenchProcessingState: View {
     private var isRecordingPhase: Bool { session.status == .recording }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.space5) {
+        VStack(spacing: 0) {
             HStack(alignment: .center, spacing: AppTheme.space3) {
                 WorkbenchDarkChip(
                     text: isRecordingPhase ? "录音中" : "正在转写",
@@ -1337,15 +1337,26 @@ struct WorkbenchProcessingState: View {
                 elapsedBadge
             }
 
-            Text(stageText)
-                .font(.callout)
-                .foregroundStyle(.white.opacity(0.86))
-                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: AppTheme.space6)
+
+            VStack(spacing: AppTheme.space4) {
+                WorkbenchWaveform()
+                    .frame(height: 88)
+
+                Text(stageText)
+                    .font(.callout)
+                    .foregroundStyle(.white.opacity(0.86))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: AppTheme.space6)
 
             if !isRecordingPhase {
                 progressBox
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .workbenchDarkPanel()
     }
 
@@ -1390,7 +1401,7 @@ struct WorkbenchProcessingState: View {
             HStack(alignment: .center, spacing: AppTheme.space4) {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .tint(.white)
+                    .tint(AppTheme.accent)
 
                 Text(percentText)
                     .font(.caption)
@@ -1404,10 +1415,41 @@ struct WorkbenchProcessingState: View {
                 .foregroundStyle(.white.opacity(0.68))
         }
         .padding(AppTheme.space4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             Color.white.opacity(0.07),
             in: RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
         )
+    }
+
+    /// 音频/活动波形。把原来上下两块大白纸填满，让「转写中」有正在干活的视觉反馈。
+    private struct WorkbenchWaveform: View {
+        private let barCount = 7
+
+        var body: some View {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+                HStack(alignment: .center, spacing: 6) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(AppTheme.accent.opacity(barOpacity(for: index, at: context.date)))
+                            .frame(width: 6, height: barHeight(for: index, at: context.date))
+                    }
+                }
+            }
+        }
+
+        private func barHeight(for index: Int, at date: Date) -> CGFloat {
+            let t = date.timeIntervalSinceReferenceDate
+            let phase = Double(index) * 0.9
+            let value = (sin(t * 4 + phase) * 0.5 + 0.5)
+            return 24 + value * 56
+        }
+
+        private func barOpacity(for index: Int, at date: Date) -> CGFloat {
+            let t = date.timeIntervalSinceReferenceDate
+            let phase = Double(index) * 0.7
+            return 0.55 + 0.45 * (sin(t * 3 + phase) * 0.5 + 0.5)
+        }
     }
 
     private var progress: Double {
