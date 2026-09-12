@@ -38,7 +38,9 @@ extension MeetingSession {
         var parts = [createdAt.formatted(date: .numeric, time: .shortened)]
         if let duration { parts.append(duration.clockLabel) }
         if includingStatus { parts.append(status.title) }
-        if let model = analysis.summaryModel, !model.isEmpty { parts.append(model) }
+        // 只挂模型名，不挂服务商。存下来的 `summaryModel` 是「服务商 · 模型」，
+        // 前半截在这条一行的副标题里是噪音（见 `MeetingAnalysis.modelLabel`）。
+        if let model = analysis.modelLabel { parts.append(model) }
         return parts.joined(separator: "  ·  ")
     }
 }
@@ -406,40 +408,48 @@ struct WorkbenchDetailView: View {
     @ToolbarContentBuilder
     private var workbenchToolbar: some ToolbarContent {
         if let session = store.workspaceSession {
+            // ⚠️ 三个动作装在**同一个** ToolbarItem 里，而不是三个并列的 ToolbarItem。
+            //
+            // 为什么：macOS 会把同一 placement 的相邻 toolbar item 收成「一组」，组内间距
+            // 由系统拍板。实测这组间距只有 **1pt** —— 像素核验：导入音频胶囊右沿 x=2430、
+            // 开始录音左沿 x=2433，中间只隔 2px@2x（1pt）；开始录音与齿轮之间同样 1pt。
+            // 三颗胶囊因此糊成一条，深色下更像同一个控件被切了三刀（用户原话：
+            // 「很怪，不规范，贴一起了，尤其深夜模式下，还有重叠的地方」）。
+            // 装进一个间距自控的 HStack 之后，间距不再受工具栏分组启发式摆布。
+            //
+            // 8pt 是 macOS 工具栏项目之间的标准间距，三颗因此既分开、又仍读成一排。
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    store.importAudioPresented = true
-                } label: {
-                    Label("导入音频", systemImage: "square.and.arrow.down")
-                }
-                .labelStyle(.titleAndIcon)
-                // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
-                .buttonStyle(WorkbenchToolbarButtonStyle())
-                .help("导入一段已有音频")
-                .disabled(store.isRecording || store.isProcessing)
-            }
+                HStack(spacing: AppTheme.space2) {
+                    Button {
+                        store.importAudioPresented = true
+                    } label: {
+                        Label("导入音频", systemImage: "square.and.arrow.down")
+                    }
+                    .labelStyle(.titleAndIcon)
+                    // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
+                    .buttonStyle(WorkbenchToolbarButtonStyle())
+                    .help("导入一段已有音频")
+                    .disabled(store.isRecording || store.isProcessing)
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    performPrimaryAction(for: session)
-                } label: {
-                    Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
-                }
-                .labelStyle(.titleAndIcon)
-                // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
-                .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
-                .help(primaryTitle(for: session))
-            }
+                    Button {
+                        performPrimaryAction(for: session)
+                    } label: {
+                        Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
+                    }
+                    .labelStyle(.titleAndIcon)
+                    // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
+                    .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
+                    .help(primaryTitle(for: session))
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    store.showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
+                    Button {
+                        store.showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
+                    .help("设置")
+                    .accessibilityLabel("设置")
                 }
-                .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
-                .help("设置")
-                .accessibilityLabel("设置")
             }
         }
     }
@@ -464,10 +474,12 @@ struct WorkbenchDetailView: View {
     }
 
     private var primaryTint: Color {
+        // 这里的颜色是**当底色**用的（上面压白字），所以走 `*Fill` 那一支：
+        // 它们钉在浅色档的数值上，深色模式下不会跟着提亮，白字才保得住 4.6:1。
         if store.isRecording || store.isProcessing {
-            return AppTheme.danger
+            return AppTheme.dangerFill
         }
-        return AppTheme.accent
+        return AppTheme.accentFill
     }
 
     private func performPrimaryAction(for session: MeetingSession) {
@@ -571,6 +583,55 @@ struct WorkbenchSessionMeta: View {
 ///
 /// 为什么把两个图标和 Tab 放在同一行：它们和 Tab 一样都是「针对这一场会议的动作」，
 /// 分两行放既白占一整行高度，也让右上角飘着两个孤立的小方块。
+/// 分段控件的**唯一一套画法**：浅底轨道 + 纸色凸起段 + 1pt 描边。
+///
+/// 抽出来是为了不让应用里长出第二种分段语言 —— 结果页的 Tab 和设置里的
+/// 「跟随系统 / 浅色 / 深色」必须长得一模一样，只是选项不同。
+/// 选中段靠「纸色填充 + 1pt 描边」立起来，不用主色实底：三档并列时色块面积
+/// 越大越吵，权重已经在字体粗细上补过一档。
+struct WorkbenchSegmentStrip<Item: Hashable>: View {
+    let items: [Item]
+    let label: (Item) -> String
+    @Binding var selection: Item
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items, id: \.self) { item in
+                Button {
+                    selection = item
+                } label: {
+                    Text(label(item))
+                        .font(.system(size: 13, weight: isCurrent(item) ? .semibold : .regular))
+                        .foregroundStyle(isCurrent(item) ? AppTheme.ink : AppTheme.muted)
+                        .padding(.horizontal, AppTheme.space4)
+                        .frame(height: AppTheme.segmentHeight)
+                        .background(
+                            isCurrent(item) ? AppTheme.segmentSelected : Color.clear,
+                            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
+                                .stroke(isCurrent(item) ? AppTheme.rule : Color.clear, lineWidth: 1)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isCurrent(item) ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(
+            AppTheme.segmentTrack,
+            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius, style: .continuous)
+        )
+        .fixedSize()
+    }
+
+    private func isCurrent(_ item: Item) -> Bool {
+        selection == item
+    }
+}
+
 struct WorkbenchResultTabBar: View {
     @Binding var selection: MeetingResultTab
     let isRefreshing: Bool
@@ -599,44 +660,14 @@ struct WorkbenchResultTabBar: View {
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    /// 分段控件：轨道只比三个 Tab 宽一点点（**不拉通栏**）。
-    /// 选中段靠「纸色填充 + 1pt 描边」立起来——三档并列时色块面积越大越吵，
-    /// 所以不用主色实底，只在字体粗细上再补一档。
+    /// 轨道只比三个 Tab 宽一点点（**不拉通栏**）。
+    /// 画法交给 `WorkbenchSegmentStrip`，与设置里的外观三选一共用。
     private var segmentedControl: some View {
-        HStack(spacing: 2) {
-            ForEach(MeetingResultTab.allCases) { tab in
-                Button {
-                    selection = tab
-                } label: {
-                    Text(tab.title)
-                        .font(.system(size: 13, weight: isCurrent(tab) ? .semibold : .regular))
-                        .foregroundStyle(isCurrent(tab) ? AppTheme.ink : AppTheme.muted)
-                        .padding(.horizontal, AppTheme.space4)
-                        .frame(height: AppTheme.segmentHeight)
-                        .background(
-                            isCurrent(tab) ? AppTheme.paper : Color.clear,
-                            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
-                                .stroke(isCurrent(tab) ? AppTheme.rule : Color.clear, lineWidth: 1)
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isCurrent(tab) ? .isSelected : [])
-            }
-        }
-        .padding(2)
-        .background(
-            AppTheme.segmentTrack,
-            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius, style: .continuous)
+        WorkbenchSegmentStrip(
+            items: MeetingResultTab.allCases,
+            label: \.title,
+            selection: $selection
         )
-        .fixedSize()
-    }
-
-    private func isCurrent(_ tab: MeetingResultTab) -> Bool {
-        selection == tab
     }
 
     private var pageActions: some View {
@@ -725,7 +756,12 @@ struct WorkbenchOverviewDocument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
-            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty {
+            // 提醒横幅只在「下面真的有本地保守结果」时才给。
+            //
+            // 它那句话是「下面仅显示本地保守结果」——下面空着的时候，这句话就是在
+            // 替空态重复一遍「没生成出东西」：同一屏里两处说同一件事，而空态那个
+            // 说得更完整（还带原因和出路）。所以让空态独家承担，横幅撤走。
+            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty, hasVisibleContent {
                 WorkbenchSummaryFallbackNotice(message: summaryError)
             }
 
@@ -752,11 +788,24 @@ struct WorkbenchOverviewDocument: View {
                 WorkbenchSummaryEmptyState(
                     title: "还没有生成速览",
                     message: emptyMessage,
+                    retry: retryAction,
                     actionTitle: "打开设置选择模型",
                     action: { store.showSettings = true }
                 )
             }
         }
+    }
+
+    /// 这场会议在「速览」页里有没有可看的东西。
+    /// 与下面空态的出现条件严格互补（空态 = `timeline` 空 **且** `overviewText` 空）。
+    private var hasVisibleContent: Bool {
+        !overviewText.isEmpty || !session.analysis.timeline.isEmpty
+    }
+
+    /// 只有失败过才给「重试」。没配置模型时点重试是白点。
+    private var retryAction: (() -> Void)? {
+        guard session.analysis.summaryError != nil else { return nil }
+        return { store.regenerateSummary(for: session) }
     }
 
     private var overviewText: String {
@@ -765,7 +814,7 @@ struct WorkbenchOverviewDocument: View {
 
     private var emptyMessage: String {
         if session.analysis.summaryError != nil {
-            return "整理模型这次没有返回可靠结果，原文仍然保留。可以更换本机或云端整理模型后重新整理。"
+            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
         }
         return "当前没有启用会后整理模型。逐字稿仍然由本机中文 Whisper 完成；选择一个整理模型后，这里会生成整场会议的快速概览。"
     }
@@ -777,7 +826,8 @@ struct WorkbenchMinutesDocument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
-            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty {
+            // 同「速览」：横幅只在下面真有本地保守结果时才给，否则和空态重复。
+            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty, hasVisibleContent {
                 WorkbenchSummaryFallbackNotice(message: summaryError)
             }
 
@@ -791,7 +841,8 @@ struct WorkbenchMinutesDocument: View {
             } else if session.analysis.decisions.isEmpty && session.analysis.actions.isEmpty {
                 WorkbenchSummaryEmptyState(
                     title: "还没有生成完整纪要",
-                    message: "本地转写已经完成，但当前没有使用会后整理模型。选择一个模型后重新整理，可以生成会议叙述、决策和待办。",
+                    message: emptyMessage,
+                    retry: retryAction,
                     actionTitle: "打开设置选择模型",
                     action: { store.showSettings = true }
                 )
@@ -839,6 +890,32 @@ struct WorkbenchMinutesDocument: View {
 
     private var minutesText: String {
         session.analysis.minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 这场会议在「纪要」页里有没有可看的东西。
+    /// 与下面空态的出现条件严格互补（空态 = 正文、决策、待办三样全空）。
+    private var hasVisibleContent: Bool {
+        !minutesText.isEmpty
+            || !session.analysis.decisions.isEmpty
+            || !session.analysis.actions.isEmpty
+    }
+
+    /// 只有失败过才给「重试」。没配置模型时点重试是白点。
+    private var retryAction: (() -> Void)? {
+        guard session.analysis.summaryError != nil else { return nil }
+        return { store.regenerateSummary(for: session) }
+    }
+
+    /// 空态文案要认得出「为什么空」。
+    ///
+    /// 原来这里写死一句「当前没有使用会后整理模型」—— 但撤掉提醒横幅之后，
+    /// 这句就成了这一屏唯一的解释，而模型**用过却失败**的时候它是错的
+    /// （用户被告知"没配模型"，于是去设置里翻半天，其实模型配得好好的）。
+    private var emptyMessage: String {
+        if session.analysis.summaryError != nil {
+            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
+        }
+        return "本地转写已经完成，但当前没有使用会后整理模型。选择一个模型后重新整理，可以生成会议叙述、决策和待办。"
     }
 }
 
@@ -1026,6 +1103,12 @@ struct WorkbenchSummaryFallbackNotice: View {
 struct WorkbenchSummaryEmptyState: View {
     let title: String
     let message: String
+    /// 「重试」入口。**只有真的失败过**（`summaryError` 非空）才传进来。
+    ///
+    /// 为什么不是常驻：没配置整理模型时，再点一次「重试」还是同一个结果 ——
+    /// 那种情况该做的是去设置里挑个模型，多一颗按钮只会让人白点一下。
+    /// 所以由调用方按失败与否决定给不给。
+    var retry: (() -> Void)?
     let actionTitle: String
     let action: () -> Void
 
@@ -1045,10 +1128,23 @@ struct WorkbenchSummaryEmptyState: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(action: action) {
-                Label(actionTitle, systemImage: "gearshape")
+            HStack(spacing: AppTheme.space2) {
+                if let retry {
+                    // 重试是这颗空态里最省事的一步（很多失败是预算/网络这类一次性的），
+                    // 所以给它实底主色；「打开设置选择模型」是退一步的做法，留描边。
+                    // 顺序按用户要求：重试在左。
+                    Button(action: retry) {
+                        Label("重试", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
+                    .help("用当前模型再整理一次")
+                }
+
+                Button(action: action) {
+                    Label(actionTitle, systemImage: "gearshape")
+                }
+                .buttonStyle(WorkbenchLightButtonStyle())
             }
-            .buttonStyle(WorkbenchLightButtonStyle())
             .padding(.top, 4)
         }
         .frame(maxWidth: 560)
@@ -1123,11 +1219,12 @@ struct WorkbenchAudioPlayerBar: View {
         .padding(.horizontal, AppTheme.contentInset)
         .padding(.top, AppTheme.space3)
         .padding(.bottom, AppTheme.space4)
+        // 这里**不再**压一条 1pt `rule` 发丝线。
+        // 原来 bar 是 paperSoft 底 + 顶部一条线，等于把「换个底色」和「画条边界」
+        // 两件事都做了，底部就多出一道横杠。现在只留底色这一档信号：
+        // paperSoft 对纸面本身就有反差，分区已经够了，边界交给色差而不是线条
+        // （Finder / Music 的底部条也是这个口径）。用户明确要求去掉这条线。
         .background(AppTheme.paperSoft)
-        .overlay(alignment: .top) {
-            Divider()
-                .overlay(AppTheme.rule)
-        }
         .onAppear {
             player.load(url: audioURL)
         }
@@ -2189,7 +2286,7 @@ struct WorkbenchSettingsPane: View {
                     Text("设置")
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text("转写始终在本机完成；下面只配置会后整理使用的模型。")
+                    Text("转写始终在本机完成；下面配置外观与会后整理使用的模型。")
                         .font(.callout)
                         .foregroundStyle(AppTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2211,6 +2308,10 @@ struct WorkbenchSettingsPane: View {
             .padding(.horizontal, 24)
             .padding(.top, 22)
             .padding(.bottom, 18)
+            // 页头原来没有自己的底，露出来的是 sheet 的原生底色 —— 深夜模式下
+            // 那是深色，于是「设置」两个字（墨色）直接消失在深底上。
+            // 补一层纸底，页头与表体成为同一张纸。
+            .background(AppTheme.paper)
 
             Divider()
                 .overlay(AppTheme.rule)
@@ -2555,6 +2656,13 @@ struct WorkbenchSettingsPane: View {
                             .foregroundStyle(AppTheme.ink)
                         }
                     }
+
+                    WorkbenchSettingsGroup(
+                        title: "外观",
+                        subtitle: "只改 MeetingScribe 自己的配色，不动系统的外观偏好。"
+                    ) {
+                        WorkbenchAppearanceSettingRow()
+                    }
                 }
                 .padding(24)
             }
@@ -2585,6 +2693,52 @@ struct WorkbenchSettingsPane: View {
     private var transcriptionReady: Bool {
         FileManager.default.isExecutableFile(atPath: store.whisperCLIPath) &&
             FileManager.default.fileExists(atPath: store.whisperModelPath)
+    }
+}
+
+/// 设置里的「外观」一行：图标 + 当前档位的说明 + 三档分段控件。
+/// 结构与上面「接入方式」那一行一致（32pt 图标底盘 / 主副两行文字 / 右侧控件）。
+struct WorkbenchAppearanceSettingRow: View {
+    @EnvironmentObject private var store: MeetingStore
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 32, height: 32)
+                .background(
+                    AppTheme.accentSoft,
+                    in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.appearance.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(store.appearance.summary)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            WorkbenchSegmentStrip(
+                items: AppAppearance.allCases,
+                label: \.title,
+                selection: $store.appearance
+            )
+        }
+    }
+
+    /// 图标跟着当前档位走，一眼能看出现在是哪一档。
+    private var iconName: String {
+        switch store.appearance {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        }
     }
 }
 
@@ -2678,7 +2832,7 @@ struct WorkbenchSettingsPathCard: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -2854,7 +3008,10 @@ struct WorkbenchToolbarIconButtonStyle: ButtonStyle {
                 .foregroundStyle(AppTheme.ink)
                 .frame(width: AppTheme.controlRegular, height: AppTheme.controlRegular)
                 .background(
-                    configuration.isPressed ? AppTheme.rule : AppTheme.paperSoft,
+                    // 与标题栏按钮共用「控件底盘 / 凹陷轨道」两个 token：
+                    // 按下时沉进轨道色。浅色下 rule 本来就够浅，深色下只有
+                    // 明显下沉才看得出按到了。
+                    configuration.isPressed ? AppTheme.segmentTrack : AppTheme.controlSurface,
                     in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
                 )
                 .overlay(
@@ -2906,7 +3063,10 @@ struct WorkbenchPlayerIconButtonStyle: ButtonStyle {
         WorkbenchDisabledDim {
             configuration.label
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(emphasized ? .white : AppTheme.ink)
+                // 强调键是 `ink` 实底 + 反白字形。深色模式下 `ink` 本身是近白色，
+                // 这里若继续用纯白，字就消失在底里 —— 所以反白取 `paper`：
+                // 浅色下 ink 底配浅纸字，深色下浅纸底配 ink 字，两种外观都读得清。
+                .foregroundStyle(emphasized ? AppTheme.paper : AppTheme.ink)
                 .frame(
                     width: emphasized ? AppTheme.controlEmphasis : AppTheme.controlCompact,
                     height: emphasized ? AppTheme.controlEmphasis : AppTheme.controlCompact
@@ -2976,10 +3136,10 @@ struct WorkbenchLightButtonStyle: ButtonStyle {
                 .foregroundStyle(emphasized ? .white : AppTheme.ink)
                 .padding(.horizontal, AppTheme.space3)
                 .padding(.vertical, 10)
-                .background(emphasized ? AppTheme.accent : AppTheme.paperSoft)
+                .background(emphasized ? AppTheme.accentFill : AppTheme.paperSoft)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                        .stroke(emphasized ? AppTheme.accent : AppTheme.rule, lineWidth: 1)
+                        .stroke(emphasized ? AppTheme.accentFill : AppTheme.rule, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
                 .opacity(configuration.isPressed ? 0.88 : 1)
@@ -2997,10 +3157,10 @@ struct WorkbenchDarkButtonStyle: ButtonStyle {
                 .foregroundStyle(emphasized ? .white : .white.opacity(0.90))
                 .padding(.horizontal, AppTheme.space3)
                 .padding(.vertical, 10)
-                .background(emphasized ? AppTheme.accent : Color.white.opacity(0.08))
+                .background(emphasized ? AppTheme.accentFill : Color.white.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
-                        .stroke(emphasized ? AppTheme.accent : Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(emphasized ? AppTheme.accentFill : Color.white.opacity(0.12), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
                 .opacity(configuration.isPressed ? 0.88 : 1)
@@ -3052,7 +3212,7 @@ struct WorkbenchToolbarButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         WorkbenchDisabledDim {
-            let fill = tint ?? AppTheme.paper
+            let fill = tint ?? AppTheme.controlSurface
             configuration.label
                 .font(.system(size: 13, weight: tint == nil ? .medium : .semibold))
                 .foregroundStyle(tint == nil ? AppTheme.ink : Color.white)
@@ -3062,6 +3222,13 @@ struct WorkbenchToolbarButtonStyle: ButtonStyle {
                     height: AppTheme.controlRegular
                 )
                 .background(fill, in: Capsule(style: .continuous))
+                // 次级按钮补一条边。`controlEdge` 在浅色档等于底盘本色（看不见），
+                // 深色档才浮出一条 1pt 的边 —— 深色下光靠明度差立不住，这条边是
+                // 「这是个按钮」的最后一道保险。主操作是实底主色，不需要边。
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(tint == nil ? AppTheme.controlEdge : Color.clear, lineWidth: 1)
+                )
                 .opacity(configuration.isPressed ? 0.72 : 1)
                 .contentShape(Capsule(style: .continuous))
         }

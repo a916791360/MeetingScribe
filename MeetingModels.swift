@@ -314,6 +314,24 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     var summaryModel: String?
     var summaryError: String?
 
+    /// 窗口副标题里用的**短模型名**：只留模型，砍掉前半截服务商。
+    ///
+    /// `summaryModel` 存的是 `SummaryModelSettings.displayName`，格式是
+    /// `<服务商> · <模型名>`（如「自定义兼容接口 · deepseek-v4.1-flash」）。
+    /// 完整名字在设置面板里有用——那里要交代「这套凭据连的是谁」；
+    /// 但窗口副标题只有一行，还要和日期、时长、状态挤在一起，
+    /// 服务商名在这里纯是噪音：它又长，又回答不了「这场会是哪个模型整理的」。
+    ///
+    /// 没有分隔符时（如本地规则档的「本地保守整理」）原样返回。
+    var modelLabel: String? {
+        guard let raw = summaryModel?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty
+        else { return nil }
+        guard let separator = raw.range(of: " · ") else { return raw }
+        let name = String(raw[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? raw : name
+    }
+
     static let empty = MeetingAnalysis(
         overview: [],
         timeline: [],

@@ -5,6 +5,13 @@ import Foundation
 final class MeetingStore: ObservableObject {
     @Published var sessions: [MeetingSession] = []
     @Published var selectedSessionID: UUID?
+    @Published var appearance: AppAppearance {
+        didSet {
+            guard oldValue != appearance else { return }
+            UserDefaults.standard.set(appearance.rawValue, forKey: Preferences.appearance)
+            AppAppearance.apply(appearance)
+        }
+    }
     @Published var captureMode: CaptureMode {
         didSet {
             guard oldValue != captureMode else { return }
@@ -52,6 +59,7 @@ final class MeetingStore: ObservableObject {
     private static let maxRecordingDuration: UInt64 = UInt64(maxRecordingSeconds) * 1_000_000_000
 
     private enum Preferences {
+        static let appearance = "meetingScribe.appearance"
         static let captureMode = "meetingScribe.captureMode"
         static let whisperCLIPath = "meetingScribe.whisperCLIPath"
         static let whisperModelPath = "meetingScribe.whisperModelPath"
@@ -70,6 +78,13 @@ final class MeetingStore: ObservableObject {
         ) ?? .localRules
         let storedSummaryModel = UserDefaults.standard.string(forKey: Preferences.summaryModel)
         let storedSummaryEndpoint = UserDefaults.standard.string(forKey: Preferences.summaryEndpoint)
+        let storedAppearance = AppAppearance(
+            rawValue: UserDefaults.standard.string(forKey: Preferences.appearance) ?? ""
+        ) ?? .system
+        appearance = storedAppearance
+        // init 不会触发 didSet，这里用**局部量**补一次应用（读 self 会撞上
+        // 「尚有存储属性未初始化」），保证「设为深色 → 关掉再开」仍然是深色。
+        AppAppearance.apply(storedAppearance)
         // New recordings always use the combined system-audio and microphone path.
         // Keep CaptureMode on the model for backwards compatibility with old sessions.
         captureMode = .mixed
