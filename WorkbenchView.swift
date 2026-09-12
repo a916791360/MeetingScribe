@@ -395,12 +395,12 @@ struct WorkbenchDetailView: View {
     }
 
     // 全局操作注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
-    // 三个动作按角色分层，而不是三个同样轻重的裸字形：
-    //   次要 → 导入音频（.bordered 底盘）
-    //   主操作 → 开始录音 / 结束并转写 / 停止处理 / 重新处理（.borderedProminent 实底）
-    //   全局 → 设置（.bordered 方形图标钮，齿轮是通用符号，不给文字）
+    // 三个动作按角色分层，而不是三个同样轻重的裸字形（**顺序即此**）：
+    //   主操作 → 开始录音 / 结束并转写 / 停止处理 / 重新处理（实底主色，排在最左）
+    //   次要 → 导入音频（无填充底盘）
+    //   全局 → 设置（方形图标钮，齿轮是通用符号，不给文字）
     //
-    // 为什么没有会话时整条撤掉：空态正文里已经有一对很大的「开始录音 / 导入已有音频」，
+    // 为什么没有会话时整条撤掉：空态正文里已经有一对很大的「开始录音 / 导入音频」，
     // 标题栏再摆一遍同样的两个动作，同一屏就有四处入口在做两件事；而且此刻选中的
     // 是"什么都没有"，工具栏却在喊"开始录音"，权重给错了对象。
     // 设置是 app 级动作、不针对某场会议，跟着一起收走，改由 app 菜单的「设置…（⌘,）」
@@ -418,8 +418,23 @@ struct WorkbenchDetailView: View {
             // 装进一个间距自控的 HStack 之后，间距不再受工具栏分组启发式摆布。
             //
             // 8pt 是 macOS 工具栏项目之间的标准间距，三颗因此既分开、又仍读成一排。
+            //
+            // **顺序：主操作在左、导入在右（v0.6.2 按用户要求调换）**。
+            // 原来是「导入音频 · 开始录音 · 设置」，主操作被夹在中间；
+            // 现在主操作紧挨窗口左侧一侧，视线从侧边栏扫过来第一眼就是它，
+            // 低频的「导入音频」退到靠设置那一侧。主次仍由填充色区分，不由左右区分。
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: AppTheme.space2) {
+                    Button {
+                        performPrimaryAction(for: session)
+                    } label: {
+                        Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
+                    }
+                    .labelStyle(.titleAndIcon)
+                    // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
+                    .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
+                    .help(primaryTitle(for: session))
+
                     Button {
                         store.importAudioPresented = true
                     } label: {
@@ -430,16 +445,6 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle())
                     .help("导入一段已有音频")
                     .disabled(store.isRecording || store.isProcessing)
-
-                    Button {
-                        performPrimaryAction(for: session)
-                    } label: {
-                        Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
-                    }
-                    .labelStyle(.titleAndIcon)
-                    // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
-                    .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
-                    .help(primaryTitle(for: session))
 
                     Button {
                         store.showSettings = true
@@ -566,7 +571,8 @@ struct WorkbenchSessionMeta: View {
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.caption)
+            // 11pt，与时间轨同一档：都是"行内元信息"，不该有两种字号。
+            .font(.system(size: 11, weight: .medium))
             .foregroundStyle(AppTheme.muted)
             .lineLimit(1)
     }
@@ -600,20 +606,35 @@ struct WorkbenchSegmentStrip<Item: Hashable>: View {
                 Button {
                     selection = item
                 } label: {
-                    Text(label(item))
-                        .font(.system(size: 13, weight: isCurrent(item) ? .semibold : .regular))
-                        .foregroundStyle(isCurrent(item) ? AppTheme.ink : AppTheme.muted)
-                        .padding(.horizontal, AppTheme.space4)
-                        .frame(height: AppTheme.segmentHeight)
-                        .background(
-                            isCurrent(item) ? AppTheme.segmentSelected : Color.clear,
-                            in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
-                                .stroke(isCurrent(item) ? AppTheme.rule : Color.clear, lineWidth: 1)
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous))
+                    // 选中段换字重（regular → semibold），字重一变**字宽就变**，
+                    // 而三个格子是贴合内容排的 → 整个控件会随选中项呼吸，
+                    // 相邻两格跟着左右挪零点几到一点几 pt。切 Tab 时看得见抖。
+                    //
+                    // 解决办法不是"别换字重"（字重是这个控件唯一的强选中信号），
+                    // 而是**先把格子撑到上限**：底下垫一份透明的 semibold 同文案，
+                    // 它不显示、但参与布局 → 每格恒等于 semibold 的字宽，
+                    // 选中谁都不再改宽度。（只垫字重，不垫字号/内衬，视觉零变化。）
+                    ZStack {
+                        Text(label(item))
+                            .font(.system(size: 13, weight: .semibold))
+                            .opacity(0)
+                            .accessibilityHidden(true)
+
+                        Text(label(item))
+                            .font(.system(size: 13, weight: isCurrent(item) ? .semibold : .regular))
+                            .foregroundStyle(isCurrent(item) ? AppTheme.ink : AppTheme.muted)
+                    }
+                    .padding(.horizontal, AppTheme.space4)
+                    .frame(height: AppTheme.segmentHeight)
+                    .background(
+                        isCurrent(item) ? AppTheme.segmentSelected : Color.clear,
+                        in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous)
+                            .stroke(isCurrent(item) ? AppTheme.rule : Color.clear, lineWidth: 1)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.segmentRadius - 2, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isCurrent(item) ? .isSelected : [])
@@ -624,6 +645,7 @@ struct WorkbenchSegmentStrip<Item: Hashable>: View {
             AppTheme.segmentTrack,
             in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius, style: .continuous)
         )
+        // 贴合内容宽度（不拉通栏），且因为上面垫了 semibold 占位，这个宽度是恒定的。
         .fixedSize()
     }
 
@@ -736,13 +758,15 @@ struct WorkbenchDocumentSectionHeading: View {
     let count: Int?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
             Text(title)
-                .font(.headline.weight(.semibold))
+                .font(AppType.sectionTitle)
                 .foregroundStyle(AppTheme.ink)
             if let count {
-                Text("\(count)")
-                    .font(.caption.weight(.semibold))
+                // 「4 条」比孤零零一个「4」有用：后者要靠上下文才猜得出是数量。
+                Text("\(count) 条")
+                    .font(AppType.documentMeta)
+                    .monospacedDigit()
                     .foregroundStyle(AppTheme.muted)
             }
             Spacer(minLength: 0)
@@ -755,7 +779,7 @@ struct WorkbenchOverviewDocument: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: AppTheme.space6) {
             // 提醒横幅只在「下面真的有本地保守结果」时才给。
             //
             // 它那句话是「下面仅显示本地保守结果」——下面空着的时候，这句话就是在
@@ -766,12 +790,21 @@ struct WorkbenchOverviewDocument: View {
             }
 
             if !overviewText.isEmpty {
+                // 导语是「整场概览」，比条目正文大一档（16.5 vs 15）就够。
+                // 原来给到 20pt 又铺满 920pt：它和条目正文只差 2pt、却都很大，
+                // 层级没拉开，整页还显得松垮。
+                //
+                // 外面这层容器只圈**这段话**：它是"一整段话"，与下面"一条一条"的
+                // 时间线是不同的东西，给它一个面才立得住（下面那些靠轨和线立住）。
+                // 宽度（行宽 + 内衬 = 结构列）全部由容器自己负责，调用方不要再套
+                // `.frame` —— 上一版就是调用方套了两层，外沿漏了 79.5pt。
                 Text(overviewText)
-                    .font(.system(size: 20, weight: .regular, design: .default))
+                    .font(AppType.documentLead)
                     .foregroundStyle(AppTheme.ink)
-                    .lineSpacing(7)
+                    .lineSpacing(AppType.leadLineSpacing)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                    .workbenchProsePanel()
             }
 
             if !session.analysis.timeline.isEmpty {
@@ -779,8 +812,7 @@ struct WorkbenchOverviewDocument: View {
                     ForEach(Array(session.analysis.timeline.enumerated()), id: \.element.id) { index, item in
                         WorkbenchTimelineDocumentRow(item: item)
                         if index != session.analysis.timeline.count - 1 {
-                            Divider()
-                                .overlay(AppTheme.rule)
+                            WorkbenchDocumentRowDivider()
                         }
                     }
                 }
@@ -825,7 +857,7 @@ struct WorkbenchMinutesDocument: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: AppTheme.space6) {
             // 「纪要」页只说结果，不做任何自我说明。
             //
             // 这里先后撤掉过两样东西：先是失败提醒横幅（"下面仅显示本地保守结果"），
@@ -837,12 +869,16 @@ struct WorkbenchMinutesDocument: View {
             // （"还没有生成速览" + 原因 + 重试按钮）。跨 Tab 去看一眼，比在每个 Tab
             // 都贴一遍要干净。
             if !minutesText.isEmpty {
+                // 同速览：只给"这一段话"一个容器，下面的决策 / 待办是条目，靠轨和线立住。
+                // 限宽的理由在下面那条注释里 —— 这一页最容易变成"一屏 60 字的墙"。
+                // 宽度交给容器（= 结构列整宽），调用方不再套 frame。
                 Text(minutesText)
-                    .font(.system(size: 18, weight: .regular, design: .default))
+                    .font(AppType.documentBody)
                     .foregroundStyle(AppTheme.ink)
-                    .lineSpacing(7)
+                    .lineSpacing(AppType.bodyLineSpacing)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                    .workbenchProsePanel()
             } else if session.analysis.decisions.isEmpty && session.analysis.actions.isEmpty {
                 // 什么都没整理出来时另说：空态不是"提醒"，它是这一屏唯一的内容，
                 // 而且要给出路（重试 / 去设置选模型）。
@@ -870,8 +906,7 @@ struct WorkbenchMinutesDocument: View {
                     ForEach(Array(session.analysis.decisions.enumerated()), id: \.element.id) { index, item in
                         WorkbenchDecisionDocumentRow(item: item)
                         if index != session.analysis.decisions.count - 1 {
-                            Divider()
-                                .overlay(AppTheme.rule)
+                            WorkbenchDocumentRowDivider()
                         }
                     }
                 }
@@ -891,8 +926,7 @@ struct WorkbenchMinutesDocument: View {
                     ForEach(Array(session.analysis.actions.enumerated()), id: \.element.id) { index, item in
                         WorkbenchActionDocumentRow(item: item)
                         if index != session.analysis.actions.count - 1 {
-                            Divider()
-                                .overlay(AppTheme.rule)
+                            WorkbenchDocumentRowDivider()
                         }
                     }
                 }
@@ -946,11 +980,9 @@ struct WorkbenchOriginalDocument: View {
                     ForEach(Array(session.transcriptSegments.enumerated()), id: \.element.id) { index, segment in
                         WorkbenchTranscriptDocumentRow(segment: segment)
                         if index != session.transcriptSegments.count - 1 {
-                            Divider()
-                                .overlay(AppTheme.rule)
-                                // 分隔线从正文列起笔，不从行首起笔：
-                                // 左边那一栏留白是给时间戳的，不该被横线穿过去。
-                                .padding(.leading, WorkbenchTranscriptDocumentRow.bodyColumnInset)
+                            // 三页共用同一条分隔线画法（`WorkbenchDocumentRowDivider`），
+                            // 起笔线也同一个 —— 原来这里是手写的一份,现在收归一处。
+                            WorkbenchDocumentRowDivider()
                         }
                     }
                 }
@@ -959,23 +991,123 @@ struct WorkbenchOriginalDocument: View {
     }
 }
 
+/// 文档条目的行间分隔线。
+///
+/// 它曾经**从正文列起笔**而不是从行首起笔 —— 因为左边那一栏当时是留给时间轨的，
+/// 横线穿过去会把「时间」和「正文」重新粘成一堆。
+/// v0.6.2 撤掉时间轨之后，条目本身就是从结构列左沿起笔的（见
+/// `AppTheme.contentColumn`），这条线跟着回到左沿：与章节分隔线、Tab 发丝线、
+/// 散文块左右边框**同宽同起点**，整页只剩一条竖线。
+struct WorkbenchDocumentRowDivider: View {
+    var body: some View {
+        Divider()
+            .overlay(AppTheme.rule)
+    }
+}
+
+/// 速览时间线的一行。
+///
+/// **起笔线回到结构列左沿（v0.6.2 对齐修正）**：这一行原来和纪要、原文共用一条
+/// 96pt 的时间轨，正文因此要在结构列左沿再往右 112pt 才起笔 —— 用户看到的
+/// 「内容非常往右」就是这条轨。轨撤掉之后，区间标签退成**主句上面那一行元信息**，
+/// 正文于是和「决策与结论」这类章节标题落在同一条竖线上（x=421）。
+///
+/// 时间**不是标题**。原来它是 `.headline.weight(.semibold)`：一个机械字符串拿到了
+/// 主句的字重，真正有内容的那句话反而只有 18pt 常规 —— 层级整个是反的。
+/// 现在它是元信息档（11pt semibold / muted），排在段落上方只为给这一段定位；
+/// 主角是下面那句话，拿正文档（15pt 常规）。
 struct WorkbenchTimelineDocumentRow: View {
     let item: TimelineChunk
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(item.title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(AppTheme.ink)
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            Text(item.rangeLabel)
+                .font(AppType.documentMeta)
+                .foregroundStyle(AppTheme.muted)
                 .monospacedDigit()
+                .lineLimit(1)
 
             Text(item.summary)
-                .font(.system(size: 18, weight: .regular, design: .default))
+                .font(AppType.documentBody)
                 .foregroundStyle(AppTheme.ink)
-                .lineSpacing(5)
+                .lineSpacing(AppType.bodyLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 16)
+        // 行宽 = 结构列：正文右边界、行间分隔线、章节分隔线落在同一条竖线上。
+        // 行尾不要再加 `Spacer()` —— 它是弹性的，会跟正文抢宽度
+        // （同 `WorkbenchDocumentItemRow` 里那条注释）。
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+        .padding(.vertical, AppType.documentItemPadding)
+    }
+}
+
+/// 决策 / 待办**共用**的一行。
+///
+/// 这一行专门解决用户说的「信息太分散」：原来时间戳孤零零飘在左上角、
+/// 「把握 96%」飘在 900pt 之外的最右边、中间那句结论夹在二者之间 ——
+/// 三样东西横跨一整屏，眼睛要来回扫三次才拼得出一条完整的话。
+/// 现在收进**同一个信息簇**：
+///   · 时间退成主句上方的一行元信息（11pt / muted），不再另开一栏；
+///   · 主句与徽标同处一条行，徽标贴这条行的**右端** —— 于是全页徽标排成一列；
+///   · 依据 12pt / muted 紧随其下，与主句同一个左边线。
+///
+/// **起笔线回到结构列左沿（v0.6.2 对齐修正）**：原来时间落在一条 96pt 的左轨上，
+/// 主句因此要在结构列左沿再往右 112pt 才起笔 —— 用户原话「内容是非常往右的」。
+/// 轨撤掉、时间改成上方元信息之后，**主句与「决策与结论」这类章节标题落在同一条
+/// 竖线上**（x=421）；时间行也在同一条线上，整块条目再没有内缩。
+struct WorkbenchDocumentItemRow<Trailing: View>: View {
+    let time: String?
+    let label: String
+    let evidence: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            // 没有时间就不画这一行：在行首印一个孤零零的「—」比不给还糟，
+            // 而且空着的那一行会把「这条没定位」放大成视觉噪音。
+            if let time {
+                Text(time)
+                    .font(AppType.documentMeta)
+                    .foregroundStyle(AppTheme.muted)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                Text(label)
+                    .font(AppType.documentItemLabel)
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 这一颗 Spacer 是**必须**的：它把徽标推到行尾，全页徽标才排成一列。
+                // 别和行尾那颗混为一谈（见下）。
+                Spacer(minLength: AppTheme.space3)
+
+                trailing()
+            }
+
+            // 依据为空时不画这一行 —— 否则屏幕上只剩一个孤零零的「依据：」，
+            // 比不给还糟。
+            if !trimmedEvidence.isEmpty {
+                Text("依据：\(trimmedEvidence)")
+                    .font(AppType.documentEvidence)
+                    .foregroundStyle(AppTheme.muted)
+                    .lineSpacing(AppType.evidenceLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // 行宽 = **结构列本身**。徽标因此贴在 1221，与它上下的行间分隔线、
+        // 章节分隔线、Tab 发丝线落在同一条竖线上。
+        //
+        // ⚠️ 行尾**不能**再跟一个 `Spacer(minLength: 0)`。
+        // 行尾那个 Spacer 也是弹性的，它会分走 20~26pt —— 实测徽标右端只到 1194.5，
+        // 而分隔线铺到 1221：**徽标那一列比线短了 26.5pt**，正是"元素对不齐"。
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+        .padding(.vertical, AppType.documentItemPadding)
+    }
+
+    private var trimmedEvidence: String {
+        evidence.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -983,28 +1115,13 @@ struct WorkbenchDecisionDocumentRow: View {
     let item: InsightItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(item.timestamp?.clockLabel ?? "—")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
-                Spacer(minLength: 8)
-                WorkbenchConfidenceChip(value: item.confidence)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.label)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("依据：\(item.evidence)")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        WorkbenchDocumentItemRow(
+            time: item.timestamp?.clockLabel,
+            label: item.label,
+            evidence: item.evidence
+        ) {
+            WorkbenchConfidenceChip(value: item.confidence)
         }
-        .padding(.vertical, 16)
     }
 }
 
@@ -1012,67 +1129,50 @@ struct WorkbenchActionDocumentRow: View {
     let item: ActionItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(item.timestamp?.clockLabel ?? "—")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
-                Spacer(minLength: 8)
+        WorkbenchDocumentItemRow(
+            time: item.timestamp?.clockLabel,
+            label: item.label,
+            evidence: item.evidence
+        ) {
+            HStack(spacing: AppTheme.space2) {
+                // 截止日期并进这一簇：它和「高优先」是同一层的判断依据。
+                // 原来它和「时间戳」并排挤在主句下面那一行，而那个时间戳又和左轨
+                // 说的是同一件事 —— 一条待办里同一个信息出现两遍。
+                if let dueText = item.dueText {
+                    WorkbenchSessionMeta(text: "截止 \(dueText)", systemImage: "calendar")
+                }
+                if let priority = item.priority {
+                    WorkbenchPriorityChip(priority: priority)
+                }
                 WorkbenchConfidenceChip(value: item.confidence)
             }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(item.label)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(AppTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let priority = item.priority {
-                        WorkbenchPriorityChip(priority: priority)
-                    }
-                }
-
-                HStack(spacing: 12) {
-                    if let dueText = item.dueText {
-                        WorkbenchSessionMeta(text: "截止 \(dueText)", systemImage: "calendar")
-                    }
-                    if let timestamp = item.timestamp {
-                        WorkbenchSessionMeta(text: timestamp.clockLabel, systemImage: "clock")
-                    }
-                }
-
-                Text("依据：\(item.evidence)")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-        .padding(.vertical, 16)
     }
 }
 
 struct WorkbenchTranscriptDocumentRow: View {
     let segment: TranscriptSegment
 
-    /// 时间戳栏宽度。11pt 等宽数字的「00:00」只占约 30pt，留到 56pt 是为了让正文列
-    /// 有一条稳定的竖线 —— 行间分隔线也从这条线起笔（见 `bodyColumnInset`）。
-    static let gutter: CGFloat = 56
-    static let gutterSpacing: CGFloat = 16
-
-    /// 正文列的左边距（从行首算起）。分隔线要跟正文对齐，就得让出这个宽度。
-    static var bodyColumnInset: CGFloat { gutter + gutterSpacing }
-
     var body: some View {
         // 基线对齐：11pt 的时间戳和置信度要落在正文**第一行的基线**上。
         // 用 `.top` 对齐时小的那两串字会浮在行顶（视觉上比正文高半行），
         // 这正是此前这一页"看着不齐"的来源之一。
-        HStack(alignment: .firstTextBaseline, spacing: Self.gutterSpacing) {
+        //
+        // 时间戳不再占一条独立的轨（v0.6.2 对齐修正）：原来它是一条 96pt 的左轨，
+        // 正文因此要在结构列左沿再往右 112pt 才起笔。现在它退成**行首的一个元信息
+        // 前缀**，整行的起笔线回到结构列左沿 —— 与速览 / 纪要同一条竖线，
+        // 换 Tab 时那一列文字不会横跳。
+        //
+        // 逐字稿这一页特意**不**把时间挪到上一行（速览 / 纪要那样做）：
+        // 一场会议有上百段，每段再占一行会让这一页长出一倍。而且同一场会议里
+        // 时间戳等长（1 小时内都是 `MM:SS`、超过 1 小时都是 `HH:MM:SS`），
+        // 正文的左边界仍然自然对齐。
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
             Text(segment.start.clockLabel)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.muted)
                 .monospacedDigit()
-                .frame(width: Self.gutter, alignment: .leading)
+                .lineLimit(1)
 
             Text(segment.text)
                 .font(.system(size: 14.5, weight: .regular, design: .default))
@@ -1081,7 +1181,7 @@ struct WorkbenchTranscriptDocumentRow: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Spacer(minLength: 16)
+            Spacer(minLength: AppTheme.space4)
 
             // 置信度是「机器给的参考值」，比时间戳更次要：同样的字级与颜色，
             // 但字重更轻，右对齐在一列里，好让人扫一眼又不会跟正文抢。
@@ -1091,6 +1191,8 @@ struct WorkbenchTranscriptDocumentRow: View {
                 .monospacedDigit()
                 .frame(width: 40, alignment: .trailing)
         }
+        // 行宽 = 结构列：置信度那一列因此贴住分隔线的右端（1221）。
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
         .padding(.vertical, 12)
     }
 }
@@ -1176,8 +1278,9 @@ struct WorkbenchSummaryEmptyState: View {
             }
             .padding(.top, 4)
         }
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity, minHeight: 260)
+        // 限宽：空态那段话是要读完的，铺到 560pt 以上就不成句了。
+        .frame(maxWidth: 420)
+        .frame(maxWidth: .infinity, minHeight: 240)
     }
 }
 
@@ -1460,6 +1563,27 @@ struct WorkbenchProcessingState: View {
 
     private var isRecordingPhase: Bool { session.status == .recording }
 
+    /// 这张卡片其实横跨三个真实阶段，原来的界面把它们揉成了同一句话：
+    ///
+    /// - `preparing`：拿到了音频但还没算出总段数（导入 / 转码），进度无从谈起；
+    /// - `transcribing`：正在跑第 n 段的 whisper；
+    /// - `analyzing`：**所有段都转完了**，正在调模型做结构化整理。
+    ///
+    /// 第三段是原来漏掉的一页：转写循环一结束，`processingStage` 就写成了
+    /// "正在整理会议结果..."，可卡片上还挂着"第 4/4 段"、进度条停在 100%、
+    /// 逐字稿尾部还在闪打字点——读起来像"卡死了"，其实它正在干活。
+    private enum ProcessingPhase {
+        case preparing
+        case transcribing
+        case analyzing
+    }
+
+    private var phase: ProcessingPhase {
+        if isRecordingPhase { return .preparing }
+        guard let total = session.processingTotalChunks, total > 0 else { return .preparing }
+        return completedChunks >= total ? .analyzing : .transcribing
+    }
+
     private var segments: [TranscriptSegment] {
         session.transcriptSegments.sorted { $0.start < $1.start }
     }
@@ -1494,12 +1618,12 @@ struct WorkbenchProcessingState: View {
             if isRecordingPhase {
                 WorkbenchLiveDot()
             } else {
-                Image(systemName: "waveform")
+                Image(systemName: phase == .analyzing ? "sparkles" : "waveform")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.accent)
             }
 
-            Text(isRecordingPhase ? "录音中" : "正在转写")
+            Text(statusTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppTheme.ink)
 
@@ -1509,8 +1633,8 @@ struct WorkbenchProcessingState: View {
 
             Spacer(minLength: AppTheme.space4)
 
-            if !isRecordingPhase, let total = session.processingTotalChunks, total > 0 {
-                Text("第 \(min(completedChunks + 1, total))/\(total) 段")
+            if let counter = chunkCounterText {
+                Text(counter)
                     .font(.caption.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(AppTheme.muted)
@@ -1518,6 +1642,25 @@ struct WorkbenchProcessingState: View {
         }
         .padding(.horizontal, AppTheme.space5)
         .padding(.vertical, AppTheme.space4)
+    }
+
+    private var statusTitle: String {
+        switch phase {
+        case .preparing: return isRecordingPhase ? "录音中" : "正在准备"
+        case .transcribing: return "正在转写"
+        case .analyzing: return "正在整理"
+        }
+    }
+
+    /// 右上角的段计数。整理阶段不再显示"第 n/n 段"——那是**转写**的坐标，
+    /// 在一个已经转完、正在调模型的界面上它读起来像"卡在最后一段了"。
+    private var chunkCounterText: String? {
+        guard let total = session.processingTotalChunks, total > 0 else { return nil }
+        switch phase {
+        case .preparing: return nil
+        case .transcribing: return "第 \(min(completedChunks + 1, total))/\(total) 段"
+        case .analyzing: return "\(total)/\(total) 段 · 转写完成"
+        }
     }
 
     // MARK: - 主体
@@ -1579,7 +1722,7 @@ struct WorkbenchProcessingState: View {
 
                 Spacer(minLength: AppTheme.space3)
 
-                Text(segments.isEmpty ? "正在识别第一段…" : "已识别 \(segments.count) 句")
+                Text(transcriptCountText)
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(AppTheme.muted)
@@ -1590,6 +1733,13 @@ struct WorkbenchProcessingState: View {
             liveTranscript
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var transcriptCountText: String {
+        if segments.isEmpty {
+            return phase == .analyzing ? "这一段没有识别到内容" : "正在识别第一段…"
+        }
+        return phase == .analyzing ? "共 \(segments.count) 句" : "已识别 \(segments.count) 句"
     }
 
     private var liveTranscript: some View {
@@ -1620,9 +1770,18 @@ struct WorkbenchProcessingState: View {
                         .id(segment.id)
                     }
 
-                    HStack(spacing: AppTheme.space3) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
                         Color.clear.frame(width: 46, height: 1)
-                        WorkbenchTypingDots()
+
+                        if phase == .analyzing {
+                            // 全转完了就别再假装还在"打字"——闪动的点会让用户
+                            // 以为转写卡在这一段。明说"转完了、在整理"。
+                            Text("逐字稿已全部转完，正在整理会议结果…")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.muted)
+                        } else {
+                            WorkbenchTypingDots()
+                        }
                     }
                     .id(Self.transcriptTailID)
                 }
@@ -1649,16 +1808,23 @@ struct WorkbenchProcessingState: View {
                     .progressViewStyle(.linear)
                     .tint(AppTheme.danger)
             } else {
-                HStack(spacing: AppTheme.space4) {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(AppTheme.accent)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let shown = smoothProgress(now: context.date)
 
-                    Text(percentText)
-                        .font(.caption.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(AppTheme.ink)
-                        .fixedSize()
+                    HStack(spacing: AppTheme.space4) {
+                        ProgressView(value: shown)
+                            .progressViewStyle(.linear)
+                            .tint(AppTheme.accent)
+
+                        Text(shown.percentLabel)
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .foregroundStyle(AppTheme.ink)
+                            .fixedSize()
+                    }
+                    // 每秒钟只是往上挪零点几个百分点；不补一个同时长的线性动画，
+                    // 线条会一格一格地"跳"。补上之后观感才是连续地爬。
+                    .animation(.linear(duration: 1), value: shown)
                 }
             }
 
@@ -1689,9 +1855,14 @@ struct WorkbenchProcessingState: View {
     /// 录音到点是**直接 `stopRecording()`**、没有任何预告的（原来的 B6），
     /// 主计时器旁边随时能看到"还剩多久"是这里唯一能做的补救。
     private func footerNote(now: Date) -> String {
-        guard isRecordingPhase else {
-            return "每段完成后立即保存，重开应用会从未完成的段继续。"
+        if isRecordingPhase { return recordingFooterNote(now: now) }
+        if phase == .analyzing {
+            return "逐字稿已经全部转完，正在梳理结构、提炼决策与待办。"
         }
+        return "每段完成后立即保存，重开应用会从未完成的段继续。"
+    }
+
+    private func recordingFooterNote(now: Date) -> String {
         let remaining = MeetingStore.maxRecordingSeconds - max(0, now.timeIntervalSince(session.createdAt))
         if remaining <= Self.recordingLimitWarningWindow {
             let minutes = max(1, Int((remaining / 60).rounded(.up)))
@@ -1718,8 +1889,19 @@ struct WorkbenchProcessingState: View {
         max(0, min(1, session.processingProgress ?? 0))
     }
 
-    private var percentText: String {
-        "\(Int((progress * 100).rounded()))%"
+    /// 段内平滑的**显示用**进度。规则与纪律全在
+    /// `ProcessingProgressEstimator` 里（纯函数，有回归护栏），
+    /// 这里只负责把当前会话的字段喂进去。
+    private func smoothProgress(now: Date) -> Double {
+        guard !isRecordingPhase, phase == .transcribing else { return progress }
+        return ProcessingProgressEstimator.displayProgress(
+            base: progress,
+            completedChunks: completedChunks,
+            totalChunks: session.processingTotalChunks ?? 0,
+            startedAt: session.processingStartedAt,
+            chunkStartedAt: session.processingChunkStartedAt,
+            now: now
+        )
     }
 
     private func elapsedClock(now: Date) -> String {
@@ -2275,7 +2457,10 @@ struct WorkbenchEmptyState: View {
                 Button {
                     store.importAudioPresented = true
                 } label: {
-                    Label("导入已有音频", systemImage: "square.and.arrow.down")
+                    // 空态这颗和标题栏那颗（`workbenchToolbar`）说同一件事，文案必须**逐字一致**：
+                    // 同一屏里两个入口一个叫「导入已有音频」、一个叫「导入音频」，
+                    // 读起来像两个不同功能。侧栏空态那行「开始录音或导入音频」也是这个词。
+                    Label("导入音频", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
                 .disabled(store.isRecording || store.isProcessing)
@@ -3231,6 +3416,18 @@ struct WorkbenchToolbarButtonStyle: ButtonStyle {
             configuration.label
                 .font(.system(size: 13, weight: tint == nil ? .medium : .semibold))
                 .foregroundStyle(tint == nil ? AppTheme.ink : Color.white)
+                // ⚠️ 文案**绝不允许折行**。`Text` 在标题栏里是唯一可伸缩的子视图，
+                // 系统给整个 `ToolbarItem` 的宽度提案只要略紧一点，它就自己折成两行——
+                // 实测「开始录音」被压成「开始」/「录音」上下两行，胶囊缩到 73pt
+                // （= 图标 17 + 间隙 5 + **2 个汉字** 27.7 + 内边距 24），还被钉在
+                // `controlRegular` 的 34pt 高里，两行挤成一团；同一排的「导入音频」
+                // 拿到的是自然宽度 99pt、一行。主操作反而比次级动作先垮，
+                // 缺的就是这一道「不可折行」的约束。
+                //
+                // 钉住后：标签按**理想宽度**取尺寸、不再听宽度提案的摆布，按钮因此
+                // 拿到它真正需要的宽度（4~5 个汉字 + 图标），横向富余由工具栏左移消化。
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, iconOnly ? 0 : AppTheme.space3)
                 .frame(
                     width: iconOnly ? AppTheme.controlRegular : nil,

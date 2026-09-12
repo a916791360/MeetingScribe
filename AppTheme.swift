@@ -185,8 +185,50 @@ enum AppTheme {
     static let controlEmphasis: CGFloat = 38
 
     /// 会议头、结果页 Tab、正文文档共用同一条居中列，三者左边界必须齐平。
-    static let contentColumn: CGFloat = 920
+    ///
+    /// **920 → 800（v0.6.2）**：原来这一列是给"工作台"定的宽度，但结果页三张页签
+    /// 全都是**文档**，铺到 920pt 之后 15pt 的中文一行能排到 60 字开外 ——
+    /// 眼睛要横扫一整个屏幕才换行，读起来非常累（用户原话「信息不易阅读」）。
+    /// 收窄到 800 之后左右各留 139pt 余白，视线一次能兜住整行。
+    /// Tab 条、章节分隔线、正文左边界**三者仍然共用这一条列**，所以它们还是齐平的。
+    ///
+    /// **条目行不再内缩（v0.6.2 第二轮）**：这一列同时是**条目行的行宽**。
+    /// 原来速览 / 纪要 / 原文三页的条目左边还有一条 96pt 的时间轨（正文要
+    /// 再往右 112pt 才起笔），于是「决策与结论」这类章节标题在 421、而条目正文在
+    /// 533 —— 用户原话「内容是非常往右的」。现在轨撤掉、时间改成条目内的元信息，
+    /// **条目正文与章节标题共用结构列左沿**，右端也仍然齐平：
+    /// 正文右边界、徽标右端、行间分隔线、章节分隔线、Tab 发丝线落在同一条竖线上。
+    static let contentColumn: CGFloat = 800
     static let contentInset: CGFloat = 32
+
+    /// **条目行**的行宽。它必须**等于**结构列（v0.6.2 第二轮）。
+    ///
+    /// 单独起这个名字有两个用处：调用处读得出"这一行属于文档列"；
+    /// 而 `LayoutTokenTests` 有一条算式可以守 —— 这个数一旦被改小，
+    /// 就意味着有人又把条目往右推了，那正是用户报的「内容是非常往右的」。
+    /// 上一版三页的条目左边各有一条 96pt 的时间轨，正文要再往右 112pt 才起笔，
+    /// 而章节标题在结构列左沿：两者错开 112pt。
+    ///
+    /// 名字的区别：`contentColumn` 说的是"这一列有多宽"（容器用它），
+    /// `documentRowWidth` 说的是"这一行铺满这一列"（条目用它）。两者必须相等。
+    static var documentRowWidth: CGFloat { contentColumn }
+
+    /// 散文块（速览导语 / 纪要正文）在容器里的**行宽**。
+    ///
+    /// 容器是**结构列的一个整宽盒子**：外沿 800 = 行宽 760 + 两侧内衬 40。
+    /// 这条等式是"盒子的左右边框跟 Tab 发丝线、章节分隔线同宽"的全部依据 ——
+    /// 改任一边而另一边没跟上，盒子的边就飘到结构线之外，整页立刻显毛。
+    ///
+    /// 上一版容器是 720（= 680 + 40），左沿虽然在结构线上，
+    /// 右沿却落在 1141.5 —— 比结构列的 1221 短 79.5pt，比正文列短 71.5pt，
+    /// 是那页上第三条右边界（用户原话「各种元素对不齐」）。
+    /// 现在右沿归位：**盒子 = 结构列**。
+    ///
+    /// 为什么盒子的字是 760 而不是整 800：这是一个**带内衬的面** ——
+    /// 有背景、有 1pt 边框，字贴着框线站会把框读成"挤"。所以两侧各让 20pt。
+    /// 条目行（时间线 / 决策 / 待办 / 逐字稿）**没有面、也没有框**，
+    /// 因此不设内衬，字直接排在 800 上 —— 它们靠行间分隔线立住，不靠边框。
+    static let proseLineWidth: CGFloat = 760
 
     /// 结果页控制条：一个**贴合内容宽度**的分段控件 + 一条发丝线。
     /// 轨道比纸面深一档（paper 是 248,250,253），白色凸起段才立得起来；
@@ -200,10 +242,84 @@ enum AppTheme {
     static let stripIconHit: CGFloat = 30
 }
 
+/// 排印阶梯。
+///
+/// **文档页面只从这几档里取值。** 上一版的毛病是 20 / 18 / callout 三档挤在一起：
+/// 导语和条目正文只差 2pt，既谈不上层级，又每一段都偏大，整页读起来松垮；
+/// 而"依据"这种注脚却跟主句只差一档，主次分不开。
+/// 现在把六档拉开：**章节标题 17** / 导语 16.5 / 正文 15 / 主句 14.5 semibold /
+/// 依据 12 / 元信息 11，**行距也按字号分档**（大字的行距要更大，否则行与行太挤）。
+///
+/// ⚠️ **章节标题必须站在整条阶梯的最上面**：条目主句是 14.5 semibold，
+/// 章节标题原来只有 13 —— 同一页里标题反而比条目里那句话还小，两块就糊成一片，
+/// 章节读不出来（用户原话「标题应该稍大一些，不然和内容融一起了」）。
+/// 标题不只是"比正文大"，它要压过主句那一档，所以直接跳到导语之上。
+enum AppType {
+    /// 速览导语。它是"整场概览"，角色与条目正文不同，所以大一档。
+    static let documentLead = Font.system(size: 16.5, weight: .regular)
+    /// 文档正文：纪要认真叙述、速览时间线的条目正文。
+    static let documentBody = Font.system(size: 15, weight: .regular)
+    /// 条目主句：决策 / 待办的那一句话。同字号里唯一的 semibold，靠字重立起来。
+    static let documentItemLabel = Font.system(size: 14.5, weight: .semibold)
+    /// 条目依据。注脚，不是内容 —— 小两档 + 退到 `muted`。
+    static let documentEvidence = Font.system(size: 12, weight: .regular)
+    /// 时间轨、计数这类元信息。
+    static let documentMeta = Font.system(size: 11, weight: .semibold)
+    /// 章节标题（决策与结论 / 待办）。**整条阶梯的最高一档**，
+    /// 必须压过 `documentItemLabel`，否则标题和条目里的句子糊成一片（见上）。
+    static let sectionTitle = Font.system(size: 17, weight: .semibold)
+
+    static let leadLineSpacing: CGFloat = 7
+    static let bodyLineSpacing: CGFloat = 6.5
+    static let evidenceLineSpacing: CGFloat = 4
+
+    /// 文档条目的上下留白。速览与纪要共用同一个值，两页的节奏才一致。
+    static let documentItemPadding: CGFloat = 14
+}
+
 extension View {
     func workbenchPanel(cornerRadius: CGFloat = AppTheme.radius) -> some View {
         self
             .padding(AppTheme.space5)
+            .background(AppTheme.paperSoft)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppTheme.rule, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    /// 散文块容器：把**那一段话**（速览导语 / 纪要正文）圈起来。
+    ///
+    /// 为什么只圈这一段：整页内容原来直接铺在页面底上，导语读起来"漂"着没有归属
+    /// （用户原话「内容还是直接铺在上面，加个容器把这些内容包起来」）。
+    /// 但**不该给整页套一层**——下面的时间线、决策、待办本来就是结构化条目，
+    /// 它们靠时间轨和分隔线立住；再罩一层大纸，等于在纸上又画一个框，
+    /// 是 Hallmark 说的 card-on-card slop。
+    ///
+    /// 所以边界画在**散文与条目之间**：散文是"一整段话"，给它一个面；
+    /// 条目是"一条一条"，给它们轨和线。两者各得其所。
+    ///
+    /// 用法：调用方**什么都别加**，容器自己负责宽度。
+    /// ```swift
+    /// Text(lead)
+    ///     .fixedSize(horizontal: false, vertical: true)
+    ///     .workbenchProsePanel()
+    /// ```
+    ///
+    /// 为什么宽度必须收进容器里：上一版是调用方套两层 `.frame(maxWidth:)`
+    /// （行宽一层、外框一层），两层都要跟 token 对上才不错位，结果就是
+    /// 外层 frame 没撑满、盒子比结构列短 79.5pt。宽度这类**约束**一旦散在调用方，
+    /// 就总有一处会忘；收进一个 modifier，改错只会错一处。
+    func workbenchProsePanel(cornerRadius: CGFloat = AppTheme.radiusLarge) -> some View {
+        self
+            .frame(maxWidth: AppTheme.proseLineWidth, alignment: .leading)
+            .padding(.horizontal, AppTheme.space5)
+            .padding(.vertical, AppTheme.space5)
+            // 盒子撑满结构列：`maxWidth: .infinity` 拿满父级给的 800，
+            // 而非"由内容撑"——内容的理想宽度是 760，撑出来的盒子会是 800 还是 720
+            // 取决于提议链，正是上一版错位的来源。
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.paperSoft)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

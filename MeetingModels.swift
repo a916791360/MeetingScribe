@@ -301,6 +301,30 @@ struct TimelineChunk: Codable, Identifiable, Hashable, Sendable {
     var title: String {
         "\(start.clockLabel) - \(end.clockLabel)"
     }
+
+    /// 时间轨上用的紧凑区间写法：`00:00–01:51`。
+    ///
+    /// 两条约束：
+    /// 1. **字符数恒定在 11 左右**——三页共用的时间轨是固定 96pt 的，
+    ///    标签必须保证装得下，否则只能靠缩字号兜底，字号就会一场一个样。
+    ///    所以一小时的会开成 `00:00–01:51`，三小时的会开成 `1:00–1:10`：
+    ///    区间标签只需要说清"这一段大概在哪"，秒在这里是噪音。
+    /// 2. 用 en dash（–）而不是连字符：等宽数字下它落在正中，读起来是"一段"，
+    ///    而 `00:00 - 01:51` 中间那两个空格会让它读成"两个数"。
+    var rangeLabel: String {
+        "\(Self.compactClock(start))–\(Self.compactClock(end))"
+    }
+
+    private static func compactClock(_ value: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(value.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d", hours, minutes)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
 }
 
 struct MeetingAnalysis: Codable, Hashable, Sendable {
@@ -433,6 +457,15 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var processingCompletedChunks: Int?
     var processingTotalChunks: Int?
     var processingNextOffset: TimeInterval?
+    /// 当前这一段是**什么时候开始转的**。
+    ///
+    /// 进度条原来只会按段跳（4 段就是 0 → 25% → 50% → 75% → 100%），
+    /// 每一段之间十分钟一动不动、然后"啪"地往前一格 —— 用户的原话是
+    /// 「过一阵突然往前增一下」。有了这个时间点，界面才能在**段内**平滑推进：
+    /// 用「已完成段的实际耗时」当本段的预期耗时，把这一段切成连续的百分比。
+    /// 它只用来算显示值，永远不超过 `(已完成段 + 0.92) / 总段数`，
+    /// 所以某一段真跑完时进度只会继续往前，不会往回缩。
+    var processingChunkStartedAt: Date?
 
     static func makeDraft(createdAt date: Date, captureMode: CaptureMode, folderName: String) -> MeetingSession {
         MeetingSession(
@@ -457,7 +490,8 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
             processingStartedAt: nil,
             processingCompletedChunks: nil,
             processingTotalChunks: nil,
-            processingNextOffset: nil
+            processingNextOffset: nil,
+            processingChunkStartedAt: nil
         )
     }
 }
@@ -484,6 +518,53 @@ extension Double {
     var percentLabel: String {
         let value = Int((max(0, min(1, self)) * 100).rounded())
         return "\(value)%"
+    }
+}
+
+/// 「转写中」进度条的**显示值**估算。
+///
+/// 管线是"一段一段跑 whisper"，段内没有任何回调，所以 `processingProgress`
+/// 只在段边界跳一下——4 段就是 0 → 25 → 50 → 75 → 100，每跳一次隔好几分钟。
+/// 用户看到的「过一阵突然往前增一下」就是这个。
+///
+/// 这里拿**本段已经跑掉的时间**除以**已完成段的平均耗时**，在段内插值，
+/// 让进度条连续地爬。三条纪律，缺一不可：
+///
+/// 1. **只在真实进度之上加**——`max(base, estimated)`，永不回缩；
+/// 2. **段内最多补到 `maxIntraChunkFill` 段**——留出余量，进下一段时只会
+///    往前跳，不会"先冲过界、再倒吸一口"；
+/// 3. **一段都没跑完就不猜**——此时没有平均耗时可用，老实返回 `base`。
+///
+/// 刻意做成纯函数：**显示**用它，存盘与分支判断一律仍用真实进度。
+/// 别把它的返回值写回 `session`。
+enum ProcessingProgressEstimator {
+    /// 段内最多补到的比例。留 8% 余量给"下一段开头"。
+    static let maxIntraChunkFill = 0.92
+
+    static func displayProgress(
+        base: Double,
+        completedChunks: Int,
+        totalChunks: Int,
+        startedAt: Date?,
+        chunkStartedAt: Date?,
+        now: Date
+    ) -> Double {
+        let clampedBase = max(0, min(1, base))
+        guard totalChunks > 0,
+              completedChunks > 0,
+              completedChunks < totalChunks,
+              let startedAt,
+              let chunkStartedAt
+        else { return clampedBase }
+
+        let perChunk = now.timeIntervalSince(startedAt) / Double(completedChunks)
+        // 小于 1 秒的"平均耗时"只可能是时钟抖动，别拿它做除数。
+        guard perChunk.isFinite, perChunk > 1 else { return clampedBase }
+
+        let elapsed = max(0, now.timeIntervalSince(chunkStartedAt))
+        let withinChunk = min(maxIntraChunkFill, elapsed / perChunk)
+        let estimated = (Double(completedChunks) + withinChunk) / Double(totalChunks)
+        return max(clampedBase, min(1, estimated))
     }
 }
 

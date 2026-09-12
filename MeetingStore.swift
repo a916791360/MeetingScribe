@@ -32,7 +32,19 @@ final class MeetingStore: ObservableObject {
     @Published var isProcessing: Bool = false
     @Published var processingProgress: Double = 0
     @Published var processingStage: String = ""
-    @Published var showSettings: Bool = false
+    @Published var showSettings: Bool = false {
+        didSet {
+            // 打开设置时才去取密文。
+            //
+            // 原来这一步在 `init()` 里做，后果是：应用每次重新打包（自签名证书下
+            // 代码签名必然变），钥匙串 ACL 就不认得新签名，macOS 弹一个系统模态框
+            // 要登录密码 —— 而它卡在 `NSApplicationMain` 完成之前，
+            // **窗口根本来不及建出来**。用户看到的是"双击图标没反应"。
+            // 现在启动只查"有没有"（不解密、不弹框），要显示时才取。
+            guard showSettings, !oldValue else { return }
+            loadSummaryAPIKeyFromKeychain()
+        }
+    }
     @Published var importAudioPresented: Bool = false
     @Published var errorMessage: String?
 
@@ -53,6 +65,9 @@ final class MeetingStore: ObservableObject {
     private var summaryRegenerationID: UUID?
 
     private static let chunkDuration: TimeInterval = 10 * 60
+
+    /// 每段音频的长度（秒）。界面拿它估"段内"的连续进度，见 `WorkbenchProcessingState`。
+    static var chunkDurationSeconds: TimeInterval { chunkDuration }
     private static let chunkOverlap: TimeInterval = 2
     /// 录音上限（秒）。界面拿它来做「快到点了」的提前预警。
     static let maxRecordingSeconds: TimeInterval = 3 * 60 * 60
@@ -103,8 +118,11 @@ final class MeetingStore: ObservableObject {
             endpoint: storedSummaryEndpoint ?? summaryProvider.defaultEndpoint
         )
         canEditSummaryModelManually = false
-        summaryAPIKeyInput = keychain.string(for: summaryProvider) ?? ""
-        summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
+        // **不在启动时取密文**，只问一句"存过没有"。取密文会解密，
+        // 换过签名的应用会因此被 macOS 拦下来要登录密码，而那时窗口还没建出来
+        // （详见 `showSettings` didSet 与 `KeychainStore.contains` 的注释）。
+        summaryAPIKeyInput = ""
+        summaryAPIKeyStatus = keychain.contains(for: summaryProvider) ? "已保存到钥匙串" : "未保存"
         reloadSessions()
         savePreferences()
 
@@ -308,6 +326,16 @@ final class MeetingStore: ObservableObject {
 
     func refreshPreferences() {
         savePreferences()
+    }
+
+    /// 把钥匙串里那条凭据读回输入框。**只在窗口已经在屏幕上时调用**
+    /// （打开设置、切换服务商）—— 读密文可能需要用户解一次锁，
+    /// 那一下必须发生在他看得见窗口的时候。
+    func loadSummaryAPIKeyFromKeychain() {
+        summaryAPIKeyInput = keychain.string(for: summarySettings.provider) ?? ""
+        summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty
+            ? "未保存"
+            : "已保存到钥匙串"
     }
 
     func updateSummaryProvider(_ provider: SummaryModelProvider) {
@@ -527,7 +555,12 @@ final class MeetingStore: ObservableObject {
               !isLoadingSummaryModels else {
             return
         }
-        if summarySettings.provider.requiresAPIKey && summaryAPIKeyInput.isEmpty {
+        // 输入框空**不等于**没配 Key：启动时故意不取密文（见 `init`），
+        // 所以这里还要问一句钥匙串里存过没有，否则设置页刚打开的那一瞬间
+        // 会被误判成"没凭据"而不去拉模型列表。
+        if summarySettings.provider.requiresAPIKey,
+           summaryAPIKeyInput.isEmpty,
+           !keychain.contains(for: summarySettings.provider) {
             return
         }
         testSummaryModel()
@@ -645,6 +678,7 @@ final class MeetingStore: ObservableObject {
         resetSession.processingCompletedChunks = 0
         resetSession.processingTotalChunks = nil
         resetSession.processingNextOffset = 0
+        resetSession.processingChunkStartedAt = nil
 
         do {
             try storage.save(resetSession)
@@ -731,6 +765,8 @@ final class MeetingStore: ObservableObject {
         session.processingCompletedChunks = completedChunks
         session.processingTotalChunks = totalChunks
         session.processingNextOffset = nextOffset
+        // 第一段的起点就是"现在"。进度条用它算段内的连续百分比（见 MeetingSession 注释）。
+        session.processingChunkStartedAt = Date()
         session.errorMessage = nil
         try storage.save(session)
         replaceSession(session)
@@ -801,6 +837,9 @@ final class MeetingStore: ObservableObject {
             session.processingCompletedChunks = completedChunks
             session.processingTotalChunks = totalChunks
             session.processingNextOffset = nextOffset
+            // 这一段已经落地，把"当前段起点"推到此刻 —— 界面上的估算进度会回到
+            // (已完成段 / 总段数) 这条**真实**基线上，然后继续往上走，绝不回缩。
+            session.processingChunkStartedAt = Date()
             session.errorMessage = nil
             try storage.save(session)
             replaceSession(session)
@@ -842,6 +881,7 @@ final class MeetingStore: ObservableObject {
         session.processingCompletedChunks = totalChunks
         session.processingTotalChunks = totalChunks
         session.processingNextOffset = duration
+        session.processingChunkStartedAt = nil
         try storage.save(session)
 
         replaceSession(session)
