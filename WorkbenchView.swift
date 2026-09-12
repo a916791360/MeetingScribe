@@ -826,12 +826,16 @@ struct WorkbenchMinutesDocument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
-            // 「纪要」页不挂提醒横幅。
+            // 「纪要」页只说结果，不做任何自我说明。
             //
-            // 横幅那句话是「下面仅显示本地保守结果」，而下面本来就有 `WorkbenchLocalSummaryNote`
-            // 在讲同一件事（它还得解释"哪些东西被保留了"）—— 一处失败叠两条说明，
-            // 观感上就是"这页在反复道歉"。用户已明确要求这里不要横幅。
-            // 失败原因不丢：交给那条说明顺带交代（见 `localSummaryFailureReason`）。
+            // 这里先后撤掉过两样东西：先是失败提醒横幅（"下面仅显示本地保守结果"），
+            // 然后是本地说明（"本地保守整理只保留…"）。两次都是同一个判断：
+            // 这一页存在的意义是**给出结论和待办**，不是解释这些结论是怎么来的；
+            // 一屏之内连续两段"因为模型没成功所以…"，读起来像在反复道歉。
+            //
+            // 失败信息没有被丢掉：它在唯一该出现的地方 —— 「速览」页的空态
+            // （"还没有生成速览" + 原因 + 重试按钮）。跨 Tab 去看一眼，比在每个 Tab
+            // 都贴一遍要干净。
             if !minutesText.isEmpty {
                 Text(minutesText)
                     .font(.system(size: 18, weight: .regular, design: .default))
@@ -840,6 +844,8 @@ struct WorkbenchMinutesDocument: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             } else if session.analysis.decisions.isEmpty && session.analysis.actions.isEmpty {
+                // 什么都没整理出来时另说：空态不是"提醒"，它是这一屏唯一的内容，
+                // 而且要给出路（重试 / 去设置选模型）。
                 WorkbenchSummaryEmptyState(
                     title: "还没有生成完整纪要",
                     message: emptyMessage,
@@ -847,13 +853,15 @@ struct WorkbenchMinutesDocument: View {
                     actionTitle: "打开设置选择模型",
                     action: { store.showSettings = true }
                 )
-            } else {
-                WorkbenchLocalSummaryNote(failureReason: localSummaryFailureReason)
             }
 
             if !session.analysis.decisions.isEmpty {
-                Divider()
-                    .overlay(AppTheme.rule)
+                // 分隔线是**分界**，不是页首装饰：正文在上面时才画。
+                // 本地保守整理那条路 minutesText 是空的，原来会在内容顶部留一条悬空的线。
+                if !minutesText.isEmpty {
+                    Divider()
+                        .overlay(AppTheme.rule)
+                }
                 WorkbenchDocumentSectionHeading(
                     title: "决策与结论",
                     count: session.analysis.decisions.count
@@ -870,8 +878,11 @@ struct WorkbenchMinutesDocument: View {
             }
 
             if !session.analysis.actions.isEmpty {
-                Divider()
-                    .overlay(AppTheme.rule)
+                // 同上：上面真有东西（正文或决策）才画这条分界线。
+                if !minutesText.isEmpty || !session.analysis.decisions.isEmpty {
+                    Divider()
+                        .overlay(AppTheme.rule)
+                }
                 WorkbenchDocumentSectionHeading(
                     title: "待办",
                     count: session.analysis.actions.count
@@ -891,13 +902,6 @@ struct WorkbenchMinutesDocument: View {
 
     private var minutesText: String {
         session.analysis.minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// 交给本地说明的失败原因。横幅撤掉之后，这里是这一屏唯一讲得清
-    /// 「为什么下面是本地结果」的地方，所以原因必须带过去，不能丢。
-    private var localSummaryFailureReason: String? {
-        guard let error = session.analysis.summaryError, !error.isEmpty else { return nil }
-        return error
     }
 
     /// 只有失败过才给「重试」。没配置模型时点重试是白点。
@@ -1174,55 +1178,6 @@ struct WorkbenchSummaryEmptyState: View {
         }
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity, minHeight: 260)
-    }
-}
-
-struct WorkbenchLocalSummaryNote: View {
-    /// 整理模型失败过才会有值。
-    ///
-    /// 有值的时候这条说明要连着把「为什么下面是本地结果」讲清楚 ——
-    /// 「纪要」页的失败横幅已经被撤掉，这里是唯一交代原因的地方；
-    /// 没值就是纯粹的规则说明（用户主动选了本地整理，或者压根没配模型）。
-    var failureReason: String?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-                .foregroundStyle(tint)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(headline)
-                    .font(.callout)
-                    .foregroundStyle(failureReason == nil ? AppTheme.muted : AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // 真实原因要看得见（原来只喂给 `.help`，用户根本不知道为什么）。
-                if let failureReason {
-                    Text(failureReason)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.muted)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var symbol: String {
-        failureReason == nil ? "checkmark.seal" : "info.circle"
-    }
-
-    private var tint: Color {
-        failureReason == nil ? AppTheme.success : AppTheme.warning
-    }
-
-    private var headline: String {
-        if failureReason == nil {
-            return "本地保守整理只保留逐字稿中明确命中的决策和待办，不把普通讨论拼成纪要。"
-        }
-        return "整理模型这次没有返回结果，下面是本地保守整理：只保留逐字稿中明确命中的决策和待办，不把普通讨论拼成纪要。"
     }
 }
 
