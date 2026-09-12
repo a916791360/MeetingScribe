@@ -826,11 +826,12 @@ struct WorkbenchMinutesDocument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
-            // 同「速览」：横幅只在下面真有本地保守结果时才给，否则和空态重复。
-            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty, hasVisibleContent {
-                WorkbenchSummaryFallbackNotice(message: summaryError)
-            }
-
+            // 「纪要」页不挂提醒横幅。
+            //
+            // 横幅那句话是「下面仅显示本地保守结果」，而下面本来就有 `WorkbenchLocalSummaryNote`
+            // 在讲同一件事（它还得解释"哪些东西被保留了"）—— 一处失败叠两条说明，
+            // 观感上就是"这页在反复道歉"。用户已明确要求这里不要横幅。
+            // 失败原因不丢：交给那条说明顺带交代（见 `localSummaryFailureReason`）。
             if !minutesText.isEmpty {
                 Text(minutesText)
                     .font(.system(size: 18, weight: .regular, design: .default))
@@ -847,7 +848,7 @@ struct WorkbenchMinutesDocument: View {
                     action: { store.showSettings = true }
                 )
             } else {
-                WorkbenchLocalSummaryNote()
+                WorkbenchLocalSummaryNote(failureReason: localSummaryFailureReason)
             }
 
             if !session.analysis.decisions.isEmpty {
@@ -892,12 +893,11 @@ struct WorkbenchMinutesDocument: View {
         session.analysis.minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 这场会议在「纪要」页里有没有可看的东西。
-    /// 与下面空态的出现条件严格互补（空态 = 正文、决策、待办三样全空）。
-    private var hasVisibleContent: Bool {
-        !minutesText.isEmpty
-            || !session.analysis.decisions.isEmpty
-            || !session.analysis.actions.isEmpty
+    /// 交给本地说明的失败原因。横幅撤掉之后，这里是这一屏唯一讲得清
+    /// 「为什么下面是本地结果」的地方，所以原因必须带过去，不能丢。
+    private var localSummaryFailureReason: String? {
+        guard let error = session.analysis.summaryError, !error.isEmpty else { return nil }
+        return error
     }
 
     /// 只有失败过才给「重试」。没配置模型时点重试是白点。
@@ -923,10 +923,17 @@ struct WorkbenchOriginalDocument: View {
     let session: MeetingSession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("\(session.createdAt.formatted(date: .numeric, time: .shortened)) · 原汁原味保留转写")
-                .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(AppTheme.muted)
+        VStack(alignment: .leading, spacing: 14) {
+            // 页眉做小：这是一行「日期 · 这是什么」的眉标，不是标题 ——
+            // 页面主角是下面成百上千行逐字稿，眉标不该跟它抢字号。
+            HStack(spacing: 7) {
+                Text(session.createdAt.formatted(date: .numeric, time: .shortened))
+                    .foregroundStyle(AppTheme.muted)
+                    .monospacedDigit()
+                Text("原汁原味保留转写")
+                    .foregroundStyle(AppTheme.ink)
+            }
+            .font(.system(size: 12, weight: .medium))
 
             if session.transcriptSegments.isEmpty {
                 WorkbenchEmptyHint(text: "转写还没有内容。")
@@ -937,6 +944,9 @@ struct WorkbenchOriginalDocument: View {
                         if index != session.transcriptSegments.count - 1 {
                             Divider()
                                 .overlay(AppTheme.rule)
+                                // 分隔线从正文列起笔，不从行首起笔：
+                                // 左边那一栏留白是给时间戳的，不该被横线穿过去。
+                                .padding(.leading, WorkbenchTranscriptDocumentRow.bodyColumnInset)
                         }
                     }
                 }
@@ -1041,28 +1051,43 @@ struct WorkbenchActionDocumentRow: View {
 struct WorkbenchTranscriptDocumentRow: View {
     let segment: TranscriptSegment
 
+    /// 时间戳栏宽度。11pt 等宽数字的「00:00」只占约 30pt，留到 56pt 是为了让正文列
+    /// 有一条稳定的竖线 —— 行间分隔线也从这条线起笔（见 `bodyColumnInset`）。
+    static let gutter: CGFloat = 56
+    static let gutterSpacing: CGFloat = 16
+
+    /// 正文列的左边距（从行首算起）。分隔线要跟正文对齐，就得让出这个宽度。
+    static var bodyColumnInset: CGFloat { gutter + gutterSpacing }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
+        // 基线对齐：11pt 的时间戳和置信度要落在正文**第一行的基线**上。
+        // 用 `.top` 对齐时小的那两串字会浮在行顶（视觉上比正文高半行），
+        // 这正是此前这一页"看着不齐"的来源之一。
+        HStack(alignment: .firstTextBaseline, spacing: Self.gutterSpacing) {
             Text(segment.start.clockLabel)
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.muted)
                 .monospacedDigit()
-                .frame(width: 92, alignment: .leading)
+                .frame(width: Self.gutter, alignment: .leading)
 
             Text(segment.text)
-                .font(.system(size: 17, weight: .regular, design: .default))
+                .font(.system(size: 14.5, weight: .regular, design: .default))
                 .foregroundStyle(AppTheme.ink)
-                .lineSpacing(5)
+                .lineSpacing(4.5)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 16)
+
+            // 置信度是「机器给的参考值」，比时间戳更次要：同样的字级与颜色，
+            // 但字重更轻，右对齐在一列里，好让人扫一眼又不会跟正文抢。
             Text(segment.confidence.confidenceLabel)
-                .font(.caption)
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(AppTheme.muted)
                 .monospacedDigit()
+                .frame(width: 40, alignment: .trailing)
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
     }
 }
 
@@ -1153,16 +1178,51 @@ struct WorkbenchSummaryEmptyState: View {
 }
 
 struct WorkbenchLocalSummaryNote: View {
+    /// 整理模型失败过才会有值。
+    ///
+    /// 有值的时候这条说明要连着把「为什么下面是本地结果」讲清楚 ——
+    /// 「纪要」页的失败横幅已经被撤掉，这里是唯一交代原因的地方；
+    /// 没值就是纯粹的规则说明（用户主动选了本地整理，或者压根没配模型）。
+    var failureReason: String?
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "checkmark.seal")
-                .foregroundStyle(AppTheme.success)
-            Text("本地保守整理只保留逐字稿中明确命中的决策和待办，不把普通讨论拼成纪要。")
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headline)
+                    .font(.callout)
+                    .foregroundStyle(failureReason == nil ? AppTheme.muted : AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 真实原因要看得见（原来只喂给 `.help`，用户根本不知道为什么）。
+                if let failureReason {
+                    Text(failureReason)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.muted)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+    }
+
+    private var symbol: String {
+        failureReason == nil ? "checkmark.seal" : "info.circle"
+    }
+
+    private var tint: Color {
+        failureReason == nil ? AppTheme.success : AppTheme.warning
+    }
+
+    private var headline: String {
+        if failureReason == nil {
+            return "本地保守整理只保留逐字稿中明确命中的决策和待办，不把普通讨论拼成纪要。"
+        }
+        return "整理模型这次没有返回结果，下面是本地保守整理：只保留逐字稿中明确命中的决策和待办，不把普通讨论拼成纪要。"
     }
 }
 
