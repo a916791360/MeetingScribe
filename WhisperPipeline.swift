@@ -319,9 +319,22 @@ struct AudioDurationReader {
 actor WhisperCLIRunner {
     private let processRunner = LocalProcessRunner()
 
-    /// 起始提示词（initial prompt）。它会被当成「上一句」喂给解码器，
-    /// 所以只说语言和场合，不猜话题——猜偏了会把无关词汇带进转写结果。
-    static let initialPrompt = "以下是一场中文普通话商务会议的录音转写。"
+    /// 起始提示词（initial prompt）。它会被当成「上一句」喂给解码器。
+    ///
+    /// **旧结论已推翻**：这里原来写的是「只说语言和场合，不猜话题」，
+    /// 怕猜偏了把无关词汇带进结果。2026-09-13 实测是反的 ——
+    /// 把**术语表**拼进 prompt（配合 `--carry-initial-prompt`）能明显压低专名误听
+    /// （客户→课考、拜访→败网 这类），专名错词几乎归零，还顺手抬了断句质量。
+    ///
+    /// 仍然坚持的那条边界是：**只放术语，不放"这场会在讲什么"**。
+    /// 术语是词表，话题是判断，后者猜错会污染整场。
+    ///
+    /// ⚠️ 这是硬编码的第一版。用户的真实术语各不相同，P1-3 会把它接成
+    /// 设置页里的「识别术语表」（同一份数据同时供这里、后处理替换表、事后纠错三处用）。
+    static let initialPrompt = """
+    以下是一场中文普通话商务会议的录音转写。
+    常见术语：客户、拜访、合同、预算、报价、验收、渠道、方案、排期、复盘、交付、需求。
+    """
 
     /// 这些是每次转写都一样的参数，单独抽出来方便在 GPU 失败后用 CPU 重跑。
     private static func baseArguments(
@@ -343,6 +356,13 @@ actor WhisperCLIRunner {
             "-oj",
             "-ojf",
             "-np",
+            // 抑制非语音 token。whisper 会给 `[BLANK_AUDIO]`、`♪♪`、`(掌声)` 这类
+            // 单独占一段，而它们**不带任何标点** —— 实测「没有标点的段」里有相当一部分
+            // 就是它们，把断句合格率白白拉低。抑制掉之后有标点的段占比明显回升。
+            "-sns",
+            // 每个解码窗口都从这段提示词起步。不加这个开关的话，术语表只影响
+            // 每块音频的前几段，越往后越"忘"。
+            "--carry-initial-prompt",
             "--prompt", initialPrompt,
             "-of", outputPrefix.path
         ]
