@@ -89,7 +89,17 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?
     ) async throws -> MeetingAnalysis {
-        guard !segments.isEmpty else {
+        // 前置门禁：**材料不够就一个 token 都不花**。
+        //
+        // 这道检查必须在 `chatCompletionsURL` 和 API Key 校验**之前** ——
+        // 材料不足是一个关于录音本身的结论，不该因为"用户还没填 Key"而变成另一个报错，
+        // 也不该为了得出这个结论而先跑一趟网络。
+        //
+        // 不做这道门禁的原始现场：25 秒的误录被送进模型，而模型返回的**不是空**，
+        // 是一段元评论 ——「本次材料仅包含一句栏目推广语，未出现任何会议讨论内容，
+        // 因此无法识别会议主题……」。它花掉预算、占着「速览」最显眼的位置、
+        // 还长得像结论。见 `TranscriptMaterial`。
+        if TranscriptMaterial.measure(segments).shortfall != nil {
             return MeetingAnalysisBuilder.build(from: segments)
         }
 

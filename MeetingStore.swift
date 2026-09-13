@@ -166,6 +166,27 @@ final class MeetingStore: ObservableObject {
             }
         }
 
+        // 2C 的历史数据修补。
+        //
+        // 门禁只对**新产出**生效，而升级前那条"25 秒误录"的记录里存的还是模型写的
+        // 元评论（「本次材料仅包含一句栏目推广语……」），它的 `summaryModel` 是一个
+        // 真实模型名 —— 上面那个循环只认"本地整理"档，压根不会碰它。于是修复在
+        // 用户已有的那条记录上**根本看不见**（这正是方案 O5 的现场，也是本条存在的全部理由）。
+        //
+        // 条件刻意收得很紧，两把锁缺一不可：**材料确实不够** 且 **这条结果里没有任何
+        // 结构化发现**。材料够的不动（那是真结果）；有决策 / 待办 / 一句话结论的也不动
+        // （哪怕材料少，那也是用户真正拿到过的东西，不能替他清掉）。
+        // **逐字稿任何时候都不删** —— 被替换的只有那份"对着材料自我介绍"的整理结果。
+        for index in loadedSessions.indices
+            where MeetingAnalysisBuilder.needsMaterialGateRepair(loadedSessions[index]) {
+            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].transcriptSegments)
+            if analysis != loadedSessions[index].analysis {
+                loadedSessions[index].analysis = analysis
+                loadedSessions[index].updatedAt = Date()
+                try? storage.save(loadedSessions[index])
+            }
+        }
+
         for index in loadedSessions.indices where loadedSessions[index].status == .recording {
             loadedSessions[index].status = .failed
             loadedSessions[index].errorMessage = "应用退出时录音未完成，原始文件已保留，可以重新处理。"
@@ -1515,6 +1536,15 @@ enum MeetingAnalysisBuilder {
     }
 
     static func build(from segments: [TranscriptSegment]) -> MeetingAnalysis {
+        // **门禁在这里**，而不是只在上层调用点 —— 这样三条路都会经过它：
+        // ① 录音 / 导入后的正式整理（`MeetingSummaryEngine.analyze` 会先问一次，
+        //    不足就直接回到这里）；② 选「本地保守整理」的用户；③ `reloadSessions`
+        //    里那段"重算本地整理结果"的修补循环。少任何一条，短录音都会在重启后
+        //    换个样子出现。
+        if let shortfall = TranscriptMaterial.measure(segments).shortfall {
+            return buildInsufficient(shortfall: shortfall)
+        }
+
         let overview: [InsightItem] = []
         let timeline: [TimelineChunk] = []
         let decisions = buildDecisions(from: segments)
@@ -1541,6 +1571,55 @@ enum MeetingAnalysisBuilder {
             ),
             summaryModel: SummaryModelProvider.localRules.title,
             summaryError: nil
+        )
+    }
+
+    /// 2C 的历史修补判据：这条会话要不要拿门禁结果覆盖一次。
+    ///
+    /// 抽成静态函数，是因为它决定**要不要动用户已经存盘的数据** ——
+    /// 这种判据不能靠审阅代码来保证正确，必须有单测钉住（`TranscriptMaterialTests`）。
+    ///
+    /// 两把锁缺一不可：
+    /// 1. **材料确实不够**（门禁会拦），
+    /// 2. **结果里没有任何结构化发现**（`hasStructuredFindings`）。
+    ///
+    /// 材料够的不动（那是真结果）；有决策 / 待办 / 结论的也不动 ——
+    /// 哪怕材料少，那也是用户真正拿到过的东西。已经标过 `insufficientMaterial`
+    /// 的更不用动（否则每次启动都要重写一遍）。
+    static func needsMaterialGateRepair(_ session: MeetingSession) -> Bool {
+        guard session.status == .ready else { return false }
+        guard session.analysis.insufficientMaterial == nil else { return false }
+        guard !session.analysis.hasStructuredFindings else { return false }
+        return TranscriptMaterial.measure(session.transcriptSegments).shortfall != nil
+    }
+
+    /// 材料不足时的产物：**一屏空态，而不是一段元评论**。
+    ///
+    /// 刻意留空的几处，每一处都有理由：
+    /// - `summaryError` 保持 nil —— 这里没有失败，写进去会让界面弹出
+    ///   「已保留逐字稿；下面仅显示本地保守结果」，并且给出一个点了也没用的「重试」。
+    /// - `summaryModel` 保持 nil —— **没有模型参与**，这是字面事实。填上「本地保守整理」
+    ///   会让窗口副标题挂出一个档位名，读起来像"用本地规则整理过一场会"，其实
+    ///   本地规则这次也只做了一件事：判定材料不够。
+    ///   （nil 会让 `reloadSessions` 的第一个修补循环重算一次，但算出来与存盘结果
+    ///   逐字段相等，所以不会写盘 —— 这条不变式由 `testRepairLoopSeesAStableResult` 钉住。）
+    static func buildInsufficient(shortfall: MaterialShortfall) -> MeetingAnalysis {
+        MeetingAnalysis(
+            overview: [],
+            timeline: [],
+            decisions: [],
+            actions: [],
+            confidence: 0,
+            overviewText: "",
+            minutesText: "",
+            summaryModel: nil,
+            summaryError: nil,
+            partialNotice: nil,
+            diagnostics: nil,
+            headline: nil,
+            overviewBullets: nil,
+            openQuestions: nil,
+            insufficientMaterial: shortfall
         )
     }
 

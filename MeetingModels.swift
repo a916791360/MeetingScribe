@@ -399,6 +399,13 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 列表里时，读者会把悬而未决的条目当成结论。
     var openQuestions: [String]?
 
+    /// 材料不足，**压根没调模型**。见 `MaterialShortfall`。
+    ///
+    /// 与 `summaryError` / `partialNotice` 三者互斥，语义各不同：
+    /// 这个是"我们判断过了，这份材料不值得调模型"；那两个是"调了，但没成功 / 没拿全"。
+    /// 混成一个字段会让「重试」按钮出现在按了也没用（材料还是那么少）的地方。
+    var insufficientMaterial: MaterialShortfall?
+
     /// 窗口副标题里用的**短模型名**：只留模型，砍掉前半截服务商。
     ///
     /// `summaryModel` 存的是 `SummaryModelSettings.displayName`，格式是
@@ -443,7 +450,8 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         diagnostics: SummaryDiagnostics? = nil,
         headline: String? = nil,
         overviewBullets: [String]? = nil,
-        openQuestions: [String]? = nil
+        openQuestions: [String]? = nil,
+        insufficientMaterial: MaterialShortfall? = nil
     ) {
         self.overview = overview
         self.timeline = timeline
@@ -459,6 +467,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         self.headline = headline
         self.overviewBullets = overviewBullets
         self.openQuestions = openQuestions
+        self.insufficientMaterial = insufficientMaterial
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -476,6 +485,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         case headline
         case overviewBullets
         case openQuestions
+        case insufficientMaterial
     }
 
     init(from decoder: Decoder) throws {
@@ -496,6 +506,11 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         headline = try container.decodeIfPresent(String.self, forKey: .headline)
         overviewBullets = try container.decodeIfPresent([String].self, forKey: .overviewBullets)
         openQuestions = try container.decodeIfPresent([String].self, forKey: .openQuestions)
+        // 2C 新增，同理：老会话没有这个键。
+        insufficientMaterial = try container.decodeIfPresent(
+            MaterialShortfall.self,
+            forKey: .insufficientMaterial
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -514,6 +529,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         try container.encodeIfPresent(headline, forKey: .headline)
         try container.encodeIfPresent(overviewBullets, forKey: .overviewBullets)
         try container.encodeIfPresent(openQuestions, forKey: .openQuestions)
+        try container.encodeIfPresent(insufficientMaterial, forKey: .insufficientMaterial)
     }
 
     var hasNarrative: Bool {
@@ -524,6 +540,24 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 下面这些内容是**本地保守整理**，不是模型产出（模型压根没返回）。
     var isLocalFallback: Bool {
         summaryError?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    /// 材料太少，**我们主动没调模型**。与 `isLocalFallback` 是两件事：
+    /// 那个是"调了没成"，这个是"判断过、不值得调"。空态文案因此不同，
+    /// 「重试」也只给前者（材料还是那么少，点几次都一样）。
+    var isMaterialInsufficient: Bool { insufficientMaterial != nil }
+
+    /// 这份结果里有没有**结构化发现**（决策 / 待办 / 一句话结论 / 要点 / 待确认）。
+    ///
+    /// 刻意**不**把 `overviewText` / `minutesText` / `timeline` 算进来 ——
+    /// 恰好是这三样最多、却又最可能是"模型对着材料介绍自己"的部分。
+    /// 2C 修补历史记录时用它当第二把锁：凡是有结构化发现的会话一律不碰。
+    var hasStructuredFindings: Bool {
+        !decisions.isEmpty
+            || !actions.isEmpty
+            || headline != nil
+            || !(overviewBullets?.isEmpty ?? true)
+            || !(openQuestions?.isEmpty ?? true)
     }
 
     /// 需要提示用户的那句话（有本地兜底就报兜底，否则报"不完整"）。

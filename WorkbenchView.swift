@@ -742,7 +742,7 @@ struct WorkbenchResultDocument: View {
         case .overview:
             WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab)
         case .minutes:
-            WorkbenchMinutesDocument(session: session)
+            WorkbenchMinutesDocument(session: session, onSelectTab: onSelectTab)
         }
     }
 }
@@ -931,6 +931,18 @@ struct WorkbenchOverviewDocument: View {
                         }
                     }
                 }
+            } else if let shortfall = session.analysis.insufficientMaterial {
+                // 材料不足：这一屏要说的是「这段录音里没有会议」，而不是「模型没跑成功」。
+                // 所以既没有失败横幅（`hasVisibleContent` 是 false，横幅上面就不会画），
+                // 也**不给「重试」**——材料还是那么少，点几次都一样；给的出路是
+                // 「查看原文」，因为唯一还有信息量的东西就在那儿。
+                WorkbenchSummaryEmptyState(
+                    title: shortfall.title,
+                    message: shortfall.message,
+                    actionTitle: "查看原文",
+                    action: { onSelectTab(.original) },
+                    actionIcon: "text.alignleft"
+                )
             } else if !hasVisibleContent {
                 WorkbenchSummaryEmptyState(
                     title: "还没有生成速览",
@@ -1249,6 +1261,9 @@ struct WorkbenchSectionMoreButton: View {
 
 struct WorkbenchMinutesDocument: View {
     let session: MeetingSession
+    /// 空态里「查看原文」要用它。这一页平时是终点（不给"下一站"），
+    /// 只有材料不足那一种空态需要一个出口，而出口通向原文页。
+    let onSelectTab: (MeetingResultTab) -> Void
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
@@ -1274,6 +1289,17 @@ struct WorkbenchMinutesDocument: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .workbenchProsePanel()
+            } else if let shortfall = session.analysis.insufficientMaterial {
+                // 同速览页：材料不足是一种**结论**，不是一次失败。文案与速览页逐字一致
+                // （同一句在 `MaterialShortfall.message` 里，两处共用），
+                // 出路也一样是「查看原文」，没有「重试」。
+                WorkbenchSummaryEmptyState(
+                    title: shortfall.title,
+                    message: shortfall.message,
+                    actionTitle: "查看原文",
+                    action: { onSelectTab(.original) },
+                    actionIcon: "text.alignleft"
+                )
             } else if session.analysis.decisions.isEmpty && session.analysis.actions.isEmpty {
                 // 什么都没整理出来时另说：空态不是"提醒"，它是这一屏唯一的内容，
                 // 而且要给出路（重试 / 去设置选模型）。
@@ -1643,6 +1669,9 @@ struct WorkbenchSummaryEmptyState: View {
     var retry: (() -> Void)?
     let actionTitle: String
     let action: () -> Void
+    /// 主按钮的图标。默认那颗是「打开设置选择模型」；材料不足时空态要去的是
+    /// 「原文」页（换模型解决不了材料少的问题），齿轮在那里是错的暗示。
+    var actionIcon: String = "gearshape"
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1673,7 +1702,7 @@ struct WorkbenchSummaryEmptyState: View {
                 }
 
                 Button(action: action) {
-                    Label(actionTitle, systemImage: "gearshape")
+                    Label(actionTitle, systemImage: actionIcon)
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
             }
