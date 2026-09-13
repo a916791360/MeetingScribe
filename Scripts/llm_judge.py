@@ -55,7 +55,7 @@ DEFAULT_JUDGE_BASE_URL = "https://apihub.agnes-ai.com/v1"
 # 裁判的 max_tokens。⚠️ 这个值是「思考链 + 正文」的总预算：
 # agnes-3.0-flash 带推理，预算给少了会出现 `finish_reason=length` 且正文为空 ——
 # 正是 App 那侧 P0-3 修过的病根。宁可给大，反正裁判的产出很短。
-JUDGE_MAX_TOKENS = 6000
+JUDGE_MAX_TOKENS = 12000
 
 DIMENSIONS = {
     "faithfulness": "忠实度",
@@ -63,12 +63,25 @@ DIMENSIONS = {
     "density": "信息密度",
     "actionability": "可执行性",
 }
+# 哪些维度对「期望空态」的 case 适用。
+#
+# ⚠️ 首版全量实跑当场暴露了这个口径错：`too-short`（误录到在线视频的推广语，
+# 期望就是**什么都不产出**）被按四维打分，可执行性拿 1/4 —— 理由是"没有待办、没有责任人"。
+# 可它**本来就不该有待办**。把不适用的指标拿来判，必然得低分，
+# 而这个低分会被读成"这一场质量差"。同型事故在本项目已经第 7 次（见
+# docs/转写与速览纪要质量提升方案.md 与 .learnings）。
+#
+# 空态场唯一有意义的问法是：**它有没有编造出不存在的会议内容**。
+EMPTY_STATE_DIMENSIONS = ("faithfulness",)
+NOT_APPLICABLE = "该场期望空态（本来就不该有内容），这一维不适用 —— 不是 0 分"
 # 达标线：任意维度中位数 < 3 就算没过。四维同权，不给「可执行性」加权 ——
 # 会被权重掩盖的，恰恰是最容易退化的那一维。
 PASS_THRESHOLD = 3
 
 RUBRIC = """你的输出必须是**一个 JSON 对象**，不要有多余文字、不要 markdown 代码围栏。
-JSON 里必须有整数字段 "score"（取值 1/2/3/4），以及说明理由的字段。"""
+JSON 里必须有整数字段 "score"（取值 1/2/3/4），以及说明理由的字段。
+**列举类字段最多 8 条、每条不超过 30 字**，只给最能说明问题的例子 ——
+穷举会让回复被截断，反而什么也拿不到。"""
 
 
 def dimension_prompt(dim: str, transcript: str, product: str) -> str:
@@ -349,8 +362,17 @@ def main() -> int:
         entry = {"caseId": cid, "judgeModel": model,
                  "judgeBaseUrl": base,
                  "productModel": summarizer_vendor_of(run),
+                 "expect": case.get("expect"),
                  "dimensions": {}}
-        for dim, zh in DIMENSIONS.items():
+        # 空态场只跑适用的维度，其余显式标「不适用」——不用 0 也不给低分冒充。
+        applicable = (list(DIMENSIONS) if case.get("expect") != "emptyState"
+                      else list(EMPTY_STATE_DIMENSIONS))
+        for dim in DIMENSIONS:
+            if dim not in applicable:
+                entry["dimensions"][dim] = {"score": None, "notApplicable": NOT_APPLICABLE}
+                print(f"  - {DIMENSIONS[dim]}：n/a（该场期望空态，不适用）")
+                continue
+            zh = DIMENSIONS[dim]
             prompt = dimension_prompt(dim, transcript, product)
             if args.dry_run:
                 print(f"  - {zh}：提示词 {len(prompt)} 字（--dry-run，未调用）")
@@ -361,6 +383,7 @@ def main() -> int:
             parsed_runs: list[dict] = []
             last_error: str | None = None
             for i in range(max(1, args.repeat)):
+                body = None
                 try:
                     content, body = call_judge(base, model, key, prompt)
                     (raw_dir / f"{cid}-{dim}"
@@ -369,7 +392,14 @@ def main() -> int:
                                    ensure_ascii=False, indent=1), encoding="utf-8")
                     parsed = extract_json(content)
                 except Exception as e:
-                    last_error = str(e)
+                    # 把 finish_reason 一起报出来：解析失败与「被截断」是两种病，
+                    # 不写清楚就只能靠猜（首版就吃过这个亏）。
+                    finish = None
+                    try:
+                        finish = ((body or {}).get("choices") or [{}])[0].get("finish_reason")
+                    except Exception:
+                        pass
+                    last_error = str(e) + (f"（finish_reason={finish}）" if finish else "")
                     continue
                 score = parsed.get("score")
                 if not isinstance(score, int) or not 1 <= score <= 4:
@@ -404,29 +434,54 @@ def main() -> int:
 
     # ---------------- 汇总
     dims = list(DIMENSIONS)
+    empty_cases = [cid for cid, e in results.items() if e.get("expect") == "emptyState"]
     lines = ["# LLM 裁判报告", "",
              f"- 裁判模型：`{model}`（来源：{origin}）",
+             f"- 待评产出模型：`{summarizer_vendor_of(rows[0][2]) or '未知'}`",
              f"- 待评 case：{len(results)}",
-             f"- 打分口径：1~4，4 最好；**任一维度中位数 < {PASS_THRESHOLD} 即未过**", "",
-             "| case | " + " | ".join(DIMENSIONS[d] for d in dims) + " | 均值 |",
-             "|---" * (len(dims) + 2) + "|"]
+             # 产物必须自带"怎么跑出来的"：同一份产出的分数会随 repeat 变，
+             # 不写下来，过两周看这张表就分不清是稳的还是掷硬币掷出来的。
+             f"- 每维重复次数：{max(1, args.repeat)}"
+             + ("　⚠️ **单次跑，仅供参考**（实测同维度出现过 [2,4,4] 的抖动）"
+                if args.repeat == 1 else ""),
+             f"- 打分口径：1~4，4 最好；**任一维度中位数 < {PASS_THRESHOLD} 即未过**",
+             ]
+    if empty_cases:
+        lines.append(
+            f"- **`n/a` = 不适用**：{'、'.join(f'`{c}`' for c in empty_cases)} "
+            f"期望走空态（本来就不该有内容），只评{'、'.join(DIMENSIONS[d] for d in EMPTY_STATE_DIMENSIONS)}，"
+            f"其余维度不计入统计 —— 对一场本该没内容的会去量「有多少废话」「明天该做什么」，"
+            f"必然得低分，而这个低分会被误读成质量差")
+    lines += ["",
+              "| case | " + " | ".join(DIMENSIONS[d] for d in dims) + " | 均值 |",
+              "|---" * (len(dims) + 2) + "|"]
     per_dim: dict[str, list[int]] = {d: [] for d in dims}
     for cid, entry in results.items():
         cells, vals = [], []
         for d in dims:
-            s = (entry["dimensions"].get(d) or {}).get("score")
-            cells.append("—" if s is None else str(s))
+            got = entry["dimensions"].get(d) or {}
+            s = got.get("score")
+            if s is None:
+                cells.append("n/a" if got.get("notApplicable") else "—")
+            else:
+                cells.append(str(s))
             if isinstance(s, int):
                 vals.append(s)
                 per_dim[d].append(s)
         mean_cell = f"{statistics.mean(vals):.2f}" if vals else "—"
+        if len(vals) < len(dims):
+            # 均值只按适用的维度算 —— 不写清楚，空态场的 4.00 会被拿去和四维均值比。
+            mean_cell += f"（{len(vals)} 维）"
         lines.append(f"| {cid} | " + " | ".join(cells) + f" | {mean_cell} |")
     lines += ["", "## 维度判定", "", "| 维度 | 中位数 | 判定 |", "|---|---|---|"]
     failures = []
     for d in dims:
         vals = per_dim[d]
         if not vals:
-            lines.append(f"| {DIMENSIONS[d]} | — | 不可算 |")
+            reason = ("本语料没有适用这一维的 case" if any(
+                (e["dimensions"].get(d) or {}).get("notApplicable") for e in results.values())
+                else "本轮没有拿到分数")
+            lines.append(f"| {DIMENSIONS[d]} | — | 不可算（{reason}） |")
             continue
         med = statistics.median(vals)
         ok = med >= PASS_THRESHOLD
@@ -438,6 +493,9 @@ def main() -> int:
         lines.append(f"### {cid}")
         for d in dims:
             got = entry["dimensions"].get(d) or {}
+            if got.get("notApplicable"):
+                lines.append(f"- **{DIMENSIONS[d]}**：n/a（{got['notApplicable']}）")
+                continue
             if got.get("error"):
                 lines.append(f"- **{DIMENSIONS[d]}**：跑失败（{got['error']}）")
                 continue
