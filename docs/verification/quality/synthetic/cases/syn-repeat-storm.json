@@ -1,0 +1,1336 @@
+{
+ "schemaVersion": 1,
+ "synthetic": true,
+ "caseId": "syn-repeat-storm",
+ "label": "合成：复读风暴 · 清洗未折叠",
+ "sourceSession": "(合成语料，非真实会议)",
+ "sliceStart": 0.0,
+ "sliceEnd": 594.0,
+ "durationSeconds": 594.0,
+ "expect": "content",
+ "note": "22 段/分钟的病态转录，而 run 里 preparedSegmentCount 几乎没降 —— 模拟「后处理折叠失效」，段数回退必须被判未达。",
+ "segmentCount": 220,
+ "charCount": 1689,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 2.7,
+   "text": "这个这个这个。",
+   "confidence": 0.7759
+  },
+  {
+   "start": 2.7,
+   "end": 5.4,
+   "text": "这个这个这个。",
+   "confidence": 0.5174
+  },
+  {
+   "start": 5.4,
+   "end": 8.1,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4172
+  },
+  {
+   "start": 8.1,
+   "end": 10.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7181
+  },
+  {
+   "start": 10.8,
+   "end": 13.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4329
+  },
+  {
+   "start": 13.5,
+   "end": 16.2,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5215
+  },
+  {
+   "start": 16.2,
+   "end": 18.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6671
+  },
+  {
+   "start": 18.9,
+   "end": 21.6,
+   "text": "这个这个这个。",
+   "confidence": 0.5263
+  },
+  {
+   "start": 21.6,
+   "end": 24.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4002
+  },
+  {
+   "start": 24.3,
+   "end": 27.0,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.6833
+  },
+  {
+   "start": 27.0,
+   "end": 29.7,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7777
+  },
+  {
+   "start": 29.7,
+   "end": 32.4,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5063
+  },
+  {
+   "start": 32.4,
+   "end": 35.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4623
+  },
+  {
+   "start": 35.1,
+   "end": 37.8,
+   "text": "对，对，对。",
+   "confidence": 0.632
+  },
+  {
+   "start": 37.8,
+   "end": 40.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.404
+  },
+  {
+   "start": 40.5,
+   "end": 43.2,
+   "text": "这个这个这个。",
+   "confidence": 0.411
+  },
+  {
+   "start": 43.2,
+   "end": 45.9,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6528
+  },
+  {
+   "start": 45.9,
+   "end": 48.6,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4582
+  },
+  {
+   "start": 48.6,
+   "end": 51.3,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5424
+  },
+  {
+   "start": 51.3,
+   "end": 54.0,
+   "text": "对，对，对。",
+   "confidence": 0.4723
+  },
+  {
+   "start": 54.0,
+   "end": 56.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5673
+  },
+  {
+   "start": 56.7,
+   "end": 59.4,
+   "text": "对，对，对。",
+   "confidence": 0.6929
+  },
+  {
+   "start": 59.4,
+   "end": 62.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4134
+  },
+  {
+   "start": 62.1,
+   "end": 64.8,
+   "text": "对，对，对。",
+   "confidence": 0.7266
+  },
+  {
+   "start": 64.8,
+   "end": 67.5,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4547
+  },
+  {
+   "start": 67.5,
+   "end": 70.2,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5988
+  },
+  {
+   "start": 70.2,
+   "end": 72.9,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7996
+  },
+  {
+   "start": 72.9,
+   "end": 75.6,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4957
+  },
+  {
+   "start": 75.6,
+   "end": 78.3,
+   "text": "这个这个这个。",
+   "confidence": 0.7396
+  },
+  {
+   "start": 78.3,
+   "end": 81.0,
+   "text": "这个这个这个。",
+   "confidence": 0.6742
+  },
+  {
+   "start": 81.0,
+   "end": 83.7,
+   "text": "这个这个这个。",
+   "confidence": 0.4686
+  },
+  {
+   "start": 83.7,
+   "end": 86.4,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6275
+  },
+  {
+   "start": 86.4,
+   "end": 89.1,
+   "text": "对，对，对。",
+   "confidence": 0.4245
+  },
+  {
+   "start": 89.1,
+   "end": 91.8,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6294
+  },
+  {
+   "start": 91.8,
+   "end": 94.5,
+   "text": "这个这个这个。",
+   "confidence": 0.6223
+  },
+  {
+   "start": 94.5,
+   "end": 97.2,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7044
+  },
+  {
+   "start": 97.2,
+   "end": 99.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6845
+  },
+  {
+   "start": 99.9,
+   "end": 102.6,
+   "text": "对，对，对。",
+   "confidence": 0.6802
+  },
+  {
+   "start": 102.6,
+   "end": 105.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6124
+  },
+  {
+   "start": 105.3,
+   "end": 108.0,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6442
+  },
+  {
+   "start": 108.0,
+   "end": 110.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.754
+  },
+  {
+   "start": 110.7,
+   "end": 113.4,
+   "text": "我我我觉得吧。",
+   "confidence": 0.609
+  },
+  {
+   "start": 113.4,
+   "end": 116.1,
+   "text": "对，对，对。",
+   "confidence": 0.4214
+  },
+  {
+   "start": 116.1,
+   "end": 118.8,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7937
+  },
+  {
+   "start": 118.8,
+   "end": 121.5,
+   "text": "这个这个这个。",
+   "confidence": 0.5078
+  },
+  {
+   "start": 121.5,
+   "end": 124.2,
+   "text": "对，对，对。",
+   "confidence": 0.738
+  },
+  {
+   "start": 124.2,
+   "end": 126.9,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5236
+  },
+  {
+   "start": 126.9,
+   "end": 129.6,
+   "text": "我我我觉得吧。",
+   "confidence": 0.716
+  },
+  {
+   "start": 129.6,
+   "end": 132.3,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4112
+  },
+  {
+   "start": 132.3,
+   "end": 135.0,
+   "text": "这个这个这个。",
+   "confidence": 0.6246
+  },
+  {
+   "start": 135.0,
+   "end": 137.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6572
+  },
+  {
+   "start": 137.7,
+   "end": 140.4,
+   "text": "这个这个这个。",
+   "confidence": 0.5223
+  },
+  {
+   "start": 140.4,
+   "end": 143.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4443
+  },
+  {
+   "start": 143.1,
+   "end": 145.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7559
+  },
+  {
+   "start": 145.8,
+   "end": 148.5,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5398
+  },
+  {
+   "start": 148.5,
+   "end": 151.2,
+   "text": "这个这个这个。",
+   "confidence": 0.711
+  },
+  {
+   "start": 151.2,
+   "end": 153.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7516
+  },
+  {
+   "start": 153.9,
+   "end": 156.6,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7067
+  },
+  {
+   "start": 156.6,
+   "end": 159.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6446
+  },
+  {
+   "start": 159.3,
+   "end": 162.0,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4718
+  },
+  {
+   "start": 162.0,
+   "end": 164.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4589
+  },
+  {
+   "start": 164.7,
+   "end": 167.4,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4317
+  },
+  {
+   "start": 167.4,
+   "end": 170.1,
+   "text": "对，对，对。",
+   "confidence": 0.4744
+  },
+  {
+   "start": 170.1,
+   "end": 172.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.6026
+  },
+  {
+   "start": 172.8,
+   "end": 175.5,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5648
+  },
+  {
+   "start": 175.5,
+   "end": 178.2,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7462
+  },
+  {
+   "start": 178.2,
+   "end": 180.9,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4074
+  },
+  {
+   "start": 180.9,
+   "end": 183.6,
+   "text": "这个这个这个。",
+   "confidence": 0.5035
+  },
+  {
+   "start": 183.6,
+   "end": 186.3,
+   "text": "对，对，对。",
+   "confidence": 0.5036
+  },
+  {
+   "start": 186.3,
+   "end": 189.0,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7204
+  },
+  {
+   "start": 189.0,
+   "end": 191.7,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7896
+  },
+  {
+   "start": 191.7,
+   "end": 194.4,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4954
+  },
+  {
+   "start": 194.4,
+   "end": 197.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4264
+  },
+  {
+   "start": 197.1,
+   "end": 199.8,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6757
+  },
+  {
+   "start": 199.8,
+   "end": 202.5,
+   "text": "对，对，对。",
+   "confidence": 0.7921
+  },
+  {
+   "start": 202.5,
+   "end": 205.2,
+   "text": "这个这个这个。",
+   "confidence": 0.5639
+  },
+  {
+   "start": 205.2,
+   "end": 207.9,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4179
+  },
+  {
+   "start": 207.9,
+   "end": 210.6,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7043
+  },
+  {
+   "start": 210.6,
+   "end": 213.3,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4685
+  },
+  {
+   "start": 213.3,
+   "end": 216.0,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.642
+  },
+  {
+   "start": 216.0,
+   "end": 218.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5591
+  },
+  {
+   "start": 218.7,
+   "end": 221.4,
+   "text": "这个这个这个。",
+   "confidence": 0.6057
+  },
+  {
+   "start": 221.4,
+   "end": 224.1,
+   "text": "我我我觉得吧。",
+   "confidence": 0.562
+  },
+  {
+   "start": 224.1,
+   "end": 226.8,
+   "text": "这个这个这个。",
+   "confidence": 0.5922
+  },
+  {
+   "start": 226.8,
+   "end": 229.5,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7907
+  },
+  {
+   "start": 229.5,
+   "end": 232.2,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.515
+  },
+  {
+   "start": 232.2,
+   "end": 234.9,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4622
+  },
+  {
+   "start": 234.9,
+   "end": 237.6,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7653
+  },
+  {
+   "start": 237.6,
+   "end": 240.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7391
+  },
+  {
+   "start": 240.3,
+   "end": 243.0,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4256
+  },
+  {
+   "start": 243.0,
+   "end": 245.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7423
+  },
+  {
+   "start": 245.7,
+   "end": 248.4,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4853
+  },
+  {
+   "start": 248.4,
+   "end": 251.1,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6487
+  },
+  {
+   "start": 251.1,
+   "end": 253.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.542
+  },
+  {
+   "start": 253.8,
+   "end": 256.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7055
+  },
+  {
+   "start": 256.5,
+   "end": 259.2,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7153
+  },
+  {
+   "start": 259.2,
+   "end": 261.9,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4753
+  },
+  {
+   "start": 261.9,
+   "end": 264.6,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6529
+  },
+  {
+   "start": 264.6,
+   "end": 267.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7592
+  },
+  {
+   "start": 267.3,
+   "end": 270.0,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5098
+  },
+  {
+   "start": 270.0,
+   "end": 272.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6127
+  },
+  {
+   "start": 272.7,
+   "end": 275.4,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7071
+  },
+  {
+   "start": 275.4,
+   "end": 278.1,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4736
+  },
+  {
+   "start": 278.1,
+   "end": 280.8,
+   "text": "对，对，对。",
+   "confidence": 0.5176
+  },
+  {
+   "start": 280.8,
+   "end": 283.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4894
+  },
+  {
+   "start": 283.5,
+   "end": 286.2,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6577
+  },
+  {
+   "start": 286.2,
+   "end": 288.9,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6359
+  },
+  {
+   "start": 288.9,
+   "end": 291.6,
+   "text": "对，对，对。",
+   "confidence": 0.6137
+  },
+  {
+   "start": 291.6,
+   "end": 294.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5389
+  },
+  {
+   "start": 294.3,
+   "end": 297.0,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7005
+  },
+  {
+   "start": 297.0,
+   "end": 299.7,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.488
+  },
+  {
+   "start": 299.7,
+   "end": 302.4,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7789
+  },
+  {
+   "start": 302.4,
+   "end": 305.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5929
+  },
+  {
+   "start": 305.1,
+   "end": 307.8,
+   "text": "对，对，对。",
+   "confidence": 0.7384
+  },
+  {
+   "start": 307.8,
+   "end": 310.5,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7905
+  },
+  {
+   "start": 310.5,
+   "end": 313.2,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.746
+  },
+  {
+   "start": 313.2,
+   "end": 315.9,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5003
+  },
+  {
+   "start": 315.9,
+   "end": 318.6,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.721
+  },
+  {
+   "start": 318.6,
+   "end": 321.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5393
+  },
+  {
+   "start": 321.3,
+   "end": 324.0,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4514
+  },
+  {
+   "start": 324.0,
+   "end": 326.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4607
+  },
+  {
+   "start": 326.7,
+   "end": 329.4,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7913
+  },
+  {
+   "start": 329.4,
+   "end": 332.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7338
+  },
+  {
+   "start": 332.1,
+   "end": 334.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4972
+  },
+  {
+   "start": 334.8,
+   "end": 337.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4158
+  },
+  {
+   "start": 337.5,
+   "end": 340.2,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6312
+  },
+  {
+   "start": 340.2,
+   "end": 342.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.62
+  },
+  {
+   "start": 342.9,
+   "end": 345.6,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.6733
+  },
+  {
+   "start": 345.6,
+   "end": 348.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.4643
+  },
+  {
+   "start": 348.3,
+   "end": 351.0,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7056
+  },
+  {
+   "start": 351.0,
+   "end": 353.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5457
+  },
+  {
+   "start": 353.7,
+   "end": 356.4,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4487
+  },
+  {
+   "start": 356.4,
+   "end": 359.1,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6722
+  },
+  {
+   "start": 359.1,
+   "end": 361.8,
+   "text": "这个这个这个。",
+   "confidence": 0.6249
+  },
+  {
+   "start": 361.8,
+   "end": 364.5,
+   "text": "这个这个这个。",
+   "confidence": 0.4564
+  },
+  {
+   "start": 364.5,
+   "end": 367.2,
+   "text": "这个这个这个。",
+   "confidence": 0.6574
+  },
+  {
+   "start": 367.2,
+   "end": 369.9,
+   "text": "这个这个这个。",
+   "confidence": 0.4334
+  },
+  {
+   "start": 369.9,
+   "end": 372.6,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5403
+  },
+  {
+   "start": 372.6,
+   "end": 375.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7001
+  },
+  {
+   "start": 375.3,
+   "end": 378.0,
+   "text": "这个这个这个。",
+   "confidence": 0.716
+  },
+  {
+   "start": 378.0,
+   "end": 380.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.545
+  },
+  {
+   "start": 380.7,
+   "end": 383.4,
+   "text": "这个这个这个。",
+   "confidence": 0.4664
+  },
+  {
+   "start": 383.4,
+   "end": 386.1,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4999
+  },
+  {
+   "start": 386.1,
+   "end": 388.8,
+   "text": "这个这个这个。",
+   "confidence": 0.7077
+  },
+  {
+   "start": 388.8,
+   "end": 391.5,
+   "text": "这个这个这个。",
+   "confidence": 0.6637
+  },
+  {
+   "start": 391.5,
+   "end": 394.2,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7663
+  },
+  {
+   "start": 394.2,
+   "end": 396.9,
+   "text": "这个这个这个。",
+   "confidence": 0.4033
+  },
+  {
+   "start": 396.9,
+   "end": 399.6,
+   "text": "对，对，对。",
+   "confidence": 0.7224
+  },
+  {
+   "start": 399.6,
+   "end": 402.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.595
+  },
+  {
+   "start": 402.3,
+   "end": 405.0,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4799
+  },
+  {
+   "start": 405.0,
+   "end": 407.7,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4721
+  },
+  {
+   "start": 407.7,
+   "end": 410.4,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4333
+  },
+  {
+   "start": 410.4,
+   "end": 413.1,
+   "text": "对，对，对。",
+   "confidence": 0.6719
+  },
+  {
+   "start": 413.1,
+   "end": 415.8,
+   "text": "这个这个这个。",
+   "confidence": 0.648
+  },
+  {
+   "start": 415.8,
+   "end": 418.5,
+   "text": "这个这个这个。",
+   "confidence": 0.7834
+  },
+  {
+   "start": 418.5,
+   "end": 421.2,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5871
+  },
+  {
+   "start": 421.2,
+   "end": 423.9,
+   "text": "对，对，对。",
+   "confidence": 0.7248
+  },
+  {
+   "start": 423.9,
+   "end": 426.6,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.7509
+  },
+  {
+   "start": 426.6,
+   "end": 429.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4531
+  },
+  {
+   "start": 429.3,
+   "end": 432.0,
+   "text": "对，对，对。",
+   "confidence": 0.645
+  },
+  {
+   "start": 432.0,
+   "end": 434.7,
+   "text": "对，对，对。",
+   "confidence": 0.7349
+  },
+  {
+   "start": 434.7,
+   "end": 437.4,
+   "text": "这个这个这个。",
+   "confidence": 0.5948
+  },
+  {
+   "start": 437.4,
+   "end": 440.1,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5133
+  },
+  {
+   "start": 440.1,
+   "end": 442.8,
+   "text": "这个这个这个。",
+   "confidence": 0.5909
+  },
+  {
+   "start": 442.8,
+   "end": 445.5,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6502
+  },
+  {
+   "start": 445.5,
+   "end": 448.2,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4633
+  },
+  {
+   "start": 448.2,
+   "end": 450.9,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.6808
+  },
+  {
+   "start": 450.9,
+   "end": 453.6,
+   "text": "对，对，对。",
+   "confidence": 0.6621
+  },
+  {
+   "start": 453.6,
+   "end": 456.3,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5208
+  },
+  {
+   "start": 456.3,
+   "end": 459.0,
+   "text": "我我我觉得吧。",
+   "confidence": 0.505
+  },
+  {
+   "start": 459.0,
+   "end": 461.7,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5677
+  },
+  {
+   "start": 461.7,
+   "end": 464.4,
+   "text": "这个这个这个。",
+   "confidence": 0.5449
+  },
+  {
+   "start": 464.4,
+   "end": 467.1,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6771
+  },
+  {
+   "start": 467.1,
+   "end": 469.8,
+   "text": "对，对，对。",
+   "confidence": 0.7703
+  },
+  {
+   "start": 469.8,
+   "end": 472.5,
+   "text": "我我我觉得吧。",
+   "confidence": 0.566
+  },
+  {
+   "start": 472.5,
+   "end": 475.2,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.61
+  },
+  {
+   "start": 475.2,
+   "end": 477.9,
+   "text": "对，对，对。",
+   "confidence": 0.5439
+  },
+  {
+   "start": 477.9,
+   "end": 480.6,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.478
+  },
+  {
+   "start": 480.6,
+   "end": 483.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6159
+  },
+  {
+   "start": 483.3,
+   "end": 486.0,
+   "text": "对，对，对。",
+   "confidence": 0.4421
+  },
+  {
+   "start": 486.0,
+   "end": 488.7,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.537
+  },
+  {
+   "start": 488.7,
+   "end": 491.4,
+   "text": "这个这个这个。",
+   "confidence": 0.5433
+  },
+  {
+   "start": 491.4,
+   "end": 494.1,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7202
+  },
+  {
+   "start": 494.1,
+   "end": 496.8,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.5049
+  },
+  {
+   "start": 496.8,
+   "end": 499.5,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7339
+  },
+  {
+   "start": 499.5,
+   "end": 502.2,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.7832
+  },
+  {
+   "start": 502.2,
+   "end": 504.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6217
+  },
+  {
+   "start": 504.9,
+   "end": 507.6,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.5199
+  },
+  {
+   "start": 507.6,
+   "end": 510.3,
+   "text": "这个这个这个。",
+   "confidence": 0.4361
+  },
+  {
+   "start": 510.3,
+   "end": 513.0,
+   "text": "对，对，对。",
+   "confidence": 0.6383
+  },
+  {
+   "start": 513.0,
+   "end": 515.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6686
+  },
+  {
+   "start": 515.7,
+   "end": 518.4,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.485
+  },
+  {
+   "start": 518.4,
+   "end": 521.1,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5363
+  },
+  {
+   "start": 521.1,
+   "end": 523.8,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5568
+  },
+  {
+   "start": 523.8,
+   "end": 526.5,
+   "text": "对，对，对。",
+   "confidence": 0.5933
+  },
+  {
+   "start": 526.5,
+   "end": 529.2,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.4516
+  },
+  {
+   "start": 529.2,
+   "end": 531.9,
+   "text": "这个这个这个。",
+   "confidence": 0.7682
+  },
+  {
+   "start": 531.9,
+   "end": 534.6,
+   "text": "对，对，对。",
+   "confidence": 0.7612
+  },
+  {
+   "start": 534.6,
+   "end": 537.3,
+   "text": "对，对，对。",
+   "confidence": 0.5069
+  },
+  {
+   "start": 537.3,
+   "end": 540.0,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7614
+  },
+  {
+   "start": 540.0,
+   "end": 542.7,
+   "text": "这个这个这个。",
+   "confidence": 0.6817
+  },
+  {
+   "start": 542.7,
+   "end": 545.4,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6571
+  },
+  {
+   "start": 545.4,
+   "end": 548.1,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7343
+  },
+  {
+   "start": 548.1,
+   "end": 550.8,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7022
+  },
+  {
+   "start": 550.8,
+   "end": 553.5,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.4807
+  },
+  {
+   "start": 553.5,
+   "end": 556.2,
+   "text": "对，对，对。",
+   "confidence": 0.7172
+  },
+  {
+   "start": 556.2,
+   "end": 558.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.7957
+  },
+  {
+   "start": 558.9,
+   "end": 561.6,
+   "text": "我我我觉得吧。",
+   "confidence": 0.411
+  },
+  {
+   "start": 561.6,
+   "end": 564.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6357
+  },
+  {
+   "start": 564.3,
+   "end": 567.0,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4298
+  },
+  {
+   "start": 567.0,
+   "end": 569.7,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5756
+  },
+  {
+   "start": 569.7,
+   "end": 572.4,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.6623
+  },
+  {
+   "start": 572.4,
+   "end": 575.1,
+   "text": "我我我觉得吧。",
+   "confidence": 0.6997
+  },
+  {
+   "start": 575.1,
+   "end": 577.8,
+   "text": "这个这个这个。",
+   "confidence": 0.5743
+  },
+  {
+   "start": 577.8,
+   "end": 580.5,
+   "text": "嗯嗯嗯。",
+   "confidence": 0.5389
+  },
+  {
+   "start": 580.5,
+   "end": 583.2,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.4843
+  },
+  {
+   "start": 583.2,
+   "end": 585.9,
+   "text": "我我我觉得吧。",
+   "confidence": 0.5915
+  },
+  {
+   "start": 585.9,
+   "end": 588.6,
+   "text": "这个这个这个。",
+   "confidence": 0.7516
+  },
+  {
+   "start": 588.6,
+   "end": 591.3,
+   "text": "那个那个，就是说，就是。",
+   "confidence": 0.7991
+  },
+  {
+   "start": 591.3,
+   "end": 594.0,
+   "text": "然后呢，然后呢。",
+   "confidence": 0.6031
+  }
+ ]
+}

@@ -1,0 +1,299 @@
+{
+ "caseId": "syn-meta-comment",
+ "label": "合成：超短误录 · 产出元评论",
+ "expect": "emptyState",
+ "ok": true,
+ "errorType": null,
+ "errorMessage": null,
+ "elapsedSeconds": 143.2,
+ "durationSeconds": 41.5,
+ "inputSegmentCount": 2,
+ "inputCharCount": 27,
+ "preparedSegmentCount": 2,
+ "preparedCharCount": 40,
+ "dedupCharCount": 40,
+ "transcriptCharsSentToModel": 440,
+ "finishReason": "stop",
+ "minutesFinishReason": "stop",
+ "escalationCount": 0,
+ "partialNotice": null,
+ "localFallback": {
+  "overviewChars": 0,
+  "minutesChars": 0,
+  "decisions": 0,
+  "actions": 0
+ },
+ "analysis": {
+  "headline": "本次输入材料中不包含任何工作会议内容",
+  "overviewText": "本次输入材料不包含任何工作会议内容，无法识别会议主题，因此无法生成速览。",
+  "minutesText": "## 材料情况说明\n\n本次输入材料仅包含一段栏目开场白与广告语，不存在可供归纳的会议议题。\n\n## 处理建议\n\n建议确认录音来源后重新上传；为避免编造，本次不输出纪要正文。",
+  "openQuestions": [
+   "积分能否转赠给其他会员，尚未形成结论。",
+   "跨门店通用是否收取手续费，尚未形成结论。",
+   "历史积分的起算日是否需要对会员做单独公示，未确认。"
+  ],
+  "decisions": [
+   {
+    "label": "会员积分有效期改为 24 个月滚动过期，自产生当日起算。",
+    "owner": "林可",
+    "id": "SYN-D01",
+    "confidence": 0.9,
+    "timestamp": 60,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "过期前 30 天通过小程序和短信各提醒一次。",
+    "owner": "周阳",
+    "id": "SYN-D02",
+    "confidence": 0.9,
+    "timestamp": 120,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "积分抵扣比例维持 100 积分抵 1 元，单笔最多抵订单金额 30%。",
+    "owner": "郑南",
+    "id": "SYN-D03",
+    "confidence": 0.9,
+    "timestamp": 180,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "收银台同时支持会员码与实体卡核销。",
+    "owner": "周阳",
+    "id": "SYN-D04",
+    "confidence": 0.9,
+    "timestamp": 240,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "扫码失败时收银员可手工输入手机号兜底核销。",
+    "owner": "周阳",
+    "id": "SYN-D05",
+    "confidence": 0.9,
+    "timestamp": 300,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "储值卡赠送积分按实际到账金额计算，不按充值面额计算。",
+    "owner": "林可",
+    "id": "SYN-D06",
+    "confidence": 0.9,
+    "timestamp": 360,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "退款时赠送积分同步回撤。",
+    "owner": "林可",
+    "id": "SYN-D07",
+    "confidence": 0.9,
+    "timestamp": 420,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "会员码核销 4 月 10 日灰度三家门店，观察一周。",
+    "owner": "郑南",
+    "id": "SYN-D08",
+    "confidence": 0.9,
+    "timestamp": 480,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "核销功能 4 月 20 日全量上线。",
+    "owner": "周阳",
+    "id": "SYN-D09",
+    "confidence": 0.9,
+    "timestamp": 540,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "24 个月过期规则 5 月 1 日正式生效。",
+    "owner": "林可",
+    "id": "SYN-D10",
+    "confidence": 0.9,
+    "timestamp": 600,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "历史积分统一以 5 月 1 日作为起算日。",
+    "owner": "林可",
+    "id": "SYN-D11",
+    "confidence": 0.9,
+    "timestamp": 660,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "客服统一话术由林可出文案，4 月 8 日前交客服评审。",
+    "owner": "林可",
+    "id": "SYN-D12",
+    "confidence": 0.9,
+    "timestamp": 720,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "门店店长培训材料由郑南出两页操作卡，4 月 15 日前完成。",
+    "owner": "郑南",
+    "id": "SYN-D13",
+    "confidence": 0.9,
+    "timestamp": 780,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "积分转赠与跨店手续费本轮不定，下次评审会再议。",
+    "owner": "郑南",
+    "id": "SYN-D14",
+    "confidence": 0.9,
+    "timestamp": 840,
+    "evidence": "（合成语料，无真实证据文本）"
+   }
+  ],
+  "actions": [
+   {
+    "label": "给出新旧积分口径的负债重算表。",
+    "owner": "林可",
+    "dueText": "3 月 20 日前",
+    "priority": "p0",
+    "id": "SYN-A01",
+    "confidence": 0.86,
+    "timestamp": 45,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "在积分明细表补上过期时间字段。",
+    "owner": "周阳",
+    "dueText": "3 月 25 日前",
+    "priority": "p0",
+    "id": "SYN-A02",
+    "confidence": 0.86,
+    "timestamp": 90,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "收银台改造，支持会员码与实体卡双通道核销。",
+    "owner": "周阳",
+    "dueText": "4 月 10 日前",
+    "priority": "p0",
+    "id": "SYN-A03",
+    "confidence": 0.86,
+    "timestamp": 135,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "出两页收银台操作卡，一页贴收银台。",
+    "owner": "郑南",
+    "dueText": "4 月 15 日前",
+    "priority": "p1",
+    "id": "SYN-A04",
+    "confidence": 0.86,
+    "timestamp": 180,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "出客服统一话术文案。",
+    "owner": "林可",
+    "dueText": "4 月 8 日前",
+    "priority": "p1",
+    "id": "SYN-A05",
+    "confidence": 0.86,
+    "timestamp": 225,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "灰度三家门店并收集一周核销数据。",
+    "owner": "",
+    "dueText": "4 月 17 日前",
+    "priority": "p0",
+    "id": "SYN-A06",
+    "confidence": 0.86,
+    "timestamp": 270,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "把退款积分回撤逻辑与财务对一遍。",
+    "owner": "",
+    "dueText": "4 月 3 日前",
+    "priority": "p0",
+    "id": "SYN-A07",
+    "confidence": 0.86,
+    "timestamp": 315,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "准备历史积分起算日的一次性数据迁移脚本。",
+    "owner": "",
+    "dueText": "4 月 28 日前",
+    "priority": "p0",
+    "id": "SYN-A08",
+    "confidence": 0.86,
+    "timestamp": 360,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "确认短信通道的发送配额是否够用。",
+    "owner": "",
+    "dueText": "3 月 28 日前",
+    "priority": "p1",
+    "id": "SYN-A09",
+    "confidence": 0.86,
+    "timestamp": 405,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "向三家门店收集积分转赠意见各五条。",
+    "owner": "",
+    "dueText": "下次评审会前",
+    "priority": "p1",
+    "id": "SYN-A10",
+    "confidence": 0.86,
+    "timestamp": 450,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "核对小程序积分明细页的过期时间展示文案。",
+    "owner": "",
+    "dueText": "3 月 30 日前",
+    "priority": "p2",
+    "id": "SYN-A11",
+    "confidence": 0.86,
+    "timestamp": 495,
+    "evidence": "（合成语料，无真实证据文本）"
+   },
+   {
+    "label": "评估跨门店手续费对结算流程的影响。",
+    "owner": "",
+    "dueText": "下次评审会前",
+    "priority": "p1",
+    "id": "SYN-A12",
+    "confidence": 0.86,
+    "timestamp": 540,
+    "evidence": "（合成语料，无真实证据文本）"
+   }
+  ],
+  "timeline": [
+   {
+    "id": "SYN-T01",
+    "start": 0,
+    "end": 300,
+    "confidence": 0.85,
+    "summary": "积分有效期与结算口径：24 个月滚动过期、抵扣比例不变。",
+    "evidence": "（合成语料）"
+   },
+   {
+    "id": "SYN-T02",
+    "start": 300,
+    "end": 900,
+    "confidence": 0.85,
+    "summary": "门店核销与线上会员打通，收银台双通道。",
+    "evidence": "（合成语料）"
+   }
+  ],
+  "summaryModel": "合成语料 · 非真实模型产出",
+  "overviewBullets": [
+   "[03:12] 积分改 24 个月滚动过期，过期前 30 天双通道提醒，抵扣比例仍为 100 积分抵 1 元、单笔上限 30%。",
+   "[11:40] 收银台同时支持会员码与实体卡，扫码失败可用手机号兜底，4 月 10 日前完成。",
+   "[18:05] 会员码核销 4 月 10 日灰度 3 家门店，4 月 20 日全量；过期规则 5 月 1 日生效。",
+   "[25:33] 储值卡赠送积分按实际到账金额计算，退款同步回撤。",
+   "[31:10] 财务林可 3 月 20 日前出负债重算表；郑南 4 月 15 日前出收银台操作卡。",
+   "[38:20] 积分转赠与跨店手续费本轮未定，下次会前收集 3 家门店各 5 条意见。"
+  ]
+ }
+}

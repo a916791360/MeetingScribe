@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """速览 / 纪要 / 逐字稿 质量指标报告。
 
-数据来源（都在本机，已 gitignore）：
-  docs/verification/quality/cases/<caseId>.json   输入：逐字稿段
-  docs/verification/quality/runs/<caseId>.json    输出：真实 Swift 管线跑出来的结果
+语料根由 `--corpus` 或环境变量 `MS_QUALITY_ROOT` 指定，默认 `docs/verification/quality/`。
+一套语料 = 一个目录，里面三样东西：
+
+  cases/<caseId>.json        输入：逐字稿段（真实语料已 gitignore；合成语料在仓库里）
+  runs/<caseId>.json         输出：管线跑出来的结果
+  expectations.json          可选：`--check` 用的期望判定（只有合成语料有）
 
 用法：
-  python3 Scripts/quality_report.py                 # 出报告
-  python3 Scripts/quality_report.py --write-baseline  # 把当前结果存成基线
-  python3 Scripts/quality_report.py --diff            # 与基线对比
+  python3 Scripts/quality_report.py                    # 出报告
+  python3 Scripts/quality_report.py --write-baseline   # 把当前结果存成基线
+  python3 Scripts/quality_report.py --diff             # 与基线对比
+  python3 Scripts/quality_report.py --corpus docs/verification/quality/synthetic --check
+        # 合成语料自测：逐条比对 expectations.json，不一致就退出码 1（CI 用）
 
 指标口径见《转写与速览纪要质量提升方案》§5.1。凡本机无法算的指标，
 本脚本**显式标注「不可算」并给出原因**，不用 0 冒充。
@@ -18,15 +23,46 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-QUALITY = REPO / "docs/verification/quality"
+DEFAULT_ROOT = REPO / "docs/verification/quality"
+
+# 语料根（`--corpus` / `MS_QUALITY_ROOT` 覆盖，见 configure_root）。
+QUALITY = DEFAULT_ROOT
 CASES = QUALITY / "cases"
 RUNS = QUALITY / "runs"
 BASELINE = QUALITY / "baseline.json"
+EXPECTATIONS = QUALITY / "expectations.json"
+REPORT_MD = QUALITY / "report.md"
+REPORT_JSON = QUALITY / "report.json"
+
+
+def configure_root(root: pathlib.Path) -> None:
+    """把语料根切到 `root`。
+
+    合成语料与真实语料**共用同一套指标代码** —— 这正是不把指标逻辑抄第二份的理由：
+    一抄就两边口径漂移，而口径漂移在这个项目里已经把人带去修没坏的东西 6 次了。
+    """
+    global QUALITY, CASES, RUNS, BASELINE, EXPECTATIONS, REPORT_MD, REPORT_JSON
+    QUALITY = pathlib.Path(root).resolve()
+    CASES = QUALITY / "cases"
+    RUNS = QUALITY / "runs"
+    BASELINE = QUALITY / "baseline.json"
+    EXPECTATIONS = QUALITY / "expectations.json"
+    REPORT_MD = QUALITY / "report.md"
+    REPORT_JSON = QUALITY / "report.json"
+
+
+def rel(p: pathlib.Path) -> str:
+    """相对仓库根的展示路径；不在仓库里就退化成绝对路径。"""
+    try:
+        return str(p.relative_to(REPO))
+    except ValueError:
+        return str(p)
 
 # 空话动词：出现即扣分（方案 §5.1 目标 0 处）
 EMPTY_PHRASES = [
@@ -224,24 +260,28 @@ def metrics_for(case: dict, run: dict | None) -> dict:
     return m
 
 
-def thresholds() -> list[tuple[str, str, str]]:
-    """(指标键, 目标描述, 判定函数名) —— 供 --diff 判定达标。"""
+def thresholds() -> list[tuple[str, str, str, object]]:
+    """(指标键, 目标描述, 判定方式, 阈值) —— 判定与展示共用一个来源。
+
+    ⚠️ 阈值**只在这里写一次**（2026-09-14，阶段 3-2 时改）。
+    旧版把 0.95 / 1200 / 3 / 2 / 12 / 10 / 0.30 在 `thresholds()` 与 `check()`
+    里各写了一遍，改目标值要记得改两处 —— 而"同一判据出现在第 2 处就必须抽函数"
+    是这个项目反复栽跟头后的铁律。这里把阈值并进元组，`check()` 不再自己认数字。
+    """
     return [
         # 「删没删过头」看的是去重之后的保留率；charRetention（对原始字数）只作参考，
         # 因为复读占一成、按设计就该丢，见 metrics_for 里的口径说明。
         # segmentRatio 也只在「本来就很碎」的 case 上判（slice1 那种句子级转录不适用）。
-        ("segmentRatioJudged", "≤ 0.25（仅病态密度 case）", "le"),
-        # 「删没删过头」看的是去重之后的保留率；charRetention（对原始字数）只作参考，
-        # 因为复读占一成、按设计就该丢，见 metrics_for 里的口径说明。
-        ("uniqueCharRetention", "≥ 0.95", "ge"),
-        ("minutesChars", "≥ 1200", "ge"),
-        ("minutesHeadings", "≥ 3", "ge"),
-        ("emptyPhraseCount", "= 0", "eq0"),
-        ("overviewChars", "250 ~ 500", "range"),
-        ("overviewBulletsWithFacts", "≥ 2", "ge"),
-        ("decisionCountJudged", "≥ 12（仅 ≥40 分钟 case）", "ge"),
-        ("actionCountJudged", "≥ 10（仅 ≥40 分钟 case）", "ge"),
-        ("actionsWithOwnerRatio", "≥ 0.30", "ge"),
+        ("segmentRatioJudged", "≤ 0.25（仅病态密度 case）", "le", 0.25),
+        ("uniqueCharRetention", "≥ 0.95", "ge", 0.95),
+        ("minutesChars", "≥ 1200", "ge", 1200),
+        ("minutesHeadings", "≥ 3", "ge", 3),
+        ("emptyPhraseCount", "= 0", "eq0", 0),
+        ("overviewChars", "250 ~ 500", "range", (250, 500)),
+        ("overviewBulletsWithFacts", "≥ 2", "ge", 2),
+        ("decisionCountJudged", "≥ 12（仅 ≥40 分钟 case）", "ge", 12),
+        ("actionCountJudged", "≥ 10（仅 ≥40 分钟 case）", "ge", 10),
+        ("actionsWithOwnerRatio", "≥ 0.30", "ge", 0.30),
         # ⚠️ `inputPunctRatio` **故意不参与达标判定**（2026-09-13，1D 补测时改）：
         # 它量的是**输入素材自己的标点**，不是产品产出。而离线评测喂的是**已经转写好的
         # 逐字稿** —— 转写参数（1D）在整条链路上根本没被执行，所以这个数字无论好坏
@@ -251,22 +291,44 @@ def thresholds() -> list[tuple[str, str, str]]:
     ]
 
 
-def check(key: str, val, kind: str) -> str:
+def check(key: str, val, kind: str, target=None) -> str:
+    """判定。`kind == "ge"` 时 target 就是下限（不再从硬编码字典里查）。"""
     if val is None:
         return "不可算"
     if kind == "le":
-        return "达标" if val <= 0.25 else "未达"
+        return "达标" if val <= target else "未达"
     if kind == "ge":
-        target = {"uniqueCharRetention": 0.95, "minutesChars": 1200, "minutesHeadings": 3,
-                  "overviewBulletsWithFacts": 2, "decisionCountJudged": 12,
-                  "actionCountJudged": 10, "actionsWithOwnerRatio": 0.30,
-                  "inputPunctRatio": 0.98}[key]
         return "达标" if val >= target else "未达"
     if kind == "eq0":
-        return "达标" if val == 0 else "未达"
+        return "达标" if val == target else "未达"
     if kind == "range":
-        return "达标" if 250 <= val <= 500 else "未达"
+        lo, hi = target
+        return "达标" if lo <= val <= hi else "未达"
     return "?"
+
+
+def verdict_of(key: str, val) -> str:
+    """按指标键取判定。阈值只在 `thresholds()` 里写一次，这里不认数字。"""
+    for k, _desc, kind, target in thresholds():
+        if k == key:
+            return check(k, val, kind, target)
+    raise KeyError(f"{key} 不是受判指标；要钉数值请用 expectations 里的 assert")
+
+
+def empty_state_verdict(row: dict) -> str:
+    """期望空态的 case 判成什么。
+
+    ⚠️ 抽成函数（2026-09-14，阶段 3-2）：报告表格与 `--check` 都用它，
+    否则「CI 认为达标」和「报告里写达标」会变成两份各自维护的判据。
+    """
+    meta = row.get("metaCommentCount")
+    if meta is None:
+        return "不可算"
+    if meta > 0:
+        return "未达（产出了元评论）"
+    if (row.get("overviewChars") or 0) + (row.get("minutesChars") or 0) == 0:
+        return "达标（干净空态）"
+    return "存疑（有内容但无元评论关键词，需人工看）"
 
 
 def build_report(rows: list[dict]) -> str:
@@ -323,14 +385,7 @@ def build_report(rows: list[dict]) -> str:
         lines.append("|---|---|---|---|---|")
         for r in empty_rows:
             oc, mc, meta = r.get("overviewChars"), r.get("minutesChars"), r.get("metaCommentCount")
-            if meta is None:
-                verdict = "不可算"
-            elif meta > 0:
-                verdict = "未达（产出了元评论）"
-            elif (oc or 0) + (mc or 0) == 0:
-                verdict = "达标（干净空态）"
-            else:
-                verdict = "存疑（有内容但无元评论关键词，需人工看）"
+            verdict = empty_state_verdict(r)
             lines.append(
                 f"| {r['caseId']} | {oc if oc is not None else '—'} "
                 f"| {mc if mc is not None else '—'} "
@@ -345,7 +400,7 @@ def build_report(rows: list[dict]) -> str:
     else:
         lines.append("| 指标 | 目标 | 实测（中位/最差） | 判定 |")
         lines.append("|---|---|---|---|")
-        for key, target, kind in thresholds():
+        for key, target, kind, tval in thresholds():
             vals = [r[key] for r in content_rows if r.get(key) is not None]
             if not vals:
                 lines.append(f"| {key} | {target} | — | 不可算 |")
@@ -354,7 +409,7 @@ def build_report(rows: list[dict]) -> str:
             med = vals_sorted[len(vals_sorted) // 2]
             worst = vals_sorted[0] if kind in ("ge",) else vals_sorted[-1]
             fmt = (lambda v: f"{v:.3f}")
-            verdict = check(key, med, kind)
+            verdict = check(key, med, kind, tval)
             lines.append(
                 f"| {key} | {target} | {fmt(med)} / {fmt(worst)} | {verdict} |"
             )
@@ -364,7 +419,8 @@ def build_report(rows: list[dict]) -> str:
     lines.append("| 指标 | 为什么算不了 |")
     lines.append("|---|---|")
     lines.append("| 领域专名命中率 | 需要人工标注一份「本场正确专名表」，属阶段 0-1 的人工金标准工作 |")
-    lines.append("| LLM 裁判四维（忠实度/覆盖度/密度/可执行性） | 阶段 3-3 的脚本，需调用不同厂商裁判模型 |")
+    lines.append("| LLM 裁判四维（忠实度/覆盖度/密度/可执行性） | **不在这份报告里**：它要调模型，跑 "
+                 "`Scripts/llm_judge.py`（异厂裁判），产物落在 `<语料>/judge/report.md` |")
     lines.append("| 分章路径相关指标 | 现有素材最长逐字稿 13037 字符 < 分章阈值 24000，路径未被触发 |")
     lines.append("")
     return "\n".join(lines)
@@ -374,11 +430,21 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--write-baseline", action="store_true")
     ap.add_argument("--diff", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="与 expectations.json 逐条比对判定，不一致退出码 1（CI 用）")
+    ap.add_argument("--corpus", default=None,
+                    help="语料根目录；默认取 MS_QUALITY_ROOT，再默认 docs/verification/quality")
     args = ap.parse_args()
+
+    root = pathlib.Path(args.corpus) if args.corpus else pathlib.Path(
+        os.environ.get("MS_QUALITY_ROOT", str(DEFAULT_ROOT)))
+    configure_root(root)
 
     cases = sorted(CASES.glob("*.json")) if CASES.is_dir() else []
     if not cases:
-        print("没有评测集。先跑：python3 Scripts/build_eval_set.py", file=sys.stderr)
+        print(f"没有评测集：{rel(CASES)} 里没有 case。"
+              f"真实语料先跑 python3 Scripts/build_eval_set.py；"
+              f"合成语料直接看 docs/verification/quality/synthetic/。", file=sys.stderr)
         return 1
 
     rows = []
@@ -389,18 +455,19 @@ def main() -> int:
         run = load_json(RUNS / f"{case['caseId']}.json")
         rows.append(metrics_for(case, run))
 
+    if args.check:
+        return run_check(rows)
+
     report = build_report(rows)
-    (QUALITY / "report.md").write_text(report, encoding="utf-8")
-    (QUALITY / "report.json").write_text(
-        json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    REPORT_MD.write_text(report, encoding="utf-8")
+    REPORT_JSON.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
     print(report)
 
     if args.write_baseline:
         BASELINE.write_text(
             json.dumps({"rows": rows}, ensure_ascii=False, indent=1), encoding="utf-8"
         )
-        print(f"\n已写入基线 → {BASELINE.relative_to(REPO)}")
+        print(f"\n已写入基线 → {rel(BASELINE)}")
 
     if args.diff:
         base = load_json(BASELINE)
@@ -427,6 +494,92 @@ def main() -> int:
                 if isinstance(bv, (int, float)) and isinstance(nv, (int, float)):
                     delta = f"{nv - bv:+g}"
                 print(f"| {r['caseId']} | {key} | {bv} | {nv} | {delta} |")
+    return 0
+
+
+def _cmp(val, op: str, want) -> bool:
+    if val is None:
+        return False
+    if op == "eq":
+        return val == want
+    if op == "lt":
+        return val < want
+    if op == "le":
+        return val <= want
+    if op == "gt":
+        return val > want
+    if op == "ge":
+        return val >= want
+    raise ValueError(f"不认识的比较符：{op}")
+
+
+def run_check(rows: list[dict]) -> int:
+    """合成语料自测：算出来的判定必须与 `expectations.json` 逐条一致。
+
+    这不是在测「模型好不好」——模型质量在 CI 里测不了。它测的是**尺子本身**：
+    同一份输入经指标代码算出来，该达标的还达标、该未达的还判未达、该「不可算」的
+    不许拿 0 冒充。回归一旦发生（比如有人把空话检测的句式匹配改回裸词匹配），
+    这里会红，而不是等到某天读报告时才发现数字早就没意义了。
+    """
+    exp = load_json(EXPECTATIONS)
+    if not exp:
+        print(f"没有 {rel(EXPECTATIONS)} —— 这套语料不支持 --check。", file=sys.stderr)
+        return 1
+    spec = exp.get("cases", {})
+    print(f"# 合成语料自测（{rel(QUALITY)}）")
+    print("")
+    print("| case | 指标 | 期望 | 实测 | 值 | 结果 |")
+    print("|---|---|---|---|---|---|")
+
+    failures: list[str] = []
+    seen_keys = set()
+    for r in rows:
+        cid = r["caseId"]
+        seen_keys.add(cid)
+        want = spec.get(cid)
+        if want is None:
+            failures.append(f"{cid} 没有写进 expectations.json（新增 case 必须补期望）")
+            print(f"| {cid} | — | — | — | — | ✗ 缺期望 |")
+            continue
+
+        # 1) 内容类：逐个受判指标对判定
+        for key, want_verdict in (want.get("metrics") or {}).items():
+            val = r.get(key)
+            got = verdict_of(key, val)
+            ok = got == want_verdict
+            shown = val if val is not None else "—"
+            print(f"| {cid} | {key} | {want_verdict} | {got} | {shown} | {'✓' if ok else '✗'} |")
+            if not ok:
+                failures.append(f"{cid}.{key} 期望「{want_verdict}」，实测「{got}」（值 {val}）")
+
+        # 2) 空态类：case 级判定
+        if want.get("emptyState"):
+            got = empty_state_verdict(r)
+            ok = got == want["emptyState"]
+            print(f"| {cid} | （空态判定） | {want['emptyState']} | {got} | — | {'✓' if ok else '✗'} |")
+            if not ok:
+                failures.append(f"{cid} 空态期望「{want['emptyState']}」，实测「{got}」")
+
+        # 3) 数值断言：不参与阈值的指标也要能钉住（如 preparedSegmentCount 回退）
+        for a in want.get("assert") or []:
+            val = r.get(a["key"])
+            ok = _cmp(val, a["op"], a["value"])
+            print(f"| {cid} | {a['key']} | {a['op']} {a['value']} | {val} | — | {'✓' if ok else '✗'} |")
+            if not ok:
+                failures.append(
+                    f"{cid}.{a['key']} 期望 {a['op']} {a['value']}，实测 {val}")
+
+    for cid in spec:
+        if cid not in seen_keys:
+            failures.append(f"expectations.json 里的 {cid} 找不到对应 case（语料被删了？）")
+
+    print("")
+    if failures:
+        print(f"✗ {len(failures)} 处不一致 —— 指标口径或清洗逻辑发生了退化：")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    print(f"✓ 全部一致（{len(rows)} 个 case）")
     return 0
 
 

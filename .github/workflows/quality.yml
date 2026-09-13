@@ -1,0 +1,48 @@
+name: quality
+
+# 「内容变好了」这句话，之前只能靠印象回答。这个 workflow 把其中**能离线判定的部分**
+# 变成每次改动都会自动跑的门禁；需要调用模型的指标留在本地手动（见 docs/verification/quality/README.md）。
+#
+# 两条线：
+#   metrics —— 纯 Python、免密免网络：合成语料自测 + 指标脚本自己的单测（含反向证伪）
+#   swift   —— 编译 + 全部单测（QualityEvalTests 没有 Key 会自动跳过）
+#
+# 注意 macOS runner 按 10 倍计入用量；只在 main 与 PR 上跑，并取消被后推提交取代的运行。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metrics:
+    name: 指标门禁（离线）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 环境自检
+        run: python3 --version
+      - name: 指标脚本单测（含反向证伪：把已知退化打进去，门禁必须变红）
+        run: python3 Scripts/tests/test_quality_report.py
+      - name: 合成语料自测
+        run: python3 Scripts/quality_report.py --corpus docs/verification/quality/synthetic --check
+
+  swift:
+    name: 编译与单测
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 选最新 Xcode（swift-tools-version 要求 6.1+）
+        run: |
+          latest=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
+          swift --version
+      - name: 编译
+        run: swift build --disable-sandbox -Xswiftc -warnings-as-errors
+      - name: 单测（无 MS_E2E_KEY 时真实管线那支自动跳过）
+        run: swift test --disable-sandbox -Xswiftc -warnings-as-errors

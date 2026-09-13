@@ -1,0 +1,28 @@
+{
+ "schemaVersion": 1,
+ "synthetic": true,
+ "caseId": "syn-meta-comment",
+ "label": "合成：超短误录 · 产出元评论",
+ "sourceSession": "(合成语料，非真实会议)",
+ "sliceStart": 0.0,
+ "sliceEnd": 41.5,
+ "durationSeconds": 41.5,
+ "expect": "emptyState",
+ "note": "材料不足，正确行为是走空态；这份 run 却写了一段解释自己为什么写不出来 —— P1-5 的验收靶子。",
+ "segmentCount": 2,
+ "charCount": 27,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 22.0,
+   "text": "欢迎来到本期栏目，我们先聊一聊护肤。",
+   "confidence": 0.91
+  },
+  {
+   "start": 22.0,
+   "end": 41.5,
+   "text": "广告之后马上回来。",
+   "confidence": 0.88
+  }
+ ]
+}

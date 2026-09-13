@@ -1,0 +1,22 @@
+{
+ "schemaVersion": 1,
+ "synthetic": true,
+ "caseId": "syn-clean-empty",
+ "label": "合成：超短误录 · 干净空态",
+ "sourceSession": "(合成语料，非真实会议)",
+ "sliceStart": 0.0,
+ "sliceEnd": 35.0,
+ "durationSeconds": 35.0,
+ "expect": "emptyState",
+ "note": "同一类材料，正确产出：什么都不写，也不加解释。",
+ "segmentCount": 1,
+ "charCount": 18,
+ "segments": [
+  {
+   "start": 0.0,
+   "end": 35.0,
+   "text": "欢迎来到本期栏目，我们先聊一聊护肤。",
+   "confidence": 0.91
+  }
+ ]
+}

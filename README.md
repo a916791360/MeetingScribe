@@ -49,6 +49,18 @@ swift run
 
 应用包使用标准 `Info.plist`、`.icns` 图标和可调整大小的主窗口，最低支持 macOS 15。
 
+## 质量指标
+
+改完转写/摘要相关代码，想知道「产出到底变好了没有」，跑一条命令：
+
+```bash
+Scripts/quality_report.sh --check      # 免密、免网络；CI 每次改动也跑这一条
+Scripts/quality_report.sh --run --diff # 真实语料跑一遍模型，再与基线对比（需要 MS_E2E_KEY）
+Scripts/quality_report.sh --judge      # 换异厂模型当裁判，给忠实度/覆盖度/密度/可执行性打分
+```
+
+口径、评测集与「哪些指标算不了」见 [docs/verification/quality/README.md](docs/verification/quality/README.md)。
+
 ## 默认依赖
 
 - `whisper-cli`：`~/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp/build/bin/whisper-cli`

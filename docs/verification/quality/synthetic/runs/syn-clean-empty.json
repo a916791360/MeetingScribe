@@ -1,0 +1,37 @@
+{
+ "caseId": "syn-clean-empty",
+ "label": "合成：超短误录 · 干净空态",
+ "expect": "emptyState",
+ "ok": true,
+ "errorType": null,
+ "errorMessage": null,
+ "elapsedSeconds": 143.2,
+ "durationSeconds": 35.0,
+ "inputSegmentCount": 1,
+ "inputCharCount": 18,
+ "preparedSegmentCount": 1,
+ "preparedCharCount": 18,
+ "dedupCharCount": 18,
+ "transcriptCharsSentToModel": 418,
+ "finishReason": "stop",
+ "minutesFinishReason": "stop",
+ "escalationCount": 0,
+ "partialNotice": null,
+ "localFallback": {
+  "overviewChars": 0,
+  "minutesChars": 0,
+  "decisions": 0,
+  "actions": 0
+ },
+ "analysis": {
+  "headline": "",
+  "overviewText": "",
+  "minutesText": "",
+  "overviewBullets": [],
+  "openQuestions": [],
+  "decisions": [],
+  "actions": [],
+  "timeline": [],
+  "summaryModel": "合成语料 · 门禁直接走空态，未调用模型"
+ }
+}

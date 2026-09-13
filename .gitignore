@@ -22,3 +22,11 @@ docs/verification/quality/ui-2b/
 docs/verification/quality/ui-2c/
 docs/verification/quality/ui-2d/
 docs/verification/quality/ui-2e/
+
+# 合成语料是**提交**的（编造内容，CI 靠它），但它跑出来的报告是产物，不提交
+docs/verification/quality/synthetic/report.md
+docs/verification/quality/synthetic/report.json
+
+# LLM 裁判的原始打分与素材（含真实会议内容）
+docs/verification/quality/judge/
+docs/verification/quality/synthetic/judge/

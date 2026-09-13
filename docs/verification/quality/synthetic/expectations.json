@@ -1,0 +1,140 @@
+{
+ "note": "合成语料的期望判定。--check 会拿指标脚本算出来的判定逐条比这里，不一致就以退出码 1 结束。它测的不是模型质量（CI 里测不了），而是**尺子本身**：好产出判达标、指定病症判未达、字段缺失判「不可算」。新增 case 必须同时补期望，否则 --check 会报缺期望。",
+ "cases": {
+  "syn-good": {
+   "why": "健康产出的下限：这里任何一条变成未达，都是指标口径或清洗逻辑被改坏了。",
+   "metrics": {
+    "segmentRatioJudged": "不可算",
+    "uniqueCharRetention": "达标",
+    "minutesChars": "达标",
+    "minutesHeadings": "达标",
+    "emptyPhraseCount": "达标",
+    "overviewChars": "达标",
+    "overviewBulletsWithFacts": "达标",
+    "decisionCountJudged": "达标",
+    "actionCountJudged": "达标",
+    "actionsWithOwnerRatio": "达标"
+   },
+   "assert": [
+    {
+     "key": "cleanedSegments",
+     "op": "lt",
+     "value": 200
+    }
+   ]
+  },
+  "syn-repeat-storm": {
+   "why": "病态密度（22 段/分钟）+ 清洗未折叠 → 段数回退必须被抓到；其余指标都正常，病症单一。",
+   "metrics": {
+    "segmentRatioJudged": "未达",
+    "uniqueCharRetention": "达标",
+    "minutesChars": "达标",
+    "minutesHeadings": "达标",
+    "emptyPhraseCount": "达标",
+    "overviewChars": "达标",
+    "overviewBulletsWithFacts": "达标",
+    "decisionCountJudged": "不可算",
+    "actionCountJudged": "不可算",
+    "actionsWithOwnerRatio": "达标"
+   },
+   "assert": [
+    {
+     "key": "inputSegmentsPerMinute",
+     "op": "ge",
+     "value": 15
+    }
+   ]
+  },
+  "syn-meta-comment": {
+   "why": "材料不足却产出元评论 —— P1-5 的靶子。",
+   "emptyState": "未达（产出了元评论）",
+   "assert": [
+    {
+     "key": "metaCommentCount",
+     "op": "gt",
+     "value": 0
+    }
+   ]
+  },
+  "syn-clean-empty": {
+   "why": "材料不足且什么都不写 —— 这才是正确行为。",
+   "emptyState": "达标（干净空态）",
+   "assert": [
+    {
+     "key": "metaCommentCount",
+     "op": "eq",
+     "value": 0
+    }
+   ]
+  },
+  "syn-empty-talk-ritual": {
+   "why": "句式空话（起兴）→ 必须被抓到，且**只**靠句式表抓到。值钉成 1：句式表一旦失去句首边界或整个失效，这个数就变 0，门禁立刻亮。",
+   "metrics": {
+    "segmentRatioJudged": "不可算",
+    "uniqueCharRetention": "达标",
+    "minutesChars": "达标",
+    "minutesHeadings": "达标",
+    "emptyPhraseCount": "未达",
+    "overviewChars": "达标",
+    "overviewBulletsWithFacts": "达标",
+    "decisionCountJudged": "达标",
+    "actionCountJudged": "达标",
+    "actionsWithOwnerRatio": "达标"
+   },
+   "assert": [
+    {
+     "key": "emptyPhraseCount",
+     "op": "eq",
+     "value": 1
+    },
+    {
+     "key": "metaCommentCount",
+     "op": "eq",
+     "value": 0
+    }
+   ]
+  },
+  "syn-empty-talk-plain": {
+   "why": "裸词空话（「会上介绍了」）→ 必须被抓到，且**只**靠裸词表抓到。",
+   "metrics": {
+    "segmentRatioJudged": "不可算",
+    "uniqueCharRetention": "达标",
+    "minutesChars": "达标",
+    "minutesHeadings": "达标",
+    "emptyPhraseCount": "未达",
+    "overviewChars": "达标",
+    "overviewBulletsWithFacts": "达标",
+    "decisionCountJudged": "达标",
+    "actionCountJudged": "达标",
+    "actionsWithOwnerRatio": "达标"
+   },
+   "assert": [
+    {
+     "key": "emptyPhraseCount",
+     "op": "eq",
+     "value": 1
+    },
+    {
+     "key": "metaCommentCount",
+     "op": "eq",
+     "value": 0
+    }
+   ]
+  },
+  "syn-old-record": {
+   "why": "2A 之前的存盘结构：owner 与 overviewBullets 两个键不存在，必须报不可算，不许用 0 冒充。",
+   "metrics": {
+    "segmentRatioJudged": "不可算",
+    "uniqueCharRetention": "达标",
+    "minutesChars": "达标",
+    "minutesHeadings": "达标",
+    "emptyPhraseCount": "达标",
+    "overviewChars": "达标",
+    "overviewBulletsWithFacts": "不可算",
+    "decisionCountJudged": "达标",
+    "actionCountJudged": "达标",
+    "actionsWithOwnerRatio": "不可算"
+   }
+  }
+ }
+}
