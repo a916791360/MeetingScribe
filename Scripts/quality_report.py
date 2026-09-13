@@ -175,6 +175,20 @@ def metrics_for(case: dict, run: dict | None) -> dict:
         m["metaCommentCount"] = count_phrases(ov + mn + headline, META_PHRASES)
         m["decisionCount"] = len(decisions)
         m["actionCount"] = len(actions)
+        # ⚠️ 口径说明（2026-09-13，2A 复评时加，第 5 次同型修正）：
+        # 「决策 ≥12 / 待办 ≥10」是**绝对条数**，其出处是方案 §2.4 那次实验 ——
+        # 在**同一场 44.6 分钟的长会**上量到的 15 / 12（方案 L188，材料见 L72/L139）。
+        # 把绝对条数套到 15 分钟切片上，等于要求切片和整场一样多，必然「未达」；
+        # 而四个 case 的**条数密度其实很接近**（见 decisionPerHour / actionPerHour，
+        # 17/0.74h≈23、10/0.25h≈40、7/0.24h≈29、6/0.25h≈24）。
+        # 所以只在「时长够得上这个目标」的 case（≥40 分钟）上判，其余如实记 None ——
+        # 与 segmentRatioJudged 同一套做法。原始绝对条数照旧保留在 decisionCount / actionCount。
+        hours = max(1e-6, case["durationSeconds"] / 3600.0)
+        m["decisionPerHour"] = round(len(decisions) / hours, 1)
+        m["actionPerHour"] = round(len(actions) / hours, 1)
+        long_enough = case["durationSeconds"] >= 2400
+        m["decisionCountJudged"] = m["decisionCount"] if long_enough else None
+        m["actionCountJudged"] = m["actionCount"] if long_enough else None
         # ⚠️ 这两个字段要等阶段 2（2A 数据模型）才会有。字段不存在时**必须报「不可算」**，
         # 不能用 0 冒充 —— 否则「功能还没做」会被读成「做了但效果差」，
         # 阶段 0 已经在这类假阴性上栽过一次（小标题、元评论）。
@@ -191,11 +205,17 @@ def metrics_for(case: dict, run: dict | None) -> dict:
         else:
             m["overviewBulletCount"] = None
             m["overviewBulletsWithFacts"] = None
+        # 2A 的另两个字段同理：键不在 = 「字段还没落地」，报不可算，不用 0 冒充。
+        m["headlineChars"] = len(headline.strip()) if "headline" in a else None
+        m["openQuestionCount"] = (
+            len(a.get("openQuestions") or []) if "openQuestions" in a else None
+        )
     else:
         # 失败/降级：速览与纪要必然为空 —— 这正是「内容非常差」的机器可读形态
         for k in (
             "overviewChars", "minutesChars", "minutesHeadings", "emptyPhraseCount",
             "overviewBulletCount", "overviewBulletsWithFacts", "headlineChars",
+            "openQuestionCount",
             "decisionCount", "actionCount", "actionsWithOwner", "actionsWithOwnerRatio",
             "metaCommentCount",
         ):
@@ -219,10 +239,15 @@ def thresholds() -> list[tuple[str, str, str]]:
         ("emptyPhraseCount", "= 0", "eq0"),
         ("overviewChars", "250 ~ 500", "range"),
         ("overviewBulletsWithFacts", "≥ 2", "ge"),
-        ("decisionCount", "≥ 12", "ge"),
-        ("actionCount", "≥ 10", "ge"),
+        ("decisionCountJudged", "≥ 12（仅 ≥40 分钟 case）", "ge"),
+        ("actionCountJudged", "≥ 10（仅 ≥40 分钟 case）", "ge"),
         ("actionsWithOwnerRatio", "≥ 0.30", "ge"),
-        ("inputPunctRatio", "≥ 0.98", "ge"),
+        # ⚠️ `inputPunctRatio` **故意不参与达标判定**（2026-09-13，1D 补测时改）：
+        # 它量的是**输入素材自己的标点**，不是产品产出。而离线评测喂的是**已经转写好的
+        # 逐字稿** —— 转写参数（1D）在整条链路上根本没被执行，所以这个数字无论好坏
+        # 都不反映产品。它的真实判决来自「同一段音频、只动 1D 三个变量」的三臂对照
+        # （见《执行计划》「1D 补测结果」：旧参数 1.6% → 新参数 94.7%）。
+        # 数字照旧打在明细表的「标点段」列里，但只作素材画像，不判达标。
     ]
 
 
@@ -233,8 +258,8 @@ def check(key: str, val, kind: str) -> str:
         return "达标" if val <= 0.25 else "未达"
     if kind == "ge":
         target = {"uniqueCharRetention": 0.95, "minutesChars": 1200, "minutesHeadings": 3,
-                  "overviewBulletsWithFacts": 2, "decisionCount": 12,
-                  "actionCount": 10, "actionsWithOwnerRatio": 0.30,
+                  "overviewBulletsWithFacts": 2, "decisionCountJudged": 12,
+                  "actionCountJudged": 10, "actionsWithOwnerRatio": 0.30,
                   "inputPunctRatio": 0.98}[key]
         return "达标" if val >= target else "未达"
     if kind == "eq0":
@@ -261,8 +286,8 @@ def build_report(rows: list[dict]) -> str:
         "`字数保留` = 清洗后字数 / 原始字数，复读占一成、按设计就该丢，只作参考。"
     )
     lines.append("")
-    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 去重保留 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 元评论 | 决策/待办 | 带owner |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 去重保留 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 元评论 | 结论字 | 要点 | 待确认 | 决策/待办 | 带owner |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         dens = r.get("inputSegmentsPerMinute")
         seg = f"{r['inputSegments']} → {r.get('cleanedSegments', '—')}"
@@ -279,6 +304,9 @@ def build_report(rows: list[dict]) -> str:
             f"| {r.get('minutesHeadings') if r.get('minutesHeadings') is not None else '—'} "
             f"| {r.get('emptyPhraseCount') if r.get('emptyPhraseCount') is not None else '—'} "
             f"| {r.get('metaCommentCount') if r.get('metaCommentCount') is not None else '—'} "
+            f"| {r.get('headlineChars') if r.get('headlineChars') is not None else '—'} "
+            f"| {r.get('overviewBulletCount') if r.get('overviewBulletCount') is not None else '—'} "
+            f"| {r.get('openQuestionCount') if r.get('openQuestionCount') is not None else '—'} "
             f"| {r.get('decisionCount') if r.get('decisionCount') is not None else '—'}"
             f"/{r.get('actionCount') if r.get('actionCount') is not None else '—'} "
             f"| {r.get('actionsWithOwner') if r.get('actionsWithOwner') is not None else '—'} |"

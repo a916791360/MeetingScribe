@@ -12,3 +12,7 @@ docs/verification/quality/baseline.json
 docs/verification/quality/manifest.json
 docs/verification/quality/report.md
 docs/verification/quality/report.json
+
+# Python 缓存（Scripts 下跑过 py_compile / import 会生成）
+__pycache__/
+*.pyc
