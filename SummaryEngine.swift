@@ -328,10 +328,26 @@ struct MeetingSummaryEngine: Sendable {
         var truncated: Bool
         var finishReason: String?
         var escalations: Int
+        /// 2A 新增：一句话结论 / 带时间锚的要点 / 待确认问题。
+        ///
+        /// 给默认值是为了让既有的两处构造点（正常解析 + 截断救援）不用改参数。
+        var headline: String? = nil
+        var overviewBullets: [String] = []
+        var openQuestions: [String] = []
 
         /// 一个字段都没拿到 —— 用来判断"这次等于白跑了"。
+        ///
+        /// `headline` / `overviewBullets` / `openQuestions` 也算内容：它们和
+        /// `overviewText` 一样是用户看得见的产出，只拿到要点就退化成"什么都嫌少"，
+        /// 反而会把一份可用的结果判成白跑。
         var isEmpty: Bool {
-            overviewText.isEmpty && timeline.isEmpty && decisions.isEmpty && actions.isEmpty
+            overviewText.isEmpty &&
+                (headline?.isEmpty ?? true) &&
+                overviewBullets.isEmpty &&
+                openQuestions.isEmpty &&
+                timeline.isEmpty &&
+                decisions.isEmpty &&
+                actions.isEmpty
         }
     }
 
@@ -437,11 +453,9 @@ struct MeetingSummaryEngine: Sendable {
                 + "。已保留模型产出的可用部分；可以直接重试，或在设置里换一个上下文更长的模型。"
             : nil
 
-        guard !facts.overviewText.isEmpty ||
-              !facts.timeline.isEmpty ||
-              !facts.decisions.isEmpty ||
-              !facts.actions.isEmpty ||
-              !minutesText.isEmpty else {
+        // `facts.isEmpty` 已经把 2A 新增的 headline / overviewBullets / openQuestions
+        // 也算作内容，所以这里不再逐字段罗列 —— 逐字段罗列的写法会在下次加字段时漏一处。
+        guard !facts.isEmpty || !minutesText.isEmpty else {
             throw SummaryEngineError.invalidStructuredResponse
         }
 
@@ -461,7 +475,10 @@ struct MeetingSummaryEngine: Sendable {
                 minutesFinishReason: minutes?.finishReason,
                 escalationCount: facts.escalations + (minutes?.escalations ?? 0),
                 partial: isPartial
-            )
+            ),
+            headline: facts.headline,
+            overviewBullets: facts.overviewBullets,
+            openQuestions: facts.openQuestions
         )
     }
 
@@ -546,7 +563,14 @@ struct MeetingSummaryEngine: Sendable {
 
         输出结构：
         {
+          "headline": "一句话说清这场会最终是什么结果（30 字以内，直接写结论，不要以'本次会议'开头）",
           "overview": "一段速览导语，200 到 400 字。第一句直接给结论（例如'确定…''决定…''本期只做…'），禁止用'本次会议围绕……展开''会上讨论了……'这类套话开头；随后说清形成了什么结果、下一步是什么",
+          "overviewBullets": [
+            "[12:30] 一条要点。每条必须以 [分:秒] 开头并在材料里找到对应位置，正文里尽量带上具体数字、版本号、日期或人名"
+          ],
+          "openQuestions": [
+            "会上提出但这次没定下来的问题（没有就输出空数组）"
+          ],
           "timeline": [
             {"start": 0, "end": 300, "summary": "这一阶段讨论了什么", "evidence": "依据", "confidence": 0.8}
           ],
@@ -554,10 +578,16 @@ struct MeetingSummaryEngine: Sendable {
             {"label": "明确结论", "evidence": "原文依据", "confidence": 0.8, "timestamp": 123.4}
           ],
           "actions": [
-            {"label": "具体待办", "priority": "p1", "dueText": null, "evidence": "原文依据", "confidence": 0.8, "timestamp": 123.4}
+            {"label": "具体待办", "owner": "谁来做；材料没点名就填 null", "priority": "p1", "dueText": null, "evidence": "原文依据", "confidence": 0.8, "timestamp": 123.4}
           ],
           "confidence": 0.8
         }
+
+        overviewBullets 给 4 到 7 条，覆盖整场的重点（决定、关键数字、风险、下一步），不要写成 overview 的分句抄写。
+        openQuestions 最多 5 条，只收"明确被提出来但没结论"的，不要把普通提问塞进去。
+        actions 的 owner 只在材料点出负责的人**或角色**时才填 —— "苏总""赵瑞梅""产品经理""业务人员""经销商"这类都算；
+        填了 owner 就要把它**从 label 里挪出去**，不要让同一条待办的 label 和 owner 各留一份责任人。
+        材料没点名一律 null，不要写"负责人""待定""相关同事"这类占位词。
 
         \(sourceIsChapterSummary ? "给定材料是按时间整理的章节摘要，请综合所有章节，避免把章节标题当成结论。" : "给定材料是带时间戳的会议逐字稿，请覆盖整场会议。")
 
@@ -1147,6 +1177,8 @@ struct MeetingSummaryEngine: Sendable {
                 let evidence: String?
                 let confidence: Double?
                 let timestamp: TimeInterval?
+                /// 2A：谁来做。材料没点名就为 nil。
+                let owner: String?
             }
 
             let overview: String?
@@ -1154,6 +1186,10 @@ struct MeetingSummaryEngine: Sendable {
             let decisions: [Decision]?
             let actions: [Action]?
             let confidence: Double?
+            /// 2A 新增三键，老会话/老 prompt 的返回里没有，全部 Optional。
+            let headline: String?
+            let overviewBullets: [String]?
+            let openQuestions: [String]?
         }
 
         var payload: Payload?
@@ -1211,9 +1247,13 @@ struct MeetingSummaryEngine: Sendable {
                     dueText: nonEmpty(item.dueText),
                     evidence: evidence,
                     confidence: clamp(item.confidence ?? 0.5),
-                    timestamp: item.timestamp
+                    timestamp: item.timestamp,
+                    owner: nonEmpty(item.owner)
                 )
             } ?? []
+            // 要点和待确认问题：逐条清洗，空串丢掉（模型偶尔会用空串占位）。
+            let bullets = (payload.overviewBullets ?? []).compactMap { nonEmpty($0) }
+            let questions = (payload.openQuestions ?? []).compactMap { nonEmpty($0) }
             facts = StructuredFacts(
                 overviewText: nonEmpty(payload.overview) ?? "",
                 timeline: timeline,
@@ -1225,7 +1265,10 @@ struct MeetingSummaryEngine: Sendable {
                 ),
                 truncated: result.truncated,
                 finishReason: result.finishReason,
-                escalations: result.escalations
+                escalations: result.escalations,
+                headline: nonEmpty(payload.headline),
+                overviewBullets: bullets,
+                openQuestions: questions
             )
         }
 

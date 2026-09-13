@@ -288,6 +288,13 @@ struct ActionItem: Codable, Identifiable, Hashable, Sendable {
     var evidence: String
     var confidence: Double
     var timestamp: TimeInterval?
+    /// 「谁来做」。材料里说了才填，没点名就留 nil。
+    ///
+    /// **必须是 Optional**：一方面老会话里没有这个键，非 Optional 会让升级后
+    /// 读不出历史记录；另一方面「没提责任人」和「责任人待定」是两回事，
+    /// 用空字符串把两者压成一个值，UI 就没法决定该不该显示那一行。
+    /// 放在声明末尾是为了不打断既有 `ActionItem(...)` 调用的参数顺序。
+    var owner: String? = nil
 }
 
 struct TimelineChunk: Codable, Identifiable, Hashable, Sendable {
@@ -379,6 +386,19 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 见 `SummaryDiagnostics`。老会话没有这个键，解码后为 nil。
     var diagnostics: SummaryDiagnostics?
 
+    /// 一句话结论：这场会**最终**是个什么结果。
+    ///
+    /// 和 `overviewText` 的区别是「长度」而不是「详略」：速览页最上面那行
+    /// 要在不滚动的情况下被读到，所以它必须是一句话，不是一段话。
+    /// 取 Optional 的理由同 `owner`：老会话没有这个键。
+    var headline: String?
+    /// 带时间锚的要点。每条形如「[12:30] 结论…」——`[mm:ss]` 让 UI
+    /// 能把它渲染成可点击跳播放的位置，而不是一段只能读的文字。
+    var overviewBullets: [String]?
+    /// 会上**没定下来**的问题。单独成一栏，是因为"待确认"跟"已决定"混在一张
+    /// 列表里时，读者会把悬而未决的条目当成结论。
+    var openQuestions: [String]?
+
     /// 窗口副标题里用的**短模型名**：只留模型，砍掉前半截服务商。
     ///
     /// `summaryModel` 存的是 `SummaryModelSettings.displayName`，格式是
@@ -420,7 +440,10 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         summaryModel: String? = nil,
         summaryError: String? = nil,
         partialNotice: String? = nil,
-        diagnostics: SummaryDiagnostics? = nil
+        diagnostics: SummaryDiagnostics? = nil,
+        headline: String? = nil,
+        overviewBullets: [String]? = nil,
+        openQuestions: [String]? = nil
     ) {
         self.overview = overview
         self.timeline = timeline
@@ -433,6 +456,9 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         self.summaryError = summaryError
         self.partialNotice = partialNotice
         self.diagnostics = diagnostics
+        self.headline = headline
+        self.overviewBullets = overviewBullets
+        self.openQuestions = openQuestions
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -447,6 +473,9 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         case summaryError
         case partialNotice
         case diagnostics
+        case headline
+        case overviewBullets
+        case openQuestions
     }
 
     init(from decoder: Decoder) throws {
@@ -463,6 +492,10 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         // 老会话没有这两个键 —— 必须 decodeIfPresent，否则一升级就读不出历史记录。
         partialNotice = try container.decodeIfPresent(String.self, forKey: .partialNotice)
         diagnostics = try container.decodeIfPresent(SummaryDiagnostics.self, forKey: .diagnostics)
+        // 2A 新增的三个键同理：老会话没有，必须 decodeIfPresent。
+        headline = try container.decodeIfPresent(String.self, forKey: .headline)
+        overviewBullets = try container.decodeIfPresent([String].self, forKey: .overviewBullets)
+        openQuestions = try container.decodeIfPresent([String].self, forKey: .openQuestions)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -478,6 +511,9 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         try container.encodeIfPresent(summaryError, forKey: .summaryError)
         try container.encodeIfPresent(partialNotice, forKey: .partialNotice)
         try container.encodeIfPresent(diagnostics, forKey: .diagnostics)
+        try container.encodeIfPresent(headline, forKey: .headline)
+        try container.encodeIfPresent(overviewBullets, forKey: .overviewBullets)
+        try container.encodeIfPresent(openQuestions, forKey: .openQuestions)
     }
 
     var hasNarrative: Bool {
