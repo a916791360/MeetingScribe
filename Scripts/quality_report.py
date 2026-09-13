@@ -34,11 +34,25 @@ EMPTY_PHRASES = [
     "围绕", "展开", "延伸到", "中段主要围绕", "本次材料仅包含",
     "进行了讨论", "交换了意见",
 ]
-# 元评论：模型在解释自己为什么写不出内容 —— 绝不该出现在「速览」里
-META_PHRASES = ["未出现任何", "无法识别会议主题", "仅包含", "无法生成", "材料不足"]
+# 元评论：模型在解释自己为什么写不出内容 —— 绝不该出现在「速览」里。
+# 这些措辞是 2026-09-13 基线跑出来的**实测原话**（超短误录那一场），不是猜的：
+#   「本次输入材料中不包含任何工作会议内容…」
+#   「## 材料情况说明」「## 处理建议」「当前材料不足以生成纪要正文」
+META_PHRASES = [
+    "不包含任何", "未出现任何", "无法识别会议主题", "仅包含", "无法生成",
+    "材料不足", "材料情况说明", "处理建议", "不足以生成", "无法整理",
+    "不对会议主题", "不存在可供归纳", "为避免编造",
+]
 NUMBERLIKE = re.compile(r"\d")
 VERSIONLIKE = re.compile(r"v?\d+\.\d+(\.\d+)?")
-HEADING = re.compile(r"^#{1,6}\s+\S", re.M)
+# 小标题识别。**不能只认 markdown `#`** —— 基线跑出来模型用的是中文序号
+# （「一、MVP现状与知识库」），只认 `#` 会把「有 5 个小节」误报成 0，那是口径错不是内容错。
+HEADING = re.compile(
+    r"^(?:#{1,6}\s+\S"                        # markdown 标题
+    r"|[一二三四五六七八九十]+[、．.]"            # 一、二、
+    r"|第[一二三四五六七八九十百]+[章节部分]"        # 第一章 / 第二部分
+    r"|[（(][一二三四五六七八九十]+[）)])"          # （一）
+    , re.M)
 
 
 def load_json(p: pathlib.Path):
@@ -188,8 +202,8 @@ def build_report(rows: list[dict]) -> str:
 
     lines.append("## 逐 case 明细")
     lines.append("")
-    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 决策/待办 | 带owner |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 元评论 | 决策/待办 | 带owner |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         seg = f"{r['inputSegments']} → {r.get('cleanedSegments', '—')}"
         ret = f"{r['charRetention']:.0%}" if r.get("charRetention") is not None else "—"
@@ -200,11 +214,37 @@ def build_report(rows: list[dict]) -> str:
             f"| {r.get('minutesChars') if r.get('minutesChars') is not None else '—'} "
             f"| {r.get('minutesHeadings') if r.get('minutesHeadings') is not None else '—'} "
             f"| {r.get('emptyPhraseCount') if r.get('emptyPhraseCount') is not None else '—'} "
+            f"| {r.get('metaCommentCount') if r.get('metaCommentCount') is not None else '—'} "
             f"| {r.get('decisionCount') if r.get('decisionCount') is not None else '—'}"
             f"/{r.get('actionCount') if r.get('actionCount') is not None else '—'} "
             f"| {r.get('actionsWithOwner') if r.get('actionsWithOwner') is not None else '—'} |"
         )
     lines.append("")
+
+    # 期望走空态的 case（材料太少）。P1-5 的验收就在这里：
+    # 正确行为是「不产出内容、也不做元评论」，而不是产出一段解释自己为什么写不出来。
+    empty_rows = [r for r in rows if r["expect"] == "emptyState"]
+    if empty_rows:
+        lines.append("## 期望空态的 case（P1-5 验收）")
+        lines.append("")
+        lines.append("| case | 速览字 | 纪要字 | 元评论命中 | 判定 |")
+        lines.append("|---|---|---|---|---|")
+        for r in empty_rows:
+            oc, mc, meta = r.get("overviewChars"), r.get("minutesChars"), r.get("metaCommentCount")
+            if meta is None:
+                verdict = "不可算"
+            elif meta > 0:
+                verdict = "未达（产出了元评论）"
+            elif (oc or 0) + (mc or 0) == 0:
+                verdict = "达标（干净空态）"
+            else:
+                verdict = "存疑（有内容但无元评论关键词，需人工看）"
+            lines.append(
+                f"| {r['caseId']} | {oc if oc is not None else '—'} "
+                f"| {mc if mc is not None else '—'} "
+                f"| {meta if meta is not None else '—'} | {verdict} |"
+            )
+        lines.append("")
 
     lines.append("## 达标判定（仅统计成功且有内容的 case）")
     lines.append("")

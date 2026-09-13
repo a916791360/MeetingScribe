@@ -108,11 +108,30 @@ final class QualityEvalTests: XCTestCase {
         let files = (try FileManager.default.contentsOfDirectory(at: casesDir, includingPropertiesForKeys: nil))
             .filter { $0.pathExtension == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        XCTAssertFalse(files.isEmpty, "评测集为空，先跑 Scripts/build_eval_set.py")
+
+        // MS_QUALITY_CASES=long-full,slice2-15-30min 可只跑指定 case。
+        // 排查单点问题、或不想为一次小改动重跑整套（每个 case 都是一次真实计费调用）时用得上。
+        var selected = files
+        if let only = ProcessInfo.processInfo.environment["MS_QUALITY_CASES"] {
+            let wanted = Set(
+                only.split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            )
+            if !wanted.isEmpty {
+                selected = files.filter { wanted.contains($0.deletingPathExtension().lastPathComponent) }
+                XCTAssertEqual(
+                    selected.count, wanted.count,
+                    "MS_QUALITY_CASES 里有点名不存在的 case：\(wanted)"
+                )
+            }
+        }
+
+        XCTAssertFalse(selected.isEmpty, "评测集为空，先跑 Scripts/build_eval_set.py")
 
         let engine = MeetingSummaryEngine()
 
-        for file in files {
+        for file in selected {
             let data = try Data(contentsOf: file)
             let source = try JSONDecoder().decode(CaseFile.self, from: data)
 
@@ -175,6 +194,11 @@ final class QualityEvalTests: XCTestCase {
         }
 
         let produced = try FileManager.default.contentsOfDirectory(atPath: runsDir.path)
-        XCTAssertEqual(produced.count, files.count, "每个 case 都应产出一份 run 记录")
+        for file in selected {
+            XCTAssertTrue(
+                produced.contains("\(file.deletingPathExtension().lastPathComponent).json"),
+                "\(file.lastPathComponent) 应产出一份 run 记录"
+            )
+        }
     }
 }
