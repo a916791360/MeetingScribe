@@ -1444,9 +1444,27 @@ struct SessionStorage {
         folderURL(for: session).appendingPathComponent("session.json")
     }
 
+    /// 数据根。默认是 `~/Library/Application Support/MeetingScribe`。
+    ///
+    /// **可以用环境变量 `MS_DATA_ROOT` 覆盖，指向一个隔离目录。**
+    ///
+    /// 这条覆盖不是给用户用的，是给**界面验证**用的：要截一张"会话列表里有内容"
+    /// 或"速览页有结论和要点"的图，就得先有一场那样的会 —— 而往用户真实的
+    /// 数据根里塞夹具，代价已经被证明过一次（见 `docs/未解决问题与正确做法.md`：
+    /// 真实数据根被整目录级移除，无备份可恢复）。有了这个开关，夹具永远活在
+    /// 临时目录里，真实根**一次都不被写**。
+    ///
+    /// 取不到、或取到空串时静默回落 —— 一个拼错的环境变量不该让 App 起不来。
     private static func defaultRootURL() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return base.appendingPathComponent("MeetingScribe", isDirectory: true)
+        let fallback = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!
+            .appendingPathComponent("MeetingScribe", isDirectory: true)
+
+        guard let override = ProcessInfo.processInfo.environment["MS_DATA_ROOT"],
+              !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return fallback }
+        return URL(fileURLWithPath: override, isDirectory: true)
     }
 
     private static func folderName(for date: Date, id: UUID) -> String {
