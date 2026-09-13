@@ -329,12 +329,21 @@ actor WhisperCLIRunner {
     /// 仍然坚持的那条边界是：**只放术语，不放"这场会在讲什么"**。
     /// 术语是词表，话题是判断，后者猜错会污染整场。
     ///
-    /// ⚠️ 这是硬编码的第一版。用户的真实术语各不相同，P1-3 会把它接成
-    /// 设置页里的「识别术语表」（同一份数据同时供这里、后处理替换表、事后纠错三处用）。
-    static let initialPrompt = """
-    以下是一场中文普通话商务会议的录音转写。
-    常见术语：客户、拜访、合同、预算、报价、验收、渠道、方案、排期、复盘、交付、需求。
-    """
+    /// ⚠️ 内容**不再写死在这里**：由设置页的「识别术语表」经 `Glossary.whisperInitialPrompt()`
+    /// 拼出来（P1-3 / 2D）。同一个词表还供后处理替换表和整理 prompt 使用，三处一份数据。
+    /// 这个词只对 whisper 生效，后两处各有各的形态。
+    private static func promptArguments(_ initialPrompt: String) -> [String] {
+        // 空提示词就两个参数都不给：`--carry-initial-prompt` 单挂着没有意义。
+        guard !initialPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+        return [
+            // 每个解码窗口都从这段提示词起步。不加这个开关的话，术语表只影响
+            // 每块音频的前几段，越往后越"忘"。
+            "--carry-initial-prompt",
+            "--prompt", initialPrompt
+        ]
+    }
 
     /// 这些是每次转写都一样的参数，单独抽出来方便在 GPU 失败后用 CPU 重跑。
     private static func baseArguments(
@@ -343,7 +352,8 @@ actor WhisperCLIRunner {
         language: String,
         outputPrefix: URL,
         offset: TimeInterval,
-        duration: TimeInterval?
+        duration: TimeInterval?,
+        initialPrompt: String
     ) -> [String] {
         var arguments = [
             "-m", modelURL.path,
@@ -360,12 +370,9 @@ actor WhisperCLIRunner {
             // 单独占一段，而它们**不带任何标点** —— 实测「没有标点的段」里有相当一部分
             // 就是它们，把断句合格率白白拉低。抑制掉之后有标点的段占比明显回升。
             "-sns",
-            // 每个解码窗口都从这段提示词起步。不加这个开关的话，术语表只影响
-            // 每块音频的前几段，越往后越"忘"。
-            "--carry-initial-prompt",
-            "--prompt", initialPrompt,
             "-of", outputPrefix.path
         ]
+        arguments.append(contentsOf: promptArguments(initialPrompt))
 
         if offset > 0 {
             arguments.append(contentsOf: ["-ot", "\(Int((offset * 1000).rounded()))"])
@@ -383,7 +390,11 @@ actor WhisperCLIRunner {
         outputPrefix: URL,
         offset: TimeInterval = 0,
         duration: TimeInterval? = nil,
-        language: String = "zh"
+        language: String = "zh",
+        /// 起始提示词。**刻意不给默认值**：出厂词表和用户词表的差别只有用户自己知道，
+        /// 一个"忘了传就用出厂"的默认值会静默把用户设置的术语表丢掉，
+        /// 而现象是"转写结果看着正常，只是错词还是老样子"—— 没人能看出是这里出的问题。
+        initialPrompt: String
     ) async throws -> WhisperTranscript {
         guard FileManager.default.fileExists(atPath: cliURL.path) else {
             throw PipelineError.missingBinary
@@ -413,7 +424,8 @@ actor WhisperCLIRunner {
             language: language,
             outputPrefix: outputPrefix,
             offset: offset,
-            duration: duration
+            duration: duration,
+            initialPrompt: initialPrompt
         )
         let environment = ["DYLD_LIBRARY_PATH": cliURL.deletingLastPathComponent().path]
         var result = try await processRunner.run(

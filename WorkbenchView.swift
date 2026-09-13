@@ -2916,7 +2916,7 @@ struct WorkbenchSettingsPane: View {
                     Text("设置")
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
-                    Text("转写始终在本机完成；下面配置外观与会后整理使用的模型。")
+                    Text("转写始终在本机完成；下面配置术语表、外观与会后整理使用的模型。")
                         .font(.callout)
                         .foregroundStyle(AppTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -3288,6 +3288,78 @@ struct WorkbenchSettingsPane: View {
                     }
 
                     WorkbenchSettingsGroup(
+                        title: "识别术语表",
+                        subtitle: "一行一个词，逗号后面的写法会被换成前面的。例如「多模态, 多摩泰」"
+                            + "表示把听到的「多摩泰」改成「多模态」。转写、逐字稿纠错、整理三处都用它。"
+                    ) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TextEditor(text: $store.glossaryText)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(AppTheme.ink)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 132)
+                                .padding(8)
+                                .background(
+                                    AppTheme.paper,
+                                    in: RoundedRectangle(
+                                        cornerRadius: AppTheme.radiusSmall,
+                                        style: .continuous
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(
+                                        cornerRadius: AppTheme.radiusSmall,
+                                        style: .continuous
+                                    )
+                                    .stroke(AppTheme.rule, lineWidth: 1)
+                                )
+                                .accessibilityLabel("识别术语表")
+
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                // **颜色只管图标，文字一律走 muted / ink。**
+                                // 这里踩过一个坑：`success` / `warning` 这类语义色是给图标
+                                // 和底盘用的，直接拿去当 11pt 正文色，浅色下只有 2.7:1 ——
+                                // 低于 AA 的 4.5:1（`muted` 是 4.96:1，`ink` 是 15:1）。
+                                // 语义由图标承担，可读性由文字色承担，两件事分开。
+                                Image(systemName: glossarySummaryIcon)
+                                    .font(.caption)
+                                    .foregroundStyle(
+                                        store.glossary.entries.isEmpty
+                                            ? AppTheme.muted
+                                            : AppTheme.success
+                                    )
+                                Text(glossarySummary)
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                Spacer(minLength: 10)
+
+                                Button("恢复默认") {
+                                    store.glossaryText = Glossary.factoryDefaultText
+                                }
+                                .buttonStyle(.plain)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                            }
+
+                            if let warning = glossaryBudgetWarning {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.caption)
+                                        .foregroundStyle(AppTheme.warning)
+                                    Text(warning)
+                                        .font(.caption)
+                                        // 警告用 ink 而不是 warning 色：同样是不达标的问题，
+                                        // 而且这条是"你真的需要知道"的信息，配得上主文字色。
+                                        .foregroundStyle(AppTheme.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+
+                    WorkbenchSettingsGroup(
                         title: "外观",
                         subtitle: "只改 MeetingScribe 自己的配色，不动系统的外观偏好。"
                     ) {
@@ -3323,6 +3395,44 @@ struct WorkbenchSettingsPane: View {
     private var transcriptionReady: Bool {
         FileManager.default.isExecutableFile(atPath: store.whisperCLIPath) &&
             FileManager.default.fileExists(atPath: store.whisperModelPath)
+    }
+
+    // MARK: - 术语表状态（设置页那一组下面的几行小字）
+
+    /// 「我写了几条，到底生效了几条」—— 这个数必须能对得上，否则用户只会怀疑功能坏了。
+    /// 被忽略的条目单独说一句原因，别让人自己猜（多半是把正确写法那一栏空着了）。
+    private var glossarySummary: String {
+        let entries = store.glossary.entries
+        var text: String
+        if entries.isEmpty {
+            text = "术语表是空的，转写和逐字稿都不会做任何替换。"
+        } else if glossaryAliasCount == 0 {
+            text = "已启用 \(entries.count) 个词。没有写误听写法，所以只用于转写和整理的偏置。"
+        } else {
+            text = "已启用 \(entries.count) 个词，其中 \(glossaryAliasCount) 条误听写法会被替换。"
+        }
+        if store.glossary.ignoredAliasCount > 0 {
+            text += "另有 \(store.glossary.ignoredAliasCount) 条被忽略（重复、与正确写法相同，或不足 2 个字）。"
+        }
+        return text
+    }
+
+    private var glossaryAliasCount: Int {
+        store.glossary.entries.reduce(0) { $0 + $1.aliases.count }
+    }
+
+    private var glossarySummaryIcon: String {
+        store.glossary.entries.isEmpty ? "text.badge.xmark" : "checkmark.circle.fill"
+    }
+
+    /// Whisper 的起始提示词有长度上限（方案 P0-2：`n_text_ctx/2 ≈ 224 token`），
+    /// 词表按 120 字截断。**截断只发生在这里**：整理侧上下文是万级字符，不跟着限。
+    /// 不说出来的话，用户会觉得"我明明加了这么多词，怎么一个都没进转写"。
+    private var glossaryBudgetWarning: String? {
+        let budget = store.glossary.promptTerms()
+        guard budget.isTruncated else { return nil }
+        return "转写提示词只装得下前 \(budget.terms.count) 个词，另外 \(budget.droppedCount) 个"
+            + "不参与转写偏置（Whisper 的提示词有长度上限）。整理不受这个限制。"
     }
 }
 

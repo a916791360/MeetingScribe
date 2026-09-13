@@ -20,6 +20,20 @@ final class MeetingStore: ObservableObject {
     }
     @Published var whisperCLIPath: String
     @Published var whisperModelPath: String
+    /// 设置页「识别术语表」的原始文本。**存原文、不存解析结果**：
+    /// 解析规则以后可能会改（分隔符、长度门槛），存文本的话用户下次启动自动受益；
+    /// 存解析结果就等于把老规则冻结进 UserDefaults 了。
+    @Published var glossaryText: String {
+        didSet {
+            guard oldValue != glossaryText else { return }
+            UserDefaults.standard.set(glossaryText, forKey: Preferences.glossaryText)
+            // 同步刷新派生结果 —— whisper 的 `--prompt`、后处理替换表、整理 prompt
+            // 三处读的都是 `glossary`，只有这一个写入点。
+            glossary = Glossary.parse(glossaryText)
+        }
+    }
+    /// `glossaryText` 的解析结果。三处消费点都读它，见 `Glossary`。
+    @Published private(set) var glossary: Glossary = .empty
     @Published var summarySettings: SummaryModelSettings
     @Published var summaryAPIKeyInput: String = ""
     @Published var summaryAPIKeyStatus: String = ""
@@ -78,6 +92,7 @@ final class MeetingStore: ObservableObject {
         static let captureMode = "meetingScribe.captureMode"
         static let whisperCLIPath = "meetingScribe.whisperCLIPath"
         static let whisperModelPath = "meetingScribe.whisperModelPath"
+        static let glossaryText = "meetingScribe.glossaryText"
         static let summaryProvider = "meetingScribe.summaryProvider"
         static let summaryModel = "meetingScribe.summaryModel"
         static let summaryEndpoint = "meetingScribe.summaryEndpoint"
@@ -91,6 +106,7 @@ final class MeetingStore: ObservableObject {
         let summaryProvider = SummaryModelProvider(
             rawValue: UserDefaults.standard.string(forKey: Preferences.summaryProvider) ?? ""
         ) ?? .localRules
+        let storedGlossaryText = UserDefaults.standard.string(forKey: Preferences.glossaryText)
         let storedSummaryModel = UserDefaults.standard.string(forKey: Preferences.summaryModel)
         let storedSummaryEndpoint = UserDefaults.standard.string(forKey: Preferences.summaryEndpoint)
         let storedAppearance = AppAppearance(
@@ -112,6 +128,11 @@ final class MeetingStore: ObservableObject {
         whisperModelPath = storedModelPath == nil || Self.isImplicitModelPath(storedModelPath!)
             ? defaults.modelURL.path
             : storedModelPath!
+        // 没存过就给出厂词表（就是 1D 实测用过的那一版），用户改过就一个字不动。
+        // 派生结果要在 init 里**显式**算一次：`glossaryText` 的 didSet 在 init 赋值时不触发。
+        let initialGlossaryText = storedGlossaryText ?? Glossary.factoryDefaultText
+        glossaryText = initialGlossaryText
+        glossary = Glossary.parse(initialGlossaryText)
         summarySettings = SummaryModelSettings(
             provider: summaryProvider,
             modelName: storedSummaryModel ?? summaryProvider.defaultModelName,
@@ -634,11 +655,26 @@ final class MeetingStore: ObservableObject {
         processingTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let analysis = try await buildAnalysis(from: session.transcriptSegments)
+                // 用户很可能**刚刚**才在设置里补了术语（"这个名字一直听错"），而完整清洗
+                // 只在转写那一刻跑一次 —— 那条已存盘的逐字稿不会自己变好。这里是唯一
+                // 一次能补上的机会：只做纯替换（不动段结构、不动时间戳），改到了才写回，
+                // 没改到就一个字都不碰盘。
+                let corrected = TranscriptCleaner.applyingTerminology(
+                    session.transcriptSegments,
+                    table: glossary.replacementTable
+                )
+                let correctedText = corrected.map(\.text).joined(separator: "\n")
+                let didCorrect = corrected.map(\.text) != session.transcriptSegments.map(\.text)
+
+                let analysis = try await buildAnalysis(from: corrected)
                 try Task.checkCancellation()
                 guard summaryRegenerationID == regenerationID else { return }
 
                 var updated = try storage.session(with: session.id)
+                if didCorrect {
+                    updated.transcriptSegments = corrected
+                    updated.transcriptText = correctedText
+                }
                 updated.analysis = analysis
                 updated.updatedAt = Date()
                 try storage.save(updated)
@@ -650,7 +686,7 @@ final class MeetingStore: ObservableObject {
                     // 只会以为会议本来就没内容。
                     statusText = "纪要已更新，结果不完整"
                 } else {
-                    statusText = "纪要已更新"
+                    statusText = didCorrect ? "纪要已更新，并应用了术语表" : "纪要已更新"
                 }
                 processingStage = statusText
                 processingProgress = 1
@@ -802,6 +838,11 @@ final class MeetingStore: ObservableObject {
         statusText = processingStage
         isProcessing = true
 
+        // 术语表在这**一次转写开始时取一次快照**：中途用户改了设置，也不该让同一场会议
+        // 前半段和后半段用两份不同的提示词（whisper 的偏置本来就有"越往后越弱"的问题，
+        // 再叠一层变化就更没法解释了）。下一次转写自然用新词表。
+        let initialPrompt = glossary.whisperInitialPrompt()
+
         while completedChunks < totalChunks {
             try Task.checkCancellation()
 
@@ -834,7 +875,8 @@ final class MeetingStore: ObservableObject {
                 modelURL: modelURL,
                 outputPrefix: prefix,
                 offset: chunkStart,
-                duration: chunkDuration
+                duration: chunkDuration,
+                initialPrompt: initialPrompt
             )
 
             let ownedSegments = chunkTranscript.segments.filter { segment in
@@ -882,7 +924,13 @@ final class MeetingStore: ObservableObject {
         // 复读是跨块的（whisper 在长静音上会自重复），逐块清洗看不见。
         // 清洗结果会写回会话，所以「逐字稿」页里也是清洗后的样子 ——
         // 原来一屏几十条 15 字的碎行，读起来像电报。
-        let cleanedSegments = TranscriptCleaner.clean(segments)
+        //
+        // 替换表来自设置页的术语表（P1-3 / 2D），**显式传入**：用户清空术语表就是
+        // "什么都别替我改"，不能悄悄回落到出厂词表。
+        let cleanedSegments = TranscriptCleaner.clean(
+            segments,
+            options: TranscriptCleaner.Options(terminology: glossary.replacementTable)
+        )
 
         updateProcessingState(
             sessionID: sessionID,
@@ -960,7 +1008,8 @@ final class MeetingStore: ObservableObject {
             let analysis = try await summaryEngine.analyze(
                 segments: segments,
                 settings: settings,
-                apiKey: apiKey
+                apiKey: apiKey,
+                glossary: glossary
             )
             try Task.checkCancellation()
             return analysis
@@ -1128,7 +1177,8 @@ final class MeetingStore: ObservableObject {
         modelURL: URL,
         outputPrefix: URL,
         offset: TimeInterval,
-        duration: TimeInterval
+        duration: TimeInterval,
+        initialPrompt: String
     ) async throws -> WhisperTranscript {
         try await withThrowingTaskGroup(of: WhisperTranscript.self) { group in
             group.addTask { [transcriber] in
@@ -1139,7 +1189,8 @@ final class MeetingStore: ObservableObject {
                     outputPrefix: outputPrefix,
                     offset: offset,
                     duration: duration,
-                    language: "zh"
+                    language: "zh",
+                    initialPrompt: initialPrompt
                 )
             }
             group.addTask {
@@ -1216,6 +1267,9 @@ final class MeetingStore: ObservableObject {
         UserDefaults.standard.set(CaptureMode.mixed.rawValue, forKey: Preferences.captureMode)
         UserDefaults.standard.set(whisperCLIPath, forKey: Preferences.whisperCLIPath)
         UserDefaults.standard.set(whisperModelPath, forKey: Preferences.whisperModelPath)
+        // 这里再写一次是**给新装用户补初值**：`init` 里的赋值不触发 `glossaryText` 的 didSet，
+        // 第一次启动不会落盘。之后用户每次编辑都由 didSet 负责，不依赖这个函数。
+        UserDefaults.standard.set(glossaryText, forKey: Preferences.glossaryText)
         UserDefaults.standard.set(summarySettings.provider.rawValue, forKey: Preferences.summaryProvider)
         UserDefaults.standard.set(summarySettings.modelName, forKey: Preferences.summaryModel)
         UserDefaults.standard.set(summarySettings.endpoint, forKey: Preferences.summaryEndpoint)

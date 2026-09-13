@@ -18,7 +18,8 @@ import Foundation
 enum TranscriptCleaner {
 
     struct Options: Sendable {
-        /// 术语替换表（误听 → 正确写法）。
+        /// 术语替换表（误听 → 正确写法）。默认值来自 `Glossary` 的出厂词表，
+        /// **设置页里用户自己写的词由 `MeetingStore` 显式传进来**（P1-3 / 2D）。
         var terminology: [String: String] = TranscriptCleaner.defaultTerminology
         /// 连续重复达到几次才算「复读」。3 是保守值：中文里「看看」「慢慢」「非常非常」
         /// 这类正常的双叠词不该被动。
@@ -42,15 +43,13 @@ enum TranscriptCleaner {
         static let `default` = Options()
     }
 
-    /// 一版起步用的术语表。**这是占位**：真正的表由设置页的「识别术语表」提供
-    /// （P1-3），用户自己加的词比任何模型都准。
+    /// 出厂术语表。**这里不再写死词条** —— 它和 whisper 的 `--prompt` 词表是同一份数据，
+    /// 都由 `Glossary.factoryDefaultText` 派生。分成两处写会漂移：改了设置页的默认词表，
+    /// 后处理这一处却还是旧的，而"改了却只生效一半"是最难发现的一类 bug。
     ///
-    /// 这三条来自本仓库 `WhisperPipeline` 注释里记录过的实测误听，不是凭空编的。
     /// 留空的词条一律不替换 —— 宁可少纠，不要纠错。
-    static let defaultTerminology: [String: String] = [
-        "课考": "客户",
-        "败网": "拜访"
-    ]
+    static let defaultTerminology: [String: String] =
+        Glossary.parse(Glossary.factoryDefaultText).replacementTable
 
     // MARK: - 入口
 
@@ -66,6 +65,26 @@ enum TranscriptCleaner {
         // 而清洗结果是要写回会话的，评测集也从会话导出，不幂等会越洗越少。
         let collapsedAgain = collapseRepeats(merged, options: options)
         return dropLowConfidence(collapsedAgain, options: options)
+    }
+
+    /// 只做术语替换，**不动段结构**。
+    ///
+    /// 存在的理由：替换表是用户随时会改的设置（"哦，这个公司名一直听错了"），而
+    /// 上面那条完整清洗只在**转写那一刻**跑一次 —— 对已经存盘的逐字稿，后面再加的词
+    /// 一个都不会生效。这与 2C 踩过的坑是同一类错误：**前置处理只对新产出生效，
+    /// 已存盘的数据不会自己变好**（见 `.learnings` LRN-013）。
+    ///
+    /// 所以「重新整理纪要」时会先过一遍这个函数，让用户刚加的纠错词立刻在这条已有记录上生效。
+    /// 它刻意**只做替换**：不折叠复读、不并句、不丢段 —— 段数与时间戳一律不变，
+    /// 只有字符按用户明示的方向变。用户没让改的地方，一个字都不动。
+    static func applyingTerminology(
+        _ segments: [TranscriptSegment],
+        table: [String: String]
+    ) -> [TranscriptSegment] {
+        guard !table.isEmpty, !segments.isEmpty else { return segments }
+        return segments
+            .sorted { $0.start < $1.start }
+            .map { applyTerminology($0, table) }
     }
 
     /// 只做复读折叠，不做合并 / 替换 / 丢弃。

@@ -36,6 +36,7 @@ let package = Package(
                 "WhisperPipeline.swift",
                 "TranscriptCleaner.swift",
                 "TranscriptMaterial.swift",
+                "Glossary.swift",
                 "SummaryEngine.swift",
                 "SummaryModelDiscovery.swift",
                 "KeychainStore.swift",

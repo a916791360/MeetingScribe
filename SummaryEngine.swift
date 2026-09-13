@@ -87,7 +87,10 @@ struct MeetingSummaryEngine: Sendable {
     func analyze(
         segments: [TranscriptSegment],
         settings: SummaryModelSettings,
-        apiKey: String?
+        apiKey: String?,
+        /// 用户术语表（P1-3 / 2D）。默认空表，现有测试与"没配术语表"的路径不必关心它。
+        /// 空表时 prompt 里**一个字都不加** —— 见 `Glossary.summaryInstruction`。
+        glossary: Glossary = .empty
     ) async throws -> MeetingAnalysis {
         // 前置门禁：**材料不够就一个 token 都不花**。
         //
@@ -126,7 +129,8 @@ struct MeetingSummaryEngine: Sendable {
                 source: transcript,
                 endpoint: endpoint,
                 settings: settings,
-                apiKey: apiKey
+                apiKey: apiKey,
+                glossary: glossary
             )
         }
 
@@ -134,7 +138,8 @@ struct MeetingSummaryEngine: Sendable {
             segments: segments,
             endpoint: endpoint,
             settings: settings,
-            apiKey: apiKey
+            apiKey: apiKey,
+            glossary: glossary
         )
         let synthesisSource = chapterSummaries.enumerated()
             .map { index, summary in "第 \(index + 1) 章\n\(summary)" }
@@ -144,7 +149,8 @@ struct MeetingSummaryEngine: Sendable {
             endpoint: endpoint,
             settings: settings,
             apiKey: apiKey,
-            sourceIsChapterSummary: true
+            sourceIsChapterSummary: true,
+            glossary: glossary
         )
     }
 
@@ -248,11 +254,15 @@ struct MeetingSummaryEngine: Sendable {
         segments: [TranscriptSegment],
         endpoint: URL,
         settings: SummaryModelSettings,
-        apiKey: String?
+        apiKey: String?,
+        glossary: Glossary
     ) async throws -> [String] {
         let chapters = makeChapters(from: segments, maxCharacters: 20_000)
         var results = Array(repeating: "", count: chapters.count)
         let batchSize = min(3, max(1, chapters.count))
+        // 章节摘要是后面综合**唯一**的输入，专名在这里就该写对 —— 综合那一步拿不到原文，
+        // 这里写错了后面没有任何机会纠正。所以术语约束也要给到这一层。
+        let terminology = glossary.summaryInstruction
         var batchStart = 0
 
         while batchStart < chapters.count {
@@ -270,6 +280,7 @@ struct MeetingSummaryEngine: Sendable {
                         下面是一场会议的其中一章原文。请只根据原文做保守整理，不补充原文没有的事实。
                         输出简洁的章节摘要，并分别列出明确结论和明确待办。
                         待办必须包含清晰动作和对象；没有把握就留空。
+                        \(terminology ?? "")
                         输出格式：
                         章节摘要：……
                         明确结论：
@@ -391,8 +402,12 @@ struct MeetingSummaryEngine: Sendable {
         endpoint: URL,
         settings: SummaryModelSettings,
         apiKey: String?,
-        sourceIsChapterSummary: Bool = false
+        sourceIsChapterSummary: Bool = false,
+        glossary: Glossary = .empty
     ) async throws -> MeetingAnalysis {
+        // 术语约束在这一层算一次，两个并发分支共用 —— 两段 prompt 必须说同一件事，
+        // 各算各的早晚会漂移（一处改了另一处没改）。
+        let terminology = glossary.summaryInstruction
         let outcomes = await withTaskGroup(of: StageOutcome.self) { group in
             group.addTask {
                 await self.runFactsStage(
@@ -400,7 +415,8 @@ struct MeetingSummaryEngine: Sendable {
                     endpoint: endpoint,
                     settings: settings,
                     apiKey: apiKey,
-                    sourceIsChapterSummary: sourceIsChapterSummary
+                    sourceIsChapterSummary: sourceIsChapterSummary,
+                    terminology: terminology
                 )
             }
             group.addTask {
@@ -409,7 +425,8 @@ struct MeetingSummaryEngine: Sendable {
                     endpoint: endpoint,
                     settings: settings,
                     apiKey: apiKey,
-                    sourceIsChapterSummary: sourceIsChapterSummary
+                    sourceIsChapterSummary: sourceIsChapterSummary,
+                    terminology: terminology
                 )
             }
             var collected: [StageOutcome] = []
@@ -497,7 +514,8 @@ struct MeetingSummaryEngine: Sendable {
         endpoint: URL,
         settings: SummaryModelSettings,
         apiKey: String?,
-        sourceIsChapterSummary: Bool
+        sourceIsChapterSummary: Bool,
+        terminology: String?
     ) async -> StageOutcome {
         do {
             let facts = try await requestStructuredFacts(
@@ -505,7 +523,8 @@ struct MeetingSummaryEngine: Sendable {
                 endpoint: endpoint,
                 settings: settings,
                 apiKey: apiKey,
-                sourceIsChapterSummary: sourceIsChapterSummary
+                sourceIsChapterSummary: sourceIsChapterSummary,
+                terminology: terminology
             )
             return .facts(facts)
         } catch is CancellationError {
@@ -522,7 +541,8 @@ struct MeetingSummaryEngine: Sendable {
         endpoint: URL,
         settings: SummaryModelSettings,
         apiKey: String?,
-        sourceIsChapterSummary: Bool
+        sourceIsChapterSummary: Bool,
+        terminology: String?
     ) async -> StageOutcome {
         do {
             let minutes = try await requestMinutesText(
@@ -530,7 +550,8 @@ struct MeetingSummaryEngine: Sendable {
                 endpoint: endpoint,
                 settings: settings,
                 apiKey: apiKey,
-                sourceIsChapterSummary: sourceIsChapterSummary
+                sourceIsChapterSummary: sourceIsChapterSummary,
+                terminology: terminology
             )
             return .minutes(minutes)
         } catch is CancellationError {
@@ -551,7 +572,8 @@ struct MeetingSummaryEngine: Sendable {
         endpoint: URL,
         settings: SummaryModelSettings,
         apiKey: String?,
-        sourceIsChapterSummary: Bool
+        sourceIsChapterSummary: Bool,
+        terminology: String?
     ) async throws -> StructuredFacts {
         let prompt = """
         你正在整理一场中文工作会议的"速览"。只根据给定材料输出 JSON，不要输出 Markdown、解释或代码围栏。
@@ -563,6 +585,7 @@ struct MeetingSummaryEngine: Sendable {
         **必须遵守的两条硬要求**：
         1. 禁止空话动词。以下措辞一律不许出现：会上介绍了、会上讨论了、会上提到、谈到了、提到了、围绕……展开、延伸到、进行了讨论、交换了意见。要写实质内容（谁提了什么、数字是多少、为什么否掉）。
         2. 必须保留原文里的具体数字、版本号、日期、人名、系统名，一个都不能省。
+        \(terminology ?? "")
 
         把材料中每一处明确的决定、承诺和待办都列出来，不要只挑最重要的几条。
         只有当一条内容只是提问、只是可能性或没定下来时，才不写进决策和待办。
@@ -626,7 +649,8 @@ struct MeetingSummaryEngine: Sendable {
         endpoint: URL,
         settings: SummaryModelSettings,
         apiKey: String?,
-        sourceIsChapterSummary: Bool
+        sourceIsChapterSummary: Bool,
+        terminology: String?
     ) async throws -> MinutesOutput {
         let prompt = """
         你正在整理一场中文工作会议的纪要正文，只输出正文本身。
@@ -638,6 +662,7 @@ struct MeetingSummaryEngine: Sendable {
         **两条硬要求**：
         1. 绝对禁止这些空话动词：会上介绍了、会上讨论了、会上提到、会上说、会上确认、谈到了、提到了、围绕……展开、延伸到、中段主要围绕、进行了讨论、交换了意见。直接写事实与结论，不要用"会上提到"这类转述引子。
         2. 原文里的数字、版本号、日期、人名、系统名必须写进正文，一个都不能省。
+        \(terminology ?? "")
 
         不要输出开场白（"以下是""好的"之类）、不要输出 JSON、代码围栏或对本次整理的说明。
         不要在正文里评价材料本身（比如"材料不足""未提及""无法判断"），材料里没有的内容直接不写。
