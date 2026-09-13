@@ -4,3 +4,11 @@ DerivedData
 xcuserdata
 *.xcuserstate
 .DS_Store
+
+# 质量评测集：含真实会议内容，只在本机留存，绝不进仓库
+docs/verification/quality/cases/
+docs/verification/quality/runs/
+docs/verification/quality/baseline.json
+docs/verification/quality/manifest.json
+docs/verification/quality/report.md
+docs/verification/quality/report.json
