@@ -16,3 +16,6 @@ docs/verification/quality/report.json
 # Python 缓存（Scripts 下跑过 py_compile / import 会生成）
 __pycache__/
 *.pyc
+
+# 界面验证截图（含真实会议内容，不提交）
+docs/verification/quality/ui-2b/
