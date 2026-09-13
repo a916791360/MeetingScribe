@@ -538,6 +538,84 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         }
         return nil
     }
+
+    /// 速览「要点」解析成可渲染的结构。
+    ///
+    /// 存盘里它是 `[String]`（与 prompt 的输出格式一一对应，评测脚本也能直接比对），
+    /// 解析属于**展示层**的事；放在这里只是因为解析规则要能单测 —— View 里测不到。
+    var parsedOverviewBullets: [OverviewBullet] {
+        (overviewBullets ?? []).map(OverviewBullet.parse)
+    }
+}
+
+/// 速览「要点」里的一条：`[12:30] 内容`。
+///
+/// 为什么要把时间锚从正文里拆出来：锚不是内容，它是**一个动作的把手** ——
+/// 渲染成可点击的按钮就能跳播放。留在字符串里就只能当文字读。
+struct OverviewBullet: Hashable, Identifiable, Sendable {
+    /// 括号里的时间锚（秒）。没写、或写不成时间的，是 nil。
+    var seconds: TimeInterval?
+    /// 去掉时间锚之后的正文。
+    var text: String
+
+    var id: String {
+        let stamp = seconds.map { String(Int($0)) } ?? "-"
+        return "\(stamp)|\(text)"
+    }
+
+    /// 有没有可点的锚。没有锚的条目照常渲染，只是那一小段退回纯文字。
+    var hasAnchor: Bool { seconds != nil }
+
+    /// `[12:30] 内容` → `(750, "内容")`。
+    ///
+    /// 宽容三件真实产出里见过的形状：
+    /// · **没有时间锚**（纯文本）→ `seconds = nil`，正文原样保留；
+    /// · **锚在句子中间**（模型偶尔这么写）→ 不当锚，整条留作正文 ——
+    ///   否则会把前半句吃掉；
+    /// · **只有锚没有正文** → `text` 为空串，调用方据此跳过这一条。
+    ///
+    /// 锚的格式接受 `mm:ss` 与 `h:mm:ss`（超过一小时的会），
+    /// 中英文方括号混用也认（`[` / `【`）。
+    static func parse(_ raw: String) -> OverviewBullet {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let opening = trimmed.first, opening == "[" || opening == "【" else {
+            return OverviewBullet(seconds: nil, text: trimmed)
+        }
+        let closing: Character = opening == "[" ? "]" : "】"
+        guard let closeIndex = trimmed.firstIndex(of: closing) else {
+            return OverviewBullet(seconds: nil, text: trimmed)
+        }
+
+        let stampStart = trimmed.index(after: trimmed.startIndex)
+        let stamp = trimmed[stampStart..<closeIndex]
+        guard let seconds = seconds(fromStamp: stamp) else {
+            return OverviewBullet(seconds: nil, text: trimmed)
+        }
+
+        let rest = trimmed[trimmed.index(after: closeIndex)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return OverviewBullet(seconds: seconds, text: rest)
+    }
+
+    /// 把 `12:30` / `1:02:30` 解成秒。任何一处不是数字就返回 nil。
+    private static func seconds(fromStamp stamp: Substring) -> TimeInterval? {
+        let parts = stamp.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2 || parts.count == 3 else { return nil }
+        var values: [Int] = []
+        for part in parts {
+            // `Int("")` 是 nil，`Int("1 2")` 也是 nil —— 一句 `Int` 就够了，
+            // 不需要额外判空（`:` 打头或结尾会被这里挡掉）。
+            guard let value = Int(part.trimmingCharacters(in: .whitespaces)), value >= 0 else {
+                return nil
+            }
+            values.append(value)
+        }
+        // 两位那档是 mm:ss，三位那档是 h:mm:ss —— 与 `clockLabel` 的输出一一对应。
+        if values.count == 2 {
+            return TimeInterval(values[0] * 60 + values[1])
+        }
+        return TimeInterval(values[0] * 3600 + values[1] * 60 + values[2])
+    }
 }
 
 struct MeetingSession: Codable, Identifiable, Hashable, Sendable {

@@ -535,12 +535,20 @@ struct WorkbenchSessionWorkspace: View {
                     )
 
                     ScrollView {
-                        WorkbenchResultDocument(session: session, tab: selectedTab)
-                            .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
-                            .padding(.horizontal, AppTheme.contentInset)
-                            .padding(.top, AppTheme.space3)
-                            .padding(.bottom, AppTheme.space6)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                        WorkbenchResultDocument(
+                            session: session,
+                            tab: selectedTab,
+                            onSelectTab: { selectedTab = $0 }
+                        )
+                        // 速览页的要点要能点时间锚跳播放，而播放器是这一层的
+                        // `@StateObject`（播放条也在这一层）。注入到文档子树里，
+                        // 免得把播放器一路当参数传到最底下的那一行。
+                        .environmentObject(audioPlayer)
+                        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+                        .padding(.horizontal, AppTheme.contentInset)
+                        .padding(.top, AppTheme.space3)
+                        .padding(.bottom, AppTheme.space6)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
 
                     WorkbenchAudioPlayerBar(
@@ -724,13 +732,15 @@ struct WorkbenchResultTabBar: View {
 struct WorkbenchResultDocument: View {
     let session: MeetingSession
     let tab: MeetingResultTab
+    /// 换页的回调。速览页的「查看全部」要跳到纪要页 —— 只在那里摊得开。
+    let onSelectTab: (MeetingResultTab) -> Void
 
     var body: some View {
         switch tab {
         case .original:
             WorkbenchOriginalDocument(session: session)
         case .overview:
-            WorkbenchOverviewDocument(session: session)
+            WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab)
         case .minutes:
             WorkbenchMinutesDocument(session: session)
         }
@@ -753,9 +763,14 @@ struct WorkbenchDocumentHeading: View {
     }
 }
 
-struct WorkbenchDocumentSectionHeading: View {
+struct WorkbenchDocumentSectionHeading<Trailing: View>: View {
     let title: String
     let count: Int?
+    /// 标题行右端的东西（速览页用来放「查看全部」）。
+    ///
+    /// 有它才能保证尾部动作和标题**同处一条基线**：把按钮摆在标题下面或
+    /// 单独开一行，它会读成另一个区块，而不是"这个区块的延伸"。
+    @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
@@ -770,13 +785,57 @@ struct WorkbenchDocumentSectionHeading: View {
                     .foregroundStyle(AppTheme.muted)
             }
             Spacer(minLength: 0)
+            trailing()
         }
     }
 }
 
+extension WorkbenchDocumentSectionHeading where Trailing == EmptyView {
+    /// 不带尾部动作的写法（纪要页两处沿用）。
+    ///
+    /// 有了这个 init，既有调用点一行都不用改 —— 加泛型参数不会变成一次全局改写。
+    init(title: String, count: Int?) {
+        self.init(title: title, count: count, trailing: { EmptyView() })
+    }
+}
+
+/// 速览页：**先给结论，再给抓手，最后给全文**。
+///
+/// 页面顺序是刻意排成一条下滑的漏斗，而不是"把有的东西都摞上来"：
+///
+/// | 位置 | 区块 | 回答的问题 |
+/// |---|---|---|
+/// | 1 | 一句话结论 | 这场会最后定了什么？（读完这行就能走） |
+/// | 2 | 要点（带时间锚） | 有哪几件事？（锚可点，直接跳去听） |
+/// | 3 | 决策摘要 | 决定了什么？ |
+/// | 4 | 待办摘要（含 owner） | 谁要做什么？ |
+/// | 5 | 待确认 | 还有什么没定？ |
+/// | 6 | 会议概述 | 完整脉络（200~400 字） |
+/// | 7 | 时间轨 | 每一段都聊了什么 |
+///
+/// **为什么「概述」排在第 6 位、而不是像以前那样霸着第一位**：验收标准是
+/// 「一屏内看到结论 + 要点 + 谁做什么」，而概述是 200~400 字的一段话 ——
+/// 它摆在最前面，会把下面四块全部推到折线以下。它不是不重要，
+/// 是**不紧急**：前五块是索引，它和第七块是正文。
+///
+/// 老会话没有 `headline` / `overviewBullets` / `openQuestions`（2A 之前存盘的），
+/// 那几块直接消失，页面退化回"导语 + 时间轨"—— 和升级前一模一样，
+/// 而不是一屏空白。见 `MeetingAnalysis` 的 decodeIfPresent。
 struct WorkbenchOverviewDocument: View {
     let session: MeetingSession
+    /// 跳到别的结果页。摘要行尾的「查看全部」用它。
+    let onSelectTab: (MeetingResultTab) -> Void
     @EnvironmentObject private var store: MeetingStore
+    /// 时间锚要能跳播放，所以这一页要拿到播放器。
+    /// 走 `environmentObject` 而不是逐层传参：`WorkbenchResultDocument` 只是
+    /// 一个 switch，不该为了传一个播放器而被改造成转发管道。
+    @EnvironmentObject private var player: MeetingAudioPlayer
+
+    /// 速览页最多列几条决策 / 待办。超出的走行尾「查看全部」。
+    ///
+    /// 3 是"一屏内"倒推出来的：三段小标题 + 三行摘要 ≈ 200pt，
+    /// 加上结论和要点仍在一屏之内。列全（长会 16 条）这一页就只能当纪要读了。
+    private static let summaryLimit = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.space6) {
@@ -794,34 +853,85 @@ struct WorkbenchOverviewDocument: View {
                 )
             }
 
+            if let headline {
+                WorkbenchOverviewHeadline(text: headline)
+            }
+
+            if !bullets.isEmpty {
+                WorkbenchOverviewBulletsSection(
+                    bullets: bullets,
+                    // 播放器没加载出音频时不给跳转 —— 点了没反应比不可点更糟。
+                    onJump: player.isAvailable ? { jump(to: $0) } : nil
+                )
+            }
+
+            summarySection(
+                title: "决策与结论",
+                items: session.analysis.decisions.map {
+                    WorkbenchOverviewSummaryRow.Item(
+                        time: $0.timestamp?.clockLabel,
+                        label: $0.label,
+                        owner: nil
+                    )
+                }
+            )
+
+            summarySection(
+                title: "待办",
+                items: session.analysis.actions.map {
+                    WorkbenchOverviewSummaryRow.Item(
+                        time: $0.timestamp?.clockLabel,
+                        label: $0.label,
+                        owner: $0.owner
+                    )
+                }
+            )
+
+            if !openQuestions.isEmpty {
+                WorkbenchOverviewOpenQuestionsSection(questions: openQuestions)
+            }
+
+            // 概述：老会话（没有 headline / 要点）时它是**第一块**，这时候不该给它
+            // 小标题 —— 它就是导语本身，顶上再加一个「会议概述」纯属自我说明。
+            // 新会话里它排在摘要后面，才需要一个标题说明"下面是全文"。
             if !overviewText.isEmpty {
-                // 导语是「整场概览」，比条目正文大一档（16.5 vs 15）就够。
-                // 原来给到 20pt 又铺满 920pt：它和条目正文只差 2pt、却都很大，
-                // 层级没拉开，整页还显得松垮。
-                //
-                // 外面这层容器只圈**这段话**：它是"一整段话"，与下面"一条一条"的
-                // 时间线是不同的东西，给它一个面才立得住（下面那些靠轨和线立住）。
-                // 宽度（行宽 + 内衬 = 结构列）全部由容器自己负责，调用方不要再套
-                // `.frame` —— 上一版就是调用方套了两层，外沿漏了 79.5pt。
-                Text(overviewText)
-                    .font(AppType.documentLead)
-                    .foregroundStyle(AppTheme.ink)
-                    .lineSpacing(AppType.leadLineSpacing)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .workbenchProsePanel()
+                VStack(alignment: .leading, spacing: AppTheme.space3) {
+                    if hasQuickRead {
+                        WorkbenchDocumentSectionHeading(title: "会议概述", count: nil)
+                    }
+                    // 导语是「整场概览」，比条目正文大一档（16.5 vs 15）就够。
+                    // 原来给到 20pt 又铺满 920pt：它和条目正文只差 2pt、却都很大，
+                    // 层级没拉开，整页还显得松垮。
+                    //
+                    // 外面这层容器只圈**这段话**：它是"一整段话"，与下面"一条一条"的
+                    // 时间线是不同的东西，给它一个面才立得住（下面那些靠轨和线立住）。
+                    // 宽度（行宽 + 内衬 = 结构列）全部由容器自己负责，调用方不要再套
+                    // `.frame` —— 上一版就是调用方套了两层，外沿漏了 79.5pt。
+                    Text(overviewText)
+                        .font(AppType.documentLead)
+                        .foregroundStyle(AppTheme.ink)
+                        .lineSpacing(AppType.leadLineSpacing)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .workbenchProsePanel()
+                }
             }
 
             if !session.analysis.timeline.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(session.analysis.timeline.enumerated()), id: \.element.id) { index, item in
-                        WorkbenchTimelineDocumentRow(item: item)
-                        if index != session.analysis.timeline.count - 1 {
-                            WorkbenchDocumentRowDivider()
+                VStack(alignment: .leading, spacing: AppTheme.space3) {
+                    if hasQuickRead {
+                        WorkbenchDocumentSectionHeading(title: "会议经过", count: nil)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(session.analysis.timeline.enumerated()), id: \.element.id) { index, item in
+                            WorkbenchTimelineDocumentRow(item: item)
+                            if index != session.analysis.timeline.count - 1 {
+                                WorkbenchDocumentRowDivider()
+                            }
                         }
                     }
                 }
-            } else if overviewText.isEmpty {
+            } else if !hasVisibleContent {
                 WorkbenchSummaryEmptyState(
                     title: "还没有生成速览",
                     message: emptyMessage,
@@ -833,16 +943,85 @@ struct WorkbenchOverviewDocument: View {
         }
     }
 
-    /// 这场会议在「速览」页里有没有可看的东西。
-    /// 与下面空态的出现条件严格互补（空态 = `timeline` 空 **且** `overviewText` 空）。
+    /// 摘要区块：小标题 + 前 N 条 + 行尾「查看全部」。
+    ///
+    /// 抽成一个函数而不是两个 `if`：决策和待办的排版必须**逐点一致**，
+    /// 否则两条摘要一上一下会错开（上一次"元素对不齐"就是这么来的）。
+    @ViewBuilder
+    private func summarySection(title: String, items: [WorkbenchOverviewSummaryRow.Item]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                WorkbenchDocumentSectionHeading(title: title, count: items.count) {
+                    if items.count > Self.summaryLimit {
+                        WorkbenchSectionMoreButton { onSelectTab(.minutes) }
+                    }
+                }
+                .padding(.bottom, AppTheme.space2)
+
+                ForEach(Array(items.prefix(Self.summaryLimit).enumerated()), id: \.offset) { index, item in
+                    WorkbenchOverviewSummaryRow(item: item)
+                    if index != min(items.count, Self.summaryLimit) - 1 {
+                        WorkbenchDocumentRowDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    /// 点时间锚：**先定位再播**。
+    ///
+    /// 只定位不播的话，用户点了之后还要再去按一次播放键 —— 而点一个时间锚的
+    /// 全部意图就是"我要听这一段"。已经在播的就不打断（只挪位置）。
+    private func jump(to seconds: TimeInterval) {
+        player.seek(to: seconds)
+        if !player.isPlaying {
+            player.togglePlayback()
+        }
+    }
+
+    /// 这场会议在「速览」页里有没有可看的东西（用来和空态互补）。
     private var hasVisibleContent: Bool {
-        !overviewText.isEmpty || !session.analysis.timeline.isEmpty
+        !overviewText.isEmpty
+            || !session.analysis.timeline.isEmpty
+            || hasQuickRead
+            || !session.analysis.decisions.isEmpty
+            || !session.analysis.actions.isEmpty
+    }
+
+    /// 有没有「索引层」（结论 / 要点 / 摘要 / 待确认）。
+    /// 有才给概述和时间轨加小标题 —— 否则它们在页首，标题是多余的。
+    private var hasQuickRead: Bool {
+        headline != nil
+            || !bullets.isEmpty
+            || !openQuestions.isEmpty
+            || !session.analysis.decisions.isEmpty
+            || !session.analysis.actions.isEmpty
     }
 
     /// 只有失败过（或结果不完整）才给「重试」。没配置模型时点重试是白点。
     private var retryAction: (() -> Void)? {
         guard session.analysis.noticeMessage != nil else { return nil }
         return { store.regenerateSummary(for: session) }
+    }
+
+    private var headline: String? {
+        guard let raw = session.analysis.headline?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty
+        else { return nil }
+        return raw
+    }
+
+    /// 要点。**丢弃只有时间锚、没有正文的条目** —— 那种行渲染出来就是
+    /// 一个孤零零的时刻，不如不画（同 `WorkbenchDocumentItemRow` 里
+    /// "空着的那一行会把噪音放大"的判断）。
+    private var bullets: [OverviewBullet] {
+        session.analysis.parsedOverviewBullets.filter { !$0.text.isEmpty }
+    }
+
+    private var openQuestions: [String] {
+        (session.analysis.openQuestions ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private var overviewText: String {
@@ -857,6 +1036,214 @@ struct WorkbenchOverviewDocument: View {
             return "这次只拿到了结果的一部分（速览没生成出来）。原文仍然保留，可以直接重试。"
         }
         return "当前没有启用会后整理模型。逐字稿仍然由本机中文 Whisper 完成；选择一个整理模型后，这里会生成整场会议的快速概览。"
+    }
+}
+
+/// 速览页顶部的一句话结论。
+///
+/// 它是这一页**唯一** 22pt 的东西，也是整页唯一不带小标题的区块 ——
+/// 因为它就是"标题该说的话"：这场会最后是个什么结果。
+struct WorkbenchOverviewHeadline: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            Text("一句话结论")
+                .font(AppType.documentMeta)
+                .foregroundStyle(AppTheme.muted)
+            Text(text)
+                .font(AppType.documentHeadline)
+                .foregroundStyle(AppTheme.ink)
+                .lineSpacing(6)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        // 行宽 = 结构列：与下面的章节标题、摘要行落在同一条左边线上。
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+    }
+}
+
+/// 速览「要点」：每条一行「时间锚 + 摘要」，锚可点跳播放。
+struct WorkbenchOverviewBulletsSection: View {
+    let bullets: [OverviewBullet]
+    /// 点时间锚的回调。**为 nil 表示不可跳**（没加载出音频）——
+    /// 这时锚退化成纯文字，而不是一颗点了没反应的按钮。
+    let onJump: ((TimeInterval) -> Void)?
+
+    /// 锚列的固定宽。
+    ///
+    /// 为什么要定宽：`[0:53]` 与 `[17:00]` 差一个字符，正文就会左右错一位，
+    /// 一列要点读起来像锯齿。逐字稿那一页靠"同一场会的时间戳等长"天然对齐，
+    /// 这里不能靠它 —— 要点的时间锚可能是模型从整场里挑的，会跨过 1 小时线
+    /// （`00:53` 与 `01:02:30` 不是一个长度），所以按"本场有没有超过 1 小时"选宽度。
+    private var anchorWidth: CGFloat {
+        bullets.contains { ($0.seconds ?? 0) >= 3600 } ? 62 : 42
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WorkbenchDocumentSectionHeading(title: "要点", count: bullets.count)
+                .padding(.bottom, AppTheme.space3)
+
+            ForEach(Array(bullets.enumerated()), id: \.element.id) { index, bullet in
+                row(for: bullet)
+                if index != bullets.count - 1 {
+                    WorkbenchDocumentRowDivider()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(for bullet: OverviewBullet) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+            anchor(for: bullet)
+                .frame(width: anchorWidth, alignment: .leading)
+
+            Text(bullet.text)
+                .font(AppType.documentBody)
+                .foregroundStyle(AppTheme.ink)
+                .lineSpacing(AppType.bodyLineSpacing)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+        .padding(.vertical, AppTheme.space3)
+    }
+
+    @ViewBuilder
+    private func anchor(for bullet: OverviewBullet) -> some View {
+        if let seconds = bullet.seconds, let onJump {
+            Button {
+                onJump(seconds)
+            } label: {
+                Text(seconds.clockLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.accent)
+                    // 不给交互元素换行 —— 宽度提案一紧它就折成两行。
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .buttonStyle(.plain)
+            .help("从 \(seconds.clockLabel) 开始播放")
+        } else if let seconds = bullet.seconds {
+            Text(seconds.clockLabel)
+                .font(.system(size: 11, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// 速览页的**摘要行**：一行放下一条决策或待办。
+///
+/// 它和纪要页的 `WorkbenchDocumentItemRow` 差在"要不要读依据"：
+/// 纪要页是终稿，每条都要能溯源，所以带「依据：…」和把握度徽标；
+/// 速览页是**索引**，一行一条、扫完就走，画上依据只会把一屏撑成两屏。
+struct WorkbenchOverviewSummaryRow: View {
+    struct Item: Hashable {
+        var time: String?
+        var label: String
+        /// 待办才有；决策为 nil。
+        var owner: String?
+    }
+
+    let item: Item
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+            if let time = item.time {
+                Text(time)
+                    .font(AppType.documentMeta)
+                    .foregroundStyle(AppTheme.muted)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+
+            Text(item.label)
+                .font(AppType.documentBody)
+                .foregroundStyle(AppTheme.ink)
+                // 摘要行只占一行：整句在「纪要」页里。截断掉的那半句靠 `.help` 兜底，
+                // 让"想知道但不想跳页"的人悬停就能读完。
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            // 这一颗 Spacer 是**必须**的（同 `WorkbenchDocumentItemRow`）：把负责人
+            // 推到行尾，全页的负责人排成一列。
+            Spacer(minLength: AppTheme.space3)
+
+            if let owner = item.owner {
+                WorkbenchSessionMeta(text: owner, systemImage: "person")
+            }
+        }
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+        .padding(.vertical, AppTheme.space2)
+        .help(item.label)
+    }
+}
+
+/// 速览页的「待确认」栏：会上**提过但没定下来**的事。
+///
+/// 单独立栏的理由：跟"已决定"混在同一张表里，读者会把悬案读成结论 ——
+/// 而这两者对未来动作的指引正好相反（一个可以直接执行，一个必须先去问）。
+struct WorkbenchOverviewOpenQuestionsSection: View {
+    let questions: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WorkbenchDocumentSectionHeading(title: "待确认", count: questions.count)
+                .padding(.bottom, AppTheme.space3)
+
+            ForEach(Array(questions.enumerated()), id: \.offset) { index, question in
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.muted)
+                    Text(question)
+                        .font(AppType.documentBody)
+                        .foregroundStyle(AppTheme.ink)
+                        .lineSpacing(AppType.bodyLineSpacing)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+                .padding(.vertical, AppTheme.space3)
+
+                if index != questions.count - 1 {
+                    WorkbenchDocumentRowDivider()
+                }
+            }
+        }
+    }
+}
+
+/// 章节标题行尾的「查看全部 ›」。
+///
+/// 用 `AppType.documentMeta`（11pt）而不是正文档：它是**索引的延伸**，不是内容；
+/// 和标题同一行时字号必须小于标题，否则会读成并列的两个标题。
+/// 颜色给 `accent` 是唯一一处提示"这里可以点"的信号 —— 剥掉下划线和边框之后，
+/// 颜色是这颗按钮最后的可交互痕迹。
+struct WorkbenchSectionMoreButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Text("查看全部")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(AppType.documentMeta)
+            .foregroundStyle(AppTheme.accent)
+            // `ButtonStyle` 是自定义的 `.plain`，不吃 `.disabled()`；
+            // 而标题栏里那条"`Text` 是唯一可伸缩视图"的教训在这里同样成立 ——
+            // 宽度一紧，`查看全部` 就会折成两行。
+            .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .help("到「纪要」页看全部")
     }
 }
 

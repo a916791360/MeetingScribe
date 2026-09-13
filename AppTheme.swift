@@ -255,6 +255,12 @@ enum AppTheme {
 /// 章节读不出来（用户原话「标题应该稍大一些，不然和内容融一起了」）。
 /// 标题不只是"比正文大"，它要压过主句那一档，所以直接跳到导语之上。
 enum AppType {
+    /// 速览页顶部的**一句话结论**。整页唯一一处 22pt，
+    /// 因为它是"读完这一行就可以走了"的那一行，必须一眼压过下面所有区块。
+    ///
+    /// 与 `sectionTitle`(17) 拉开 5pt 是刻意的：两者一上一下挨着，
+    /// 只差一两档就会被读成"同一级的另一个标题"。
+    static let documentHeadline = Font.system(size: 22, weight: .semibold)
     /// 速览导语。它是"整场概览"，角色与条目正文不同，所以大一档。
     static let documentLead = Font.system(size: 16.5, weight: .regular)
     /// 文档正文：纪要认真叙述、速览时间线的条目正文。
