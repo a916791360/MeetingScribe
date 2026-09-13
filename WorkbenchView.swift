@@ -785,8 +785,13 @@ struct WorkbenchOverviewDocument: View {
             // 它那句话是「下面仅显示本地保守结果」——下面空着的时候，这句话就是在
             // 替空态重复一遍「没生成出东西」：同一屏里两处说同一件事，而空态那个
             // 说得更完整（还带原因和出路）。所以让空态独家承担，横幅撤走。
-            if let summaryError = session.analysis.summaryError, !summaryError.isEmpty, hasVisibleContent {
-                WorkbenchSummaryFallbackNotice(message: summaryError)
+            if let notice = session.analysis.noticeMessage, hasVisibleContent {
+                WorkbenchSummaryFallbackNotice(
+                    message: notice,
+                    headline: session.analysis.isLocalFallback
+                        ? "整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。"
+                        : "整理模型这次的结果不完整，下面可能缺少部分内容。"
+                )
             }
 
             if !overviewText.isEmpty {
@@ -834,9 +839,9 @@ struct WorkbenchOverviewDocument: View {
         !overviewText.isEmpty || !session.analysis.timeline.isEmpty
     }
 
-    /// 只有失败过才给「重试」。没配置模型时点重试是白点。
+    /// 只有失败过（或结果不完整）才给「重试」。没配置模型时点重试是白点。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.summaryError != nil else { return nil }
+        guard session.analysis.noticeMessage != nil else { return nil }
         return { store.regenerateSummary(for: session) }
     }
 
@@ -845,8 +850,11 @@ struct WorkbenchOverviewDocument: View {
     }
 
     private var emptyMessage: String {
-        if session.analysis.summaryError != nil {
+        if session.analysis.isLocalFallback {
             return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
+        }
+        if session.analysis.partialNotice != nil {
+            return "这次只拿到了结果的一部分（速览没生成出来）。原文仍然保留，可以直接重试。"
         }
         return "当前没有启用会后整理模型。逐字稿仍然由本机中文 Whisper 完成；选择一个整理模型后，这里会生成整场会议的快速概览。"
     }
@@ -938,9 +946,9 @@ struct WorkbenchMinutesDocument: View {
         session.analysis.minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 只有失败过才给「重试」。没配置模型时点重试是白点。
+    /// 只有失败过（或结果不完整）才给「重试」。没配置模型时点重试是白点。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.summaryError != nil else { return nil }
+        guard session.analysis.noticeMessage != nil else { return nil }
         return { store.regenerateSummary(for: session) }
     }
 
@@ -950,8 +958,11 @@ struct WorkbenchMinutesDocument: View {
     /// 这句就成了这一屏唯一的解释，而模型**用过却失败**的时候它是错的
     /// （用户被告知"没配模型"，于是去设置里翻半天，其实模型配得好好的）。
     private var emptyMessage: String {
-        if session.analysis.summaryError != nil {
+        if session.analysis.isLocalFallback {
             return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
+        }
+        if session.analysis.partialNotice != nil {
+            return "这次只拿到了结果的一部分（纪要正文没生成出来）。原文仍然保留，可以直接重试。"
         }
         return "本地转写已经完成，但当前没有使用会后整理模型。选择一个模型后重新整理，可以生成会议叙述、决策和待办。"
     }
@@ -1199,13 +1210,16 @@ struct WorkbenchTranscriptDocumentRow: View {
 
 struct WorkbenchSummaryFallbackNotice: View {
     let message: String
+    /// 标题要分得清「模型整个没返回（本地兜底）」和「模型返回了但不完整」。
+    /// 这两种情况的出路不一样：前者多半要换模型/查配置，后者直接重试通常就好。
+    var headline: String = "整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。"
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "info.circle")
                 .foregroundStyle(AppTheme.warning)
             VStack(alignment: .leading, spacing: 4) {
-                Text("整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。")
+                Text(headline)
                     .font(.callout)
                     .foregroundStyle(AppTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)

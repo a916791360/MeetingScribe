@@ -140,9 +140,18 @@ final class QualityEvalTests: XCTestCase {
             }
             let rawChars = segments.reduce(0) { $0 + $1.text.trimmingCharacters(in: .whitespaces).count }
 
+            // 逐字稿后处理（P0-1C）。App 里这一步跑在整理之前，所以评测也必须喂
+            // 清洗后的段 —— 否则量到的是"改之前的管线"。
+            let cleaned = TranscriptCleaner.clean(segments)
+            let cleanedChars = cleaned.reduce(0) { $0 + $1.text.count }
+            // 「复读折叠」自己该丢多少字。清洗后总字数一定会比原文少（复读占一成），
+            // 所以判断"删没删过头"要用这个数当分母，不能拿原始总字数。
+            let deduplicatedChars = TranscriptCleaner.removingRepeats(segments)
+                .reduce(0) { $0 + $1.text.count }
+
             // 本地兜底产物：用户在「整场降级」时实际看到的就是它 —— 必须记下来，
             // 否则「内容非常差」在指标里看不见（它不报错、看起来正常）。
-            let fallback = MeetingAnalysisBuilder.build(from: segments)
+            let fallback = MeetingAnalysisBuilder.build(from: cleaned)
 
             var record: [String: Any] = [
                 "caseId": source.caseId,
@@ -151,11 +160,12 @@ final class QualityEvalTests: XCTestCase {
                 "durationSeconds": source.durationSeconds,
                 "inputSegmentCount": segments.count,
                 "inputCharCount": rawChars,
-                // P0-1（TranscriptCleaner）落地前，喂给模型的就是原始段
-                "preparedSegmentCount": segments.count,
-                "preparedCharCount": rawChars,
-                "transcriptCharsSentToModel": transcriptChars(segments),
-                "finishReason": NSNull(),  // P0-3 起由引擎回传，见《质量提升执行计划》
+                "preparedSegmentCount": cleaned.count,
+                "preparedCharCount": cleanedChars,
+                "dedupCharCount": deduplicatedChars,
+                "transcriptCharsSentToModel": transcriptChars(cleaned),
+                // P0-1 起由引擎回传（`analysis.diagnostics`），见《质量提升执行计划》
+                "finishReason": NSNull(),
                 "localFallback": [
                     "overviewChars": fallback.overviewText.count,
                     "minutesChars": fallback.minutesText.count,
@@ -167,7 +177,7 @@ final class QualityEvalTests: XCTestCase {
             let started = Date()
             do {
                 let analysis = try await engine.analyze(
-                    segments: segments,
+                    segments: cleaned,
                     settings: settings,
                     apiKey: key
                 )
@@ -175,6 +185,10 @@ final class QualityEvalTests: XCTestCase {
                 record["ok"] = true
                 record["errorType"] = NSNull()
                 record["errorMessage"] = NSNull()
+                record["finishReason"] = analysis.diagnostics?.overviewFinishReason ?? NSNull()
+                record["minutesFinishReason"] = analysis.diagnostics?.minutesFinishReason ?? NSNull()
+                record["escalationCount"] = analysis.diagnostics?.escalationCount ?? 0
+                record["partialNotice"] = analysis.partialNotice ?? NSNull()
                 let encoded = try JSONEncoder().encode(analysis)
                 record["analysis"] = try JSONSerialization.jsonObject(with: encoded)
             } catch {

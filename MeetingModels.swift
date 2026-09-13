@@ -327,6 +327,38 @@ struct TimelineChunk: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// 一次整理调用留下的技术痕迹。
+///
+/// 存在的理由只有一个：**「输出被 token 上限截断」以前是看不见的**。
+/// 模型写完半截 JSON 被砍，代码拿这段半截去解析、抛错、整场静默降级成本地规则，
+/// 用户在界面上只看到「没有任何结论」，既不知道发生过什么，也没法判断该不该重试。
+/// 把 `finish_reason` 存下来之后：评测脚本能一眼看出 `length` 还是 `stop`，
+/// 界面也能据此说一句「这次的结果不完整」。
+///
+/// 只做诊断，不参与展示逻辑（界面用 `partialNotice` 那一句人话）。
+struct SummaryDiagnostics: Codable, Hashable, Sendable {
+    /// 速览 / 结构化那一次调用的 `finish_reason`（`stop` / `length` / 服务商自定义）。
+    var overviewFinishReason: String?
+    /// 纪要正文那一次调用的 `finish_reason`。
+    var minutesFinishReason: String?
+    /// 为了躲开截断而抬预算的次数（>0 说明这次是「差点没产出来」）。
+    var escalationCount: Int
+    /// 最终交出来的结果是否**缺斤少两**（截断收尾，或缺了某一半）。
+    var partial: Bool
+
+    init(
+        overviewFinishReason: String? = nil,
+        minutesFinishReason: String? = nil,
+        escalationCount: Int = 0,
+        partial: Bool = false
+    ) {
+        self.overviewFinishReason = overviewFinishReason
+        self.minutesFinishReason = minutesFinishReason
+        self.escalationCount = escalationCount
+        self.partial = partial
+    }
+}
+
 struct MeetingAnalysis: Codable, Hashable, Sendable {
     var overview: [InsightItem]
     var timeline: [TimelineChunk]
@@ -337,6 +369,15 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     var minutesText: String
     var summaryModel: String?
     var summaryError: String?
+    /// 「模型交出来的结果不完整」的人话说明。
+    ///
+    /// 与 `summaryError` 是**两件事**，不要合并：`summaryError` 的含义是
+    /// 「模型整个没返回，下面这些是本地保守结果」——它对应的横幅文案是
+    /// 「已保留逐字稿；下面仅显示本地保守结果。」把它拿去描述一份"缺了纪要正文、
+    /// 但速览和待办都是模型产出的"结果，横幅就说谎了。
+    var partialNotice: String?
+    /// 见 `SummaryDiagnostics`。老会话没有这个键，解码后为 nil。
+    var diagnostics: SummaryDiagnostics?
 
     /// 窗口副标题里用的**短模型名**：只留模型，砍掉前半截服务商。
     ///
@@ -377,7 +418,9 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         overviewText: String = "",
         minutesText: String = "",
         summaryModel: String? = nil,
-        summaryError: String? = nil
+        summaryError: String? = nil,
+        partialNotice: String? = nil,
+        diagnostics: SummaryDiagnostics? = nil
     ) {
         self.overview = overview
         self.timeline = timeline
@@ -388,6 +431,8 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         self.minutesText = minutesText
         self.summaryModel = summaryModel
         self.summaryError = summaryError
+        self.partialNotice = partialNotice
+        self.diagnostics = diagnostics
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -400,6 +445,8 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         case minutesText
         case summaryModel
         case summaryError
+        case partialNotice
+        case diagnostics
     }
 
     init(from decoder: Decoder) throws {
@@ -413,6 +460,9 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         minutesText = try container.decodeIfPresent(String.self, forKey: .minutesText) ?? ""
         summaryModel = try container.decodeIfPresent(String.self, forKey: .summaryModel)
         summaryError = try container.decodeIfPresent(String.self, forKey: .summaryError)
+        // 老会话没有这两个键 —— 必须 decodeIfPresent，否则一升级就读不出历史记录。
+        partialNotice = try container.decodeIfPresent(String.self, forKey: .partialNotice)
+        diagnostics = try container.decodeIfPresent(SummaryDiagnostics.self, forKey: .diagnostics)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -426,11 +476,31 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         try container.encode(minutesText, forKey: .minutesText)
         try container.encodeIfPresent(summaryModel, forKey: .summaryModel)
         try container.encodeIfPresent(summaryError, forKey: .summaryError)
+        try container.encodeIfPresent(partialNotice, forKey: .partialNotice)
+        try container.encodeIfPresent(diagnostics, forKey: .diagnostics)
     }
 
     var hasNarrative: Bool {
         !overviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !minutesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 下面这些内容是**本地保守整理**，不是模型产出（模型压根没返回）。
+    var isLocalFallback: Bool {
+        summaryError?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    /// 需要提示用户的那句话（有本地兜底就报兜底，否则报"不完整"）。
+    ///
+    /// 两件事互斥优先级明确：本地兜底更严重，它意味着界面上**没有一句是模型写的**。
+    var noticeMessage: String? {
+        if let summaryError, !summaryError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return summaryError
+        }
+        if let partialNotice, !partialNotice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return partialNotice
+        }
+        return nil
     }
 }
 

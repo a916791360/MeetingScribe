@@ -622,9 +622,15 @@ final class MeetingStore: ObservableObject {
                 updated.updatedAt = Date()
                 try storage.save(updated)
                 replaceSession(updated)
-                statusText = analysis.summaryError == nil
-                    ? "纪要已更新"
-                    : "纪要已更新，使用本地整理兜底"
+                if analysis.isLocalFallback {
+                    statusText = "纪要已更新，使用本地整理兜底"
+                } else if analysis.partialNotice != nil {
+                    // 结果不完整也要说出来 —— 不然用户不知道"这次少了一半"，
+                    // 只会以为会议本来就没内容。
+                    statusText = "纪要已更新，结果不完整"
+                } else {
+                    statusText = "纪要已更新"
+                }
                 processingStage = statusText
                 processingProgress = 1
                 isProcessing = false
@@ -850,6 +856,13 @@ final class MeetingStore: ObservableObject {
 
         processingStage = "正在整理会议结果..."
         statusText = processingStage
+
+        // 逐字稿后处理（P0-1C）。放在**所有分块都转完之后、整理之前**，一次过：
+        // 复读是跨块的（whisper 在长静音上会自重复），逐块清洗看不见。
+        // 清洗结果会写回会话，所以「逐字稿」页里也是清洗后的样子 ——
+        // 原来一屏几十条 15 字的碎行，读起来像电报。
+        let cleanedSegments = TranscriptCleaner.clean(segments)
+
         updateProcessingState(
             sessionID: sessionID,
             progress: 1,
@@ -860,14 +873,14 @@ final class MeetingStore: ObservableObject {
             startedAt: startedAt
         )
 
-        let analysis = try await buildAnalysis(from: segments)
+        let analysis = try await buildAnalysis(from: cleanedSegments)
         try Task.checkCancellation()
 
         session = try storage.session(with: sessionID)
         session.status = .ready
         session.updatedAt = Date()
-        session.transcriptSegments = segments
-        session.transcriptText = segments.map(\.text).joined(separator: "\n")
+        session.transcriptSegments = cleanedSegments
+        session.transcriptText = cleanedSegments.map(\.text).joined(separator: "\n")
         session.analysis = analysis
         session.inputAudioFileName = inputURL.lastPathComponent
         session.whisperCLIPath = cliURL.path

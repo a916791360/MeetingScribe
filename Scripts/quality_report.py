@@ -31,8 +31,17 @@ BASELINE = QUALITY / "baseline.json"
 # 空话动词：出现即扣分（方案 §5.1 目标 0 处）
 EMPTY_PHRASES = [
     "会上介绍了", "会上讨论了", "会上提到", "谈到了", "提到了",
-    "围绕", "展开", "延伸到", "中段主要围绕", "本次材料仅包含",
+    "延伸到", "本次材料仅包含",
     "进行了讨论", "交换了意见",
+]
+# 「围绕……展开」这条**必须按句式匹配，不能裸词匹配**。
+# 实测（2026-09-13，阶段 1 复评）：slice1 里
+#   「后续给用户表现的形态也要围绕问答、视频和远程协助展开」
+# 是**实质内容**，却因为同时含「围绕」和「展开」被算成 2 处空话，直接把这一场
+# 判成未达标。空话的真正形态是**句首起兴**：「本次会议围绕 X 展开」。
+# 结论：指标口径错会把人带去修没坏的东西 —— 同《执行计划》§1.5 小标题那次。
+EMPTY_PATTERNS = [
+    re.compile(r"(?:^|[\n。；])\s*(?:本次|这次)?(?:会议|讨论|交流)?\s*围绕[^。；\n]{0,40}展开"),
 ]
 # 元评论：模型在解释自己为什么写不出内容 —— 绝不该出现在「速览」里。
 # 这些措辞是 2026-09-13 基线跑出来的**实测原话**（超短误录那一场），不是猜的：
@@ -75,6 +84,11 @@ def count_phrases(text: str, phrases: list[str]) -> int:
     return sum(text.count(p) for p in phrases)
 
 
+def count_empty_phrases(text: str) -> int:
+    """空话命中数 = 裸词表 + 句式表（见 EMPTY_PATTERNS 的口径说明）。"""
+    return count_phrases(text, EMPTY_PHRASES) + sum(len(p.findall(text)) for p in EMPTY_PATTERNS)
+
+
 def bullets_with_facts(bullets: list[str]) -> int:
     """要点里含数字 / 版本号 / 日期锚 的条数。"""
     n = 0
@@ -105,7 +119,11 @@ def metrics_for(case: dict, run: dict | None) -> dict:
     m["status"] = "ok" if run.get("ok") else "failed"
     m["errorType"] = run.get("errorType")
     m["elapsedSeconds"] = run.get("elapsedSeconds")
+    # 两段式：速览 / 纪要是两次独立调用，`finish_reason` 分开记。
     m["finishReason"] = run.get("finishReason")
+    m["minutesFinishReason"] = run.get("minutesFinishReason")
+    m["escalationCount"] = run.get("escalationCount")
+    m["partialNotice"] = run.get("partialNotice")
     m["degraded"] = bool(run.get("errorType"))
     m["transcriptCharsSentToModel"] = run.get("transcriptCharsSentToModel")
 
@@ -116,8 +134,26 @@ def metrics_for(case: dict, run: dict | None) -> dict:
         m["cleanedSegments"] = pre_seg
         m["segmentRatio"] = round(pre_seg / max(1, case["segmentCount"]), 4)
         m["cleanedAvgChars"] = round((pre_chars or 0) / max(1, pre_seg), 1)
+        # ⚠️ 口径说明（2026-09-13，阶段 1 复评时加）：
+        # 「后处理把碎片/复读折叠掉」这件事**只对本来就很碎的转录有意义**。
+        # slice1 的原始转录本来就是句子级（约 10.6 段/分钟、94% 带标点），没有可折叠的
+        # 东西，比值自然接近 1 —— 那不是"后处理没生效"，是**这个指标不适用**。
+        # 所以达标判定只在「病态密度」（≥15 段/分钟）的 case 上做，其余如实记 None。
+        density = case["segmentCount"] / max(1e-6, case["durationSeconds"] / 60.0)
+        m["inputSegmentsPerMinute"] = round(density, 1)
+        m["segmentRatioJudged"] = m["segmentRatio"] if density >= 15 else None
     if pre_chars:
+        # ⚠️ 口径说明（2026-09-13，P0-1 落地时改）：
+        # `charRetention` 是「清洗后 / 原始」，而**复读折叠本身就该丢掉约一成的字**
+        # （阶段 0 实测复读占 10.4% 的段）。所以它一定会掉到 0.95 以下，
+        # 拿它判「有没有删过头」是假阴性 —— 它只作参考，不参与达标判定。
         m["charRetention"] = round(pre_chars / max(1, raw_chars), 4)
+    # 真正的「删没删过头」判据：拿**去重之后**的字数当分母。
+    dedup_chars = run.get("dedupCharCount")
+    if dedup_chars and pre_chars:
+        m["dedupCharCount"] = dedup_chars
+        m["dedupLossRatio"] = round(1 - dedup_chars / max(1, raw_chars), 4)
+        m["uniqueCharRetention"] = round(pre_chars / max(1, dedup_chars), 4)
 
     # ---------- 速览层 / 纪要层 ----------
     a = run.get("analysis") or {}
@@ -135,13 +171,26 @@ def metrics_for(case: dict, run: dict | None) -> dict:
         m["overviewBulletsWithFacts"] = bullets_with_facts(bullets)
         m["minutesChars"] = len(mn)
         m["minutesHeadings"] = len(HEADING.findall(mn))
-        m["emptyPhraseCount"] = count_phrases(mn + ov + headline, EMPTY_PHRASES)
+        m["emptyPhraseCount"] = count_empty_phrases(mn + ov + headline)
         m["metaCommentCount"] = count_phrases(ov + mn + headline, META_PHRASES)
         m["decisionCount"] = len(decisions)
         m["actionCount"] = len(actions)
-        owners = [x for x in actions if (x.get("owner") or "").strip()]
-        m["actionsWithOwner"] = len(owners)
-        m["actionsWithOwnerRatio"] = round(len(owners) / max(1, len(actions)), 4)
+        # ⚠️ 这两个字段要等阶段 2（2A 数据模型）才会有。字段不存在时**必须报「不可算」**，
+        # 不能用 0 冒充 —— 否则「功能还没做」会被读成「做了但效果差」，
+        # 阶段 0 已经在这类假阴性上栽过一次（小标题、元评论）。
+        if any("owner" in x for x in actions):
+            owners = [x for x in actions if (x.get("owner") or "").strip()]
+            m["actionsWithOwner"] = len(owners)
+            m["actionsWithOwnerRatio"] = round(len(owners) / max(1, len(actions)), 4)
+        else:
+            m["actionsWithOwner"] = None
+            m["actionsWithOwnerRatio"] = None
+        if "overviewBullets" in a:
+            m["overviewBulletCount"] = len(bullets)
+            m["overviewBulletsWithFacts"] = bullets_with_facts(bullets)
+        else:
+            m["overviewBulletCount"] = None
+            m["overviewBulletsWithFacts"] = None
     else:
         # 失败/降级：速览与纪要必然为空 —— 这正是「内容非常差」的机器可读形态
         for k in (
@@ -158,8 +207,13 @@ def metrics_for(case: dict, run: dict | None) -> dict:
 def thresholds() -> list[tuple[str, str, str]]:
     """(指标键, 目标描述, 判定函数名) —— 供 --diff 判定达标。"""
     return [
-        ("segmentRatio", "≤ 0.25", "le"),
-        ("charRetention", "≥ 0.95", "ge"),
+        # 「删没删过头」看的是去重之后的保留率；charRetention（对原始字数）只作参考，
+        # 因为复读占一成、按设计就该丢，见 metrics_for 里的口径说明。
+        # segmentRatio 也只在「本来就很碎」的 case 上判（slice1 那种句子级转录不适用）。
+        ("segmentRatioJudged", "≤ 0.25（仅病态密度 case）", "le"),
+        # 「删没删过头」看的是去重之后的保留率；charRetention（对原始字数）只作参考，
+        # 因为复读占一成、按设计就该丢，见 metrics_for 里的口径说明。
+        ("uniqueCharRetention", "≥ 0.95", "ge"),
         ("minutesChars", "≥ 1200", "ge"),
         ("minutesHeadings", "≥ 3", "ge"),
         ("emptyPhraseCount", "= 0", "eq0"),
@@ -178,7 +232,7 @@ def check(key: str, val, kind: str) -> str:
     if kind == "le":
         return "达标" if val <= 0.25 else "未达"
     if kind == "ge":
-        target = {"charRetention": 0.95, "minutesChars": 1200, "minutesHeadings": 3,
+        target = {"uniqueCharRetention": 0.95, "minutesChars": 1200, "minutesHeadings": 3,
                   "overviewBulletsWithFacts": 2, "decisionCount": 12,
                   "actionCount": 10, "actionsWithOwnerRatio": 0.30,
                   "inputPunctRatio": 0.98}[key]
@@ -202,15 +256,25 @@ def build_report(rows: list[dict]) -> str:
 
     lines.append("## 逐 case 明细")
     lines.append("")
-    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 元评论 | 决策/待办 | 带owner |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append(
+        "> `去重保留` = 清洗后字数 / 去重后字数 —— **这才是「有没有删过头」的判据**（要 ≥95%）。"
+        "`字数保留` = 清洗后字数 / 原始字数，复读占一成、按设计就该丢，只作参考。"
+    )
+    lines.append("")
+    lines.append("| case | 时长 | 状态 | 段数(原始→清洗) | 标点段 | 去重保留 | 字数保留 | 速览字 | 纪要字 | 小标题 | 空话 | 元评论 | 决策/待办 | 带owner |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
+        dens = r.get("inputSegmentsPerMinute")
         seg = f"{r['inputSegments']} → {r.get('cleanedSegments', '—')}"
+        if dens is not None:
+            seg += f" ({dens:.1f}/min)"
         ret = f"{r['charRetention']:.0%}" if r.get("charRetention") is not None else "—"
+        uniq = f"{r['uniqueCharRetention']:.0%}" if r.get("uniqueCharRetention") is not None else "—"
         lines.append(
             f"| {r['caseId']} | {r['durationSeconds']:.0f}s | {r['status']}"
             f"{'(' + str(r['errorType']) + ')' if r.get('errorType') else ''} "
-            f"| {seg} | {r['inputPunctRatio']:.0%} | {ret} | {r.get('overviewChars') if r.get('overviewChars') is not None else '—'} "
+            f"| {seg} | {r['inputPunctRatio']:.0%} | {uniq} | {ret} "
+            f"| {r.get('overviewChars') if r.get('overviewChars') is not None else '—'} "
             f"| {r.get('minutesChars') if r.get('minutesChars') is not None else '—'} "
             f"| {r.get('minutesHeadings') if r.get('minutesHeadings') is not None else '—'} "
             f"| {r.get('emptyPhraseCount') if r.get('emptyPhraseCount') is not None else '—'} "
@@ -322,9 +386,10 @@ def main() -> int:
         print("|---|---|---|---|---|")
         for r in rows:
             b = bmap.get(r["caseId"], {})
-            for key in ("cleanedSegments", "minutesChars", "minutesHeadings",
+            for key in ("finishReason", "cleanedSegments", "uniqueCharRetention",
+                        "dedupLossRatio", "minutesChars", "minutesHeadings",
                         "emptyPhraseCount", "overviewChars", "decisionCount",
-                        "actionCount", "actionsWithOwner"):
+                        "actionCount", "actionsWithOwner", "metaCommentCount"):
                 bv, nv = b.get(key), r.get(key)
                 if bv is None and nv is None:
                     continue
