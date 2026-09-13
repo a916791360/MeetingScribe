@@ -266,6 +266,16 @@ struct TranscriptSegment: Codable, Identifiable, Hashable, Sendable {
     var end: TimeInterval
     var text: String
     var confidence: Double
+    /// 这一段**被人手改过**（P1-4 的就地编辑）。
+    ///
+    /// 为什么必须记到**段**而不是只记到会话：`TranscriptCleaner.applyingTerminology`
+    /// 在每次「重新整理纪要」时都会跑一遍，而用户手改的那句正是**已经被确认过的真相**。
+    /// 只记到会话级的话，改过的段还会被术语表再替换一次 —— 用户改掉「课考」，
+    /// 术语表可能又把它换回去，**改了半天白改，而且没有任何报错**。
+    ///
+    /// Optional + 合成 `Codable`：老会话没有这个键照样能解出来（nil），
+    /// 也不会往没有编辑过的段上写一个多余的 `null`。
+    var manuallyEditedAt: Date?
 
     var timeLabel: String {
         "\(start.clockLabel) - \(end.clockLabel)"
@@ -684,6 +694,15 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     /// 它只用来算显示值，永远不超过 `(已完成段 + 0.92) / 总段数`，
     /// 所以某一段真跑完时进度只会继续往前，不会往回缩。
     var processingChunkStartedAt: Date?
+    /// 这场会的逐字稿**被人改过**（最后一次编辑的时间）。
+    ///
+    /// 它不是"编辑计数"的一个缓存，而是「原文页那句话还成不成立」的判据：
+    /// 没改过时页眉说「原汁原味保留转写」，改过之后这句话就成了假话 ——
+    /// 必须换一句（同 2C 的 `summaryModel`：留 nil 才是字面事实）。
+    ///
+    /// 段级标记看 `TranscriptSegment.manuallyEditedAt`；本字段只回答
+    /// 「这场会动过没有」，好让不用遍历几百段的界面（页眉、副标题）便宜地拿到结论。
+    var transcriptEditedAt: Date?
 
     static func makeDraft(createdAt date: Date, captureMode: CaptureMode, folderName: String) -> MeetingSession {
         MeetingSession(

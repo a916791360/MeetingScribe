@@ -77,14 +77,24 @@ enum TranscriptCleaner {
     /// 所以「重新整理纪要」时会先过一遍这个函数，让用户刚加的纠错词立刻在这条已有记录上生效。
     /// 它刻意**只做替换**：不折叠复读、不并句、不丢段 —— 段数与时间戳一律不变，
     /// 只有字符按用户明示的方向变。用户没让改的地方，一个字都不动。
+    ///
+    /// **人工改过的段（`manuallyEditedAt != nil`）原样穿过**，见函数内注释。
     static func applyingTerminology(
         _ segments: [TranscriptSegment],
-        table: [String: String]
+        table: [String: String],
+        skippingManuallyEdited: Bool = true
     ) -> [TranscriptSegment] {
         guard !table.isEmpty, !segments.isEmpty else { return segments }
+        // 人工改过的段要**原样穿过**：用户会去改一句，是因为**他那句听清了**。
+        // 那句就是他确认过的真相，而术语表是「猜出来的纠错」—— 用猜的覆盖确认过的，
+        // 覆盖之后文本依然通顺、依然存得下、依然渲染得出来，**没有任何报错**。
+        // 用户只会觉得"我明明改过了，怎么又变回去"。
         return segments
             .sorted { $0.start < $1.start }
-            .map { applyTerminology($0, table) }
+            .map { segment in
+                if skippingManuallyEdited, segment.manuallyEditedAt != nil { return segment }
+                return applyTerminology(segment, table)
+            }
     }
 
     /// 只做复读折叠，不做合并 / 替换 / 丢弃。

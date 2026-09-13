@@ -1383,26 +1383,31 @@ struct WorkbenchMinutesDocument: View {
 
 struct WorkbenchOriginalDocument: View {
     let session: MeetingSession
+    /// 就地编辑要**写回盘**（`updateTranscriptSegment`），所以这一页需要 store；
+    /// 注入链和纪要页一样，由上层给。
+    @EnvironmentObject private var store: MeetingStore
+    /// 正在编辑哪一段。**同一时刻只允许一段**：两段同时编辑时「保存」的语义是模糊的
+    /// （谁先落盘？后落盘的那份会不会把前一段的改动覆盖掉？），而这种模糊不会报错，
+    /// 只会让某一处的修改静默消失。
+    @State private var editingSegmentID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // 页眉做小：这是一行「日期 · 这是什么」的眉标，不是标题 ——
-            // 页面主角是下面成百上千行逐字稿，眉标不该跟它抢字号。
-            HStack(spacing: 7) {
-                Text(session.createdAt.formatted(date: .numeric, time: .shortened))
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
-                Text("原汁原味保留转写")
-                    .foregroundStyle(AppTheme.ink)
-            }
-            .font(.system(size: 12, weight: .medium))
+            header
 
             if session.transcriptSegments.isEmpty {
                 WorkbenchEmptyHint(text: "转写还没有内容。")
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(session.transcriptSegments.enumerated()), id: \.element.id) { index, segment in
-                        WorkbenchTranscriptDocumentRow(segment: segment)
+                        WorkbenchTranscriptDocumentRow(
+                            segment: segment,
+                            isEditing: editingSegmentID == segment.id,
+                            canEdit: canEdit,
+                            onBeginEditing: { editingSegmentID = segment.id },
+                            onCancel: { editingSegmentID = nil },
+                            onCommit: { text in commit(text, for: segment) }
+                        )
                         if index != session.transcriptSegments.count - 1 {
                             // 三页共用同一条分隔线画法（`WorkbenchDocumentRowDivider`），
                             // 起笔线也同一个 —— 原来这里是手写的一份,现在收归一处。
@@ -1411,6 +1416,53 @@ struct WorkbenchOriginalDocument: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 页眉：一行「日期 · 这一页是什么」的眉标，不是标题 ——
+    /// 页面主角是下面成百上千行逐字稿，眉标不该跟它抢字号。
+    ///
+    /// **被人改过之后那句话必须换掉。**「原汁原味保留转写」在有人手工校正过之后
+    /// 就不是事实了，而它看上去毫无异常（同 2C 的 `summaryModel`：留 nil 才是字面事实）。
+    /// 换成的这句同时解释了为什么被改过的段尾不再有机器置信度。
+    private var header: some View {
+        HStack(spacing: 7) {
+            Text(session.createdAt.formatted(date: .numeric, time: .shortened))
+                .foregroundStyle(AppTheme.muted)
+                .monospacedDigit()
+            Text(editedCount > 0 ? "已人工校正 \(editedCount) 处" : "原汁原味保留转写")
+                .foregroundStyle(AppTheme.ink)
+        }
+        .font(.system(size: 12, weight: .medium))
+    }
+
+    /// 这一场**此刻**能不能改。
+    ///
+    /// 转写没完成时改不了（还没写完的逐字稿没有稳定内容）；正在整理纪要时也改不了 ——
+    /// 那一句正是模型这次要读的材料，放它进来会得到"模型整理旧文本、用户看着新文本"。
+    private var canEdit: Bool {
+        session.status == .ready && !store.isProcessing && !store.isRecording
+    }
+
+    private var editedCount: Int {
+        TranscriptEditor.editedCount(in: session.transcriptSegments)
+    }
+
+    /// 提交一次编辑。返回**拒绝理由**（nil = 通过，此时父层已经退出编辑态）。
+    ///
+    /// 校验放在 `TranscriptEditor` 里而不是这里：它要判的是"这次改动该不该落盘"，
+    /// 而落盘与否决定用户明天打开还看不看得到自己的修改 —— 必须由单测钉住。
+    private func commit(_ text: String, for segment: TranscriptSegment) -> String? {
+        switch store.updateTranscriptSegment(
+            sessionID: session.id,
+            segmentID: segment.id,
+            text: text
+        ) {
+        case .saved, .unchanged:
+            editingSegmentID = nil
+            return nil
+        case let .rejected(reason):
+            return reason
         }
     }
 }
@@ -1576,21 +1628,53 @@ struct WorkbenchActionDocumentRow: View {
 
 struct WorkbenchTranscriptDocumentRow: View {
     let segment: TranscriptSegment
+    /// 这一行正在被编辑。
+    let isEditing: Bool
+    /// 是否允许进入编辑态（转写没完 / 正在整理时为 false）。
+    let canEdit: Bool
+    let onBeginEditing: () -> Void
+    let onCancel: () -> Void
+    /// 返回拒绝理由；nil = 通过。
+    let onCommit: (String) -> String?
+
+    @State private var draft = ""
+    /// 就地拒绝的理由（比如"不能改成空"）。它必须显示在**这一行**上 ——
+    /// 只往底栏状态里塞一句的话，用户的眼睛在段落这里，等于没告诉他。
+    @State private var rejection: String?
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        // 基线对齐：11pt 的时间戳和置信度要落在正文**第一行的基线**上。
-        // 用 `.top` 对齐时小的那两串字会浮在行顶（视觉上比正文高半行），
-        // 这正是此前这一页"看着不齐"的来源之一。
-        //
-        // 时间戳不再占一条独立的轨（v0.6.2 对齐修正）：原来它是一条 96pt 的左轨，
-        // 正文因此要在结构列左沿再往右 112pt 才起笔。现在它退成**行首的一个元信息
-        // 前缀**，整行的起笔线回到结构列左沿 —— 与速览 / 纪要同一条竖线，
-        // 换 Tab 时那一列文字不会横跳。
-        //
-        // 逐字稿这一页特意**不**把时间挪到上一行（速览 / 纪要那样做）：
-        // 一场会议有上百段，每段再占一行会让这一页长出一倍。而且同一场会议里
-        // 时间戳等长（1 小时内都是 `MM:SS`、超过 1 小时都是 `HH:MM:SS`），
-        // 正文的左边界仍然自然对齐。
+        Group {
+            if isEditing {
+                editor
+            } else {
+                reader
+            }
+        }
+        // 行宽 = 结构列：编辑态也不改，否则一进编辑整页会横向跳一下。
+        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
+        .padding(.vertical, 12)
+        .onChange(of: isEditing) { _, editing in
+            guard editing else { return }
+            draft = segment.text
+            rejection = nil
+            // 让输入框立刻拿到键盘。同一次更新里设 `isFocused` 通常是白设的
+            // （那时输入框还没进视图层级），下一次 runloop 才是稳的。
+            DispatchQueue.main.async { isFocused = true }
+        }
+    }
+
+    // MARK: - 只读态
+
+    /// 基线对齐：11pt 的时间戳和置信度要落在正文**第一行的基线**上。
+    /// 用 `.top` 对齐时小的那两串字会浮在行顶（视觉上比正文高半行），
+    /// 这正是此前这一页"看着不齐"的来源之一。
+    ///
+    /// 逐字稿这一页特意**不**把时间挪到上一行（速览 / 纪要那样做）：
+    /// 一场会议有上百段，每段再占一行会让这一页长出一倍。而且同一场会议里
+    /// 时间戳等长（1 小时内都是 `MM:SS`、超过 1 小时都是 `HH:MM:SS`），
+    /// 正文的左边界仍然自然对齐。
+    private var reader: some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
             Text(segment.start.clockLabel)
                 .font(.system(size: 11, weight: .semibold))
@@ -1607,17 +1691,142 @@ struct WorkbenchTranscriptDocumentRow: View {
 
             Spacer(minLength: AppTheme.space4)
 
-            // 置信度是「机器给的参考值」，比时间戳更次要：同样的字级与颜色，
-            // 但字重更轻，右对齐在一列里，好让人扫一眼又不会跟正文抢。
-            Text(segment.confidence.confidenceLabel)
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(AppTheme.muted)
-                .monospacedDigit()
-                .frame(width: 40, alignment: .trailing)
+            trailing
         }
-        // 行宽 = 结构列：置信度那一列因此贴住分隔线的右端（1221）。
-        .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
-        .padding(.vertical, 12)
+        // 双击整行也能进编辑（与行尾那颗铅笔等价）。**不把它当成唯一入口**：
+        // 正文开了文本选择，双击在文本上会变成"选中一个词" ——
+        // 这正是必须有铅笔按钮的原因（一个可能被系统抢走的手势不能是唯一的路）。
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            if canEdit { onBeginEditing() }
+        }
+    }
+
+    private var trailing: some View {
+        HStack(spacing: AppTheme.space2) {
+            if let editedAt = segment.manuallyEditedAt {
+                // 人工改过的段**不再显示置信度**：那个数字是机器对原文的把握，
+                // 而这段已经被人一字一句看过了。继续摆一个「62%」只会让人怀疑
+                // 自己刚改过的东西，而它想表达的其实已经过期了。
+                // 用 `help` 把时间点留着（不占版面，但问得出来）。
+                Text("已校正")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AppTheme.muted)
+                    .frame(width: 40, alignment: .trailing)
+                    .help("这一句由人工校正于 \(editedAt.formatted(date: .abbreviated, time: .shortened))")
+            } else {
+                // 置信度是「机器给的参考值」，比时间戳更次要：同样的字级与颜色，
+                // 但字重更轻，右对齐在一列里，好让人扫一眼又不会跟正文抢。
+                Text(segment.confidence.confidenceLabel)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AppTheme.muted)
+                    .monospacedDigit()
+                    .frame(width: 40, alignment: .trailing)
+            }
+
+            // 编辑入口。**常驻**（怕它变成"藏起来的功能"：用户根本不知道能改），
+            // 颜色就用 `muted` —— 与同一行的置信度、时间戳**同一档**，
+            // 所以整行右端仍是"一列元信息"，铅笔只是其中一件。
+            //
+            // 为什么不再乘一个 opacity：`muted` 对纸面本来只有 4.86:1（像素实测 3.71:1），
+            // 乘 0.8 之后实测只剩 **2.71:1** —— 而这是**功能入口**（不是装饰），
+            // 非文字图形要 3:1（WCAG 1.4.11）。它看上去只是"淡了一点"，不会有任何人报 bug。
+            Button {
+                onBeginEditing()
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(WorkbenchStripIconButtonStyle())
+            .disabled(!canEdit)
+            .help("修改这一句（也可以双击这一段）")
+            .accessibilityLabel("修改这一句")
+        }
+    }
+
+    // MARK: - 编辑态
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                Text(segment.start.clockLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+                    .monospacedDigit()
+                    .lineLimit(1)
+
+                TextField("", text: $draft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14.5, weight: .regular, design: .default))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineSpacing(4.5)
+                    // 折行显示但**不许无限长**：一段改成一整页会把这一页的节奏毁掉，
+                    // 而且这种输入几乎没有正当用途。
+                    .lineLimit(1...12)
+                    .focused($isFocused)
+                    .onExitCommand { onCancel() }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(
+                        AppTheme.paperSoft,
+                        in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                            .stroke(isFocused ? AppTheme.accent : AppTheme.ruleStrong, lineWidth: isFocused ? 1.5 : 1)
+                    )
+
+                Button {
+                    submit()
+                } label: {
+                    Image(systemName: "checkmark")
+                }
+                .buttonStyle(WorkbenchStripIconButtonStyle())
+                .keyboardShortcut(.return, modifiers: [.command])
+                .disabled(!canSubmit)
+                .help("保存这一句（⌘↩）")
+                .accessibilityLabel("保存这一句")
+
+                Button {
+                    onCancel()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(WorkbenchStripIconButtonStyle())
+                .help("放弃这次修改（Esc）")
+                .accessibilityLabel("放弃这次修改")
+            }
+
+            if let rejection {
+                // **语义给图标、可读性给文字**（同 2D 的状态行）：`danger` 那一档是按
+                // "图标 / 描边 / 底盘"的量级调出来的，直接当 11pt 正文用，浅色下实测
+                // 只有 4.42:1（AA 要 4.5:1），而且看上去"只是红了一点"，
+                // 谁也不会为此报个 bug。措辞本身已经说清了这是拒绝，颜色只是提示。
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.danger)
+                    Text(rejection)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// 归一化之后没变 / 是空的，都不给保存 —— 一颗点了什么都不发生的按钮不如不给。
+    ///
+    /// 判据来自 `TranscriptEditor.verdict`，**不在这里重写一遍**：重写的那一份迟早
+    /// 会与 `apply` 走岔，而走岔的表现是"按钮亮着但点不动"（或反过来），不报错。
+    private var canSubmit: Bool {
+        if case .effective = TranscriptEditor.verdict(for: draft, against: segment.text) {
+            return true
+        }
+        return false
+    }
+
+    private func submit() {
+        rejection = onCommit(draft)
     }
 }
 

@@ -62,7 +62,7 @@ final class MeetingStore: ObservableObject {
     @Published var importAudioPresented: Bool = false
     @Published var errorMessage: String?
 
-    private let storage = SessionStorage()
+    private let storage: SessionStorage
     private let transcoder = AudioTranscoder()
     private let durationReader = AudioDurationReader()
     private let transcriber = WhisperCLIRunner()
@@ -98,7 +98,13 @@ final class MeetingStore: ObservableObject {
         static let summaryEndpoint = "meetingScribe.summaryEndpoint"
     }
 
-    init() {
+    /// `storage` 参数只为**测试**存在：要验「改一句逐字稿真的落到盘上」，
+    /// 就得让 store 把数据写进一个临时目录。不给这个入口的话，那条测试只能
+    /// 靠环境变量把整个进程的数据根改掉 —— 一旦哪天变量没生效，它就会写进
+    /// **用户真实的数据根**（这条已经被证明过一次，见 `SessionStorage.defaultRootURL`）。
+    /// 显式传进来的目录不存在"忘设就落到真实根"的可能。
+    init(storage: SessionStorage? = nil) {
+        self.storage = storage ?? SessionStorage()
         let defaults = Self.defaultRuntimePaths()
         let legacyDefaults = Self.legacyRuntimePaths()
         let storedCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath)
@@ -635,6 +641,54 @@ final class MeetingStore: ObservableObject {
         }
     }
 
+    /// 逐字稿就地编辑（方案 P1-4）：把某一段改成用户输入的文本，**立即落盘**。
+    ///
+    /// 为什么立即落盘、不给"保存全部"：用户改的是一句具体的转写，没有第二个动作
+    /// 会替他覆盖住它；而只要它攒在内存里，关窗 / 退出就没了 ——
+    /// 那时用户以为自己改过了（他确实点了保存），下次打开却发现白改。
+    ///
+    /// 为什么正在整理时**拒绝**：这一句正是整理模型这次要读的材料。放它进来会得到
+    /// 「模型整理的是旧文本、用户看着的是新文本」这种谁也解释不清的结果 ——
+    /// 与其这样，不如让用户等几秒（见"点了结果会变吗"那条判据）。
+    @discardableResult
+    func updateTranscriptSegment(
+        sessionID: UUID,
+        segmentID: UUID,
+        text: String
+    ) -> TranscriptEditor.Outcome {
+        if isProcessing || isRecording {
+            return .rejected("正在整理纪要，等它结束再改这一句。")
+        }
+
+        do {
+            var updated = try storage.session(with: sessionID)
+            let outcome = TranscriptEditor.apply(
+                text: text,
+                to: updated.transcriptSegments,
+                segmentID: segmentID
+            )
+            guard case let .saved(segments) = outcome else { return outcome }
+
+            updated.transcriptSegments = segments
+            // 全文是**派生**的，必须跟着一起走。落下一处不改，同一个会话里就有了
+            // 两份不一致的逐字稿（一份是段数组、一份是拼好的全文），
+            // 而哪一份被用到取决于走的是哪条路 —— 这种不一致只能靠"改就一起改"避免。
+            updated.transcriptText = segments.map(\.text).joined(separator: "\n")
+            updated.transcriptEditedAt = Date()
+            updated.updatedAt = Date()
+            try storage.save(updated)
+            replaceSession(updated)
+            selectedSessionID = updated.id
+            statusText = "已保存这句修改，可以重新整理纪要了"
+            errorMessage = nil
+            return .saved(segments)
+        } catch {
+            errorMessage = error.localizedDescription
+            statusText = error.localizedDescription
+            return .rejected(error.localizedDescription)
+        }
+    }
+
     func regenerateSummary(for session: MeetingSession) {
         guard session.status == .ready, !isRecording, !isProcessing else { return }
         guard !session.transcriptSegments.isEmpty else {
@@ -659,12 +713,20 @@ final class MeetingStore: ObservableObject {
                 // 只在转写那一刻跑一次 —— 那条已存盘的逐字稿不会自己变好。这里是唯一
                 // 一次能补上的机会：只做纯替换（不动段结构、不动时间戳），改到了才写回，
                 // 没改到就一个字都不碰盘。
+                //
+                // **以盘上的那份为准，不用调用方传进来的快照**：用户可能刚刚才在原文页
+                // 改过一句（`updateTranscriptSegment` 已落盘、也刷新了列表），但视图层
+                // 手里那份 `session` 是它自己构造时抓的 —— 拿它当输入，就是把用户刚改的
+                // 那句丢掉，而且丢得毫无声响（覆盖它的正是"看起来很正常"的旧文本）。
+                let current = try storage.session(with: session.id)
+                // 表替换会**跳过人工改过的段**（见 `applyingTerminology`）：用户改过的
+                // 那句是他确认过的事实，不能被"猜出来的纠错"再动一次。
                 let corrected = TranscriptCleaner.applyingTerminology(
-                    session.transcriptSegments,
+                    current.transcriptSegments,
                     table: glossary.replacementTable
                 )
                 let correctedText = corrected.map(\.text).joined(separator: "\n")
-                let didCorrect = corrected.map(\.text) != session.transcriptSegments.map(\.text)
+                let didCorrect = corrected.map(\.text) != current.transcriptSegments.map(\.text)
 
                 let analysis = try await buildAnalysis(from: corrected)
                 try Task.checkCancellation()
