@@ -34,6 +34,7 @@ let package = Package(
                 "MeetingModels.swift",
                 "MeetingStore.swift",
                 "WhisperPipeline.swift",
+                "TranscriptCleaner.swift",
                 "SummaryEngine.swift",
                 "SummaryModelDiscovery.swift",
                 "KeychainStore.swift",
