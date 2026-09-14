@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 struct KeychainStore: Sendable {
@@ -7,13 +8,24 @@ struct KeychainStore: Sendable {
     private let service = "MeetingScribe.summary-model"
 
     func string(for provider: SummaryModelProvider) -> String? {
-        let query: [String: Any] = [
+        string(for: provider, allowAuthenticationUI: true)
+    }
+
+    /// 读取密文。后台处理链路必须传 `allowAuthenticationUI: false`，否则 macOS 可能会
+    /// 在转写结束后弹系统密码框，把"停止并整理"卡住。
+    func string(for provider: SummaryModelProvider, allowAuthenticationUI: Bool) -> String? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: provider.rawValue,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        if !allowAuthenticationUI {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

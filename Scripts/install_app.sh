@@ -14,7 +14,10 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
     sleep 1
 fi
 
-rm -rf "$INSTALL_PATH"
+if [[ -e "$INSTALL_PATH" ]]; then
+    TRASH_TARGET="$HOME/.Trash/${APP_NAME}-$(date +%Y%m%d-%H%M%S).app"
+    mv "$INSTALL_PATH" "$TRASH_TARGET"
+fi
 ditto "$APP_DIR" "$INSTALL_PATH"
 open "$INSTALL_PATH"
 

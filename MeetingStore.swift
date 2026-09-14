@@ -1131,7 +1131,7 @@ final class MeetingStore: ObservableObject {
         let settings = summarySettings
         let enteredKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = enteredKey.isEmpty
-            ? keychain.string(for: settings.provider)
+            ? keychain.string(for: settings.provider, allowAuthenticationUI: false)
             : enteredKey
 
         do {
