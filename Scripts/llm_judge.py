@@ -299,6 +299,211 @@ def load_rows(corpus: pathlib.Path) -> list[tuple[str, dict, dict]]:
     return out
 
 
+# ---------------------------------------------------------------- 报告渲染
+#
+# 渲染与「跑」分开：报告是**能从产物重建**的东西。
+# 为什么必须分开：报告格式总会改（加一列、改判定口径），而**分数是花真钱跑出来的**。
+# 不分开的话，每次改格式都得重调一遍模型 —— 而重跑会得到**不同的分数**（抖动），
+# 于是「只改了个排版」会顺手把上周的结论也改掉。`--report-only` 就是为这件事存在的。
+
+
+def render_report(results: dict, model: str, origin: str, repeat: int,
+                  product_vendor: str) -> tuple[str, list[str], list[str]]:
+    """把 results 渲染成报告。返回 (报告正文, 未达标清单, 不稳定清单)。
+
+    纯函数：不调模型、不写文件 —— 所以「跑完直接渲染」与「--report-only 重渲染」
+    拿到的一定是同一份结果。
+    """
+    dims = list(DIMENSIONS)
+    empty_cases = [cid for cid, e in results.items() if e.get("expect") == "emptyState"]
+    content_cases = [cid for cid, e in results.items() if e.get("expect") != "emptyState"]
+    lines = ["# LLM 裁判报告", "",
+             f"- 裁判模型：`{model}`（来源：{origin}）",
+             f"- 待评产出模型：`{product_vendor or '未知'}`",
+             f"- 待评 case：{len(results)}"
+             f"（有内容 {len(content_cases)}　期望空态 {len(empty_cases)}）",
+             # 产物必须自带"怎么跑出来的"：同一份产出的分数会随 repeat 变，
+             # 不写下来，过两周看这张表就分不清是稳的还是掷硬币掷出来的。
+             f"- 每维重复次数：{repeat}"
+             + ("　⚠️ **单次跑，仅供参考**（实测同维度出现过 [2,4,4] 的抖动）"
+                if repeat == 1 else ""),
+             f"- 打分口径：1~4，4 最好；**任一维度中位数 < {PASS_THRESHOLD} 即未过**",
+             ]
+    if empty_cases:
+        lines.append(
+            f"- **`n/a` = 不适用**：{'、'.join(f'`{c}`' for c in empty_cases)} "
+            f"期望走空态（本来就不该有内容），只评{'、'.join(DIMENSIONS[d] for d in EMPTY_STATE_DIMENSIONS)}，"
+            f"其余维度不计入统计 —— 对一场本该没内容的会去量「有多少废话」「明天该做什么」，"
+            f"必然得低分，而这个低分会被误读成质量差")
+    lines += ["",
+              "| case | " + " | ".join(DIMENSIONS[d] for d in dims) + " | 均值 |",
+              "|---" * (len(dims) + 2) + "|"]
+    per_dim: dict[str, list[int]] = {d: [] for d in dims}
+    for cid, entry in results.items():
+        cells, vals = [], []
+        for d in dims:
+            got = entry["dimensions"].get(d) or {}
+            s = got.get("score")
+            if s is None:
+                cells.append("n/a" if got.get("notApplicable") else "—")
+            else:
+                cells.append(str(s))
+            if isinstance(s, int):
+                vals.append(s)
+                # ⚠️ 聚合**只收有内容的场**。
+                # 空态场也有一维忠实度（"有没有编造出不存在的会议内容"），但它和有内容场
+                # 问的**不是同一个问题**，而且"空场不乱编"太容易拿到 4 分 —— 混进来等于
+                # 白送一个高分，把真实缺陷的中位抬上去。实测（2026-09-14）就踩了这个：
+                # 忠实度聚合一度显示「4 场未达 / 1 场达标」，那个"1 场达标"就是空态场。
+                if cid in content_cases:
+                    per_dim[d].append(s)
+        mean_cell = f"{statistics.mean(vals):.2f}" if vals else "—"
+        if len(vals) < len(dims):
+            # 均值只按适用的维度算 —— 不写清楚，空态场的 4.00 会被拿去和四维均值比。
+            mean_cell += f"（{len(vals)} 维）"
+        lines.append(f"| {cid} | " + " | ".join(cells) + f" | {mean_cell} |")
+
+    lines += ["", "## 维度判定", "",
+              "| 维度 | 中位数 | 各场中位 | 稳定性 | 判定 |",
+              "|---|---|---|---|---|"]
+    failures, unstable = [], []
+    for d in dims:
+        vals = per_dim[d]
+        if not vals:
+            reason = ("本语料没有适用这一维的**有内容** case" if any(
+                (e["dimensions"].get(d) or {}).get("notApplicable") for e in results.values())
+                else "本轮没有拿到分数")
+            lines.append(f"| {DIMENSIONS[d]} | — | — | — | 不可算（{reason}） |")
+            continue
+        med = statistics.median(vals)
+        # 稳定性判据：**看每一场的中位落在线的哪一侧**，而不是算方差。
+        #   - 每场都 < 线  → 「未达」是稳的（换一场也还是未达），可以当依据；
+        #   - 每场都 ≥ 线  → 「达标」是稳的；
+        #   - 有的达标有的未达 → 这个中位数**随语料构成变化**，谁拿它下结论谁倒霉。
+        # 实测（2026-09-14，repeat=3）：忠实度 2/2/2/2、覆盖度 4/4/4/4、可执行性 1/2/2/2
+        # 都是一致的；而信息密度 3/4/2/1 —— 它的中位 2.5 就是撞线的产物。
+        lows = [v for v in vals if v < PASS_THRESHOLD]
+        if not lows:
+            judge, stable = "达标", "一致（每场都达标）"
+        elif len(lows) == len(vals):
+            judge, stable = "未达", "一致（每场都未达）"
+        else:
+            judge = "达标" if med >= PASS_THRESHOLD else "未达"
+            stable = (f"⚠️ **不一致（{len(lows)} 场未达 / {len(vals) - len(lows)} 场达标）"
+                      f"→ 随语料构成变化，不能当依据**")
+            unstable.append(f"{DIMENSIONS[d]}（各场中位 {'/'.join(str(int(v)) for v in vals)}）")
+        lines.append(f"| {DIMENSIONS[d]} | {med:g} | "
+                     f"{'/'.join(str(int(v)) for v in vals)} | {stable} | {judge} |")
+        if judge == "未达":
+            failures.append(f"{DIMENSIONS[d]} 中位数 {med:g} < {PASS_THRESHOLD}")
+
+    if failures:
+        # ⚠️ 这条不是客套话，是实测教训（2026-09-14，long-full 忠实度）：
+        # 同一份产出跑四次得到 [3,1,2,3]，而最低那次的三条指控回到逐字稿一核对 ——
+        #   · "12份"被判"无依据"，可逐字稿 [2266s] 明写「那就是12份」→ **误报**；
+        #   · "8小时超时"被判"被误记为 80"，可逐字稿里**既没有「8小时」也没有「八小时」**
+        #     → 它替原文编了一个它想要的版本，用来证明产出写错了 → **虚构引文**；
+        #   · "六亿个同事"确实错（应为"六个"），但那是**转写听错**、产出如实保留 ——
+        #     它在判**正确性**，不是**忠实性**。
+        # 所以负分只是**线索**，不是结论。抽 1~2 条回原文核对是必经步骤，不是可选项。
+        lines += ["", "> ⚠️ **负分先核对，再动手改代码。** 实测（2026-09-14）：裁判的指控里出现过"
+                      "**误报**（逐字稿明写的句子被判「无依据」）、**虚构引文**"
+                      "（它替原文编了一个版本来证明产出写错）、以及把**转写听错**"
+                      "当成**模型幻觉**。它给的是线索，不是判决 —— "
+                      "**任何负分在拿去改产品之前，必须抽 1~2 条回到逐字稿核对。**"]
+
+    if empty_cases:
+        lines += ["", "## 期望空态的 case（单独判，不混进上面的中位）", "",
+                  "`n/a` 的维度本来就不该测（见上）。它的**忠实度**仍然要测 —— 问的是"
+                  "「有没有编造出不存在的会议内容」，**判定也单独走**：", "",
+                  "| case | 忠实度 | 判定 |", "|---|---|---|"]
+        for cid in empty_cases:
+            got = results[cid]["dimensions"].get("faithfulness") or {}
+            s = got.get("score")
+            if got.get("error"):
+                lines.append(f"| {cid} | — | 跑失败（{got['error']}） |")
+                continue
+            if not isinstance(s, int):
+                lines.append(f"| {cid} | — | 不可算 |")
+                continue
+            ok = s >= PASS_THRESHOLD
+            lines.append(f"| {cid} | {s} | {'达标' if ok else '未达'} |")
+            if not ok:
+                # 空态场编造内容 = 无中生有一场会，是最严重的一类问题，必须计入失败。
+                failures.append(
+                    f"{cid}（期望空态）忠实度 {s} < {PASS_THRESHOLD}：编造了不存在的会议内容")
+
+    lines += ["", "## 逐条细节", ""]
+    for cid, entry in results.items():
+        lines.append(f"### {cid}")
+        for d in dims:
+            got = entry["dimensions"].get(d) or {}
+            if got.get("notApplicable"):
+                lines.append(f"- **{DIMENSIONS[d]}**：n/a（{got['notApplicable']}）")
+                continue
+            if got.get("error"):
+                lines.append(f"- **{DIMENSIONS[d]}**：跑失败（{got['error']}）")
+                continue
+            if got.get("score") is None:
+                lines.append(f"- **{DIMENSIONS[d]}**：未跑")
+                continue
+            runs = got.get("runs") or []
+            # 重复跑之间分数不一致时如实标出来：那是这条维度**信噪比**的直接证据，
+            # 也是「这个分该不该被采信」的第一手材料。
+            spread_note = f"（各次 {runs}）" if len(set(runs)) > 1 else ""
+            lines.append(f"- **{DIMENSIONS[d]}** {got['score']}/4{spread_note}："
+                         f"{got.get('note', '')}")
+            for key_name, label in (("unsupported", "无依据"), ("missed", "漏掉"),
+                                    ("fluff", "废话"), ("missing", "缺要素")):
+                items = got.get(key_name)
+                if isinstance(items, list) and items:
+                    for it in items[:6]:
+                        if isinstance(it, dict):
+                            it = f"{it.get('claim', '')}（{it.get('kind', '')}）"
+                        lines.append(f"    - {label}：{it}")
+        lines.append("")
+
+    if unstable:
+        lines += ["", "## ⚠️ 不能当依据的维度", "",
+                  "下面这些维度**各场中位落在了线的两侧** —— 也就是说「达标还是未达」"
+                  "取决于语料里放了哪几场，不取决于产品。**先别用它下结论**："
+                  "要么把 `--repeat` 加大到中位稳定，要么承认这条维度在本语料上测不出结论。", ""]
+        for u in unstable:
+            lines.append(f"- {u}")
+    return "\n".join(lines), failures, unstable
+
+
+def report_only(corpus: pathlib.Path, rows: list[tuple[str, dict, dict]]) -> int:
+    """只用已存的 judge/*.json 重渲染报告 —— 不调模型、不花钱。
+
+    用途：报告格式改了要重出，或者想复核两周前那一跑到底写了什么。
+    """
+    out_dir = corpus / "judge"
+    results: dict[str, dict] = {}
+    for cid, _case, _run in rows:
+        p = out_dir / f"{cid}.json"
+        if p.exists():
+            results[cid] = json.loads(p.read_text(encoding="utf-8"))
+    if not results:
+        print(f"{out_dir} 里没有打分结果，先完整跑一次 --judge。", file=sys.stderr)
+        return 1
+    first = next(iter(results.values()))
+    repeat = 1
+    for e in results.values():
+        for got in (e.get("dimensions") or {}).values():
+            repeat = max(repeat, len(got.get("runs") or []))
+    report, _failures, unstable = render_report(
+        results, first.get("judgeModel", "?"),
+        "judge/*.json（本次未调用模型）", repeat, first.get("productModel", ""))
+    (out_dir / "report.md").write_text(report, encoding="utf-8")
+    print(report)
+    print(f"\n产物：{out_dir.relative_to(REPO) if out_dir.is_relative_to(REPO) else out_dir}"
+          f"（由已存结果重渲染，未调用模型）")
+    if unstable:
+        print("\n⚠️ 有维度不能当依据：" + "；".join(unstable), file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default=None)
@@ -307,6 +512,9 @@ def main() -> int:
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--dry-run", action="store_true", help="只打印提示词，不调模型")
     ap.add_argument("--check", action="store_true", help="任一维度低于阈值就非零退出")
+    ap.add_argument("--report-only", action="store_true",
+                    help="不调模型，只用已存的 judge/*.json 重渲染报告"
+                         "（改了报告格式后不用再花钱跑一次）")
     ap.add_argument("--repeat", type=int, default=1,
                     help="每个维度调用几次取中位（单次 LLM 打分有 ±1 抖动，想稳就设 3）")
     ap.add_argument("--allow-same-vendor", action="store_true",
@@ -321,6 +529,9 @@ def main() -> int:
     if not rows:
         print(f"没有可评的 case（语料：{corpus}）。先跑 --run 产出 runs/。", file=sys.stderr)
         return 1
+
+    if args.report_only:
+        return report_only(corpus, rows)
 
     base, model, key, origin = resolve_judge(args)
     print(f"# LLM 裁判\n")
@@ -433,86 +644,8 @@ def main() -> int:
         return 0
 
     # ---------------- 汇总
-    dims = list(DIMENSIONS)
-    empty_cases = [cid for cid, e in results.items() if e.get("expect") == "emptyState"]
-    lines = ["# LLM 裁判报告", "",
-             f"- 裁判模型：`{model}`（来源：{origin}）",
-             f"- 待评产出模型：`{summarizer_vendor_of(rows[0][2]) or '未知'}`",
-             f"- 待评 case：{len(results)}",
-             # 产物必须自带"怎么跑出来的"：同一份产出的分数会随 repeat 变，
-             # 不写下来，过两周看这张表就分不清是稳的还是掷硬币掷出来的。
-             f"- 每维重复次数：{max(1, args.repeat)}"
-             + ("　⚠️ **单次跑，仅供参考**（实测同维度出现过 [2,4,4] 的抖动）"
-                if args.repeat == 1 else ""),
-             f"- 打分口径：1~4，4 最好；**任一维度中位数 < {PASS_THRESHOLD} 即未过**",
-             ]
-    if empty_cases:
-        lines.append(
-            f"- **`n/a` = 不适用**：{'、'.join(f'`{c}`' for c in empty_cases)} "
-            f"期望走空态（本来就不该有内容），只评{'、'.join(DIMENSIONS[d] for d in EMPTY_STATE_DIMENSIONS)}，"
-            f"其余维度不计入统计 —— 对一场本该没内容的会去量「有多少废话」「明天该做什么」，"
-            f"必然得低分，而这个低分会被误读成质量差")
-    lines += ["",
-              "| case | " + " | ".join(DIMENSIONS[d] for d in dims) + " | 均值 |",
-              "|---" * (len(dims) + 2) + "|"]
-    per_dim: dict[str, list[int]] = {d: [] for d in dims}
-    for cid, entry in results.items():
-        cells, vals = [], []
-        for d in dims:
-            got = entry["dimensions"].get(d) or {}
-            s = got.get("score")
-            if s is None:
-                cells.append("n/a" if got.get("notApplicable") else "—")
-            else:
-                cells.append(str(s))
-            if isinstance(s, int):
-                vals.append(s)
-                per_dim[d].append(s)
-        mean_cell = f"{statistics.mean(vals):.2f}" if vals else "—"
-        if len(vals) < len(dims):
-            # 均值只按适用的维度算 —— 不写清楚，空态场的 4.00 会被拿去和四维均值比。
-            mean_cell += f"（{len(vals)} 维）"
-        lines.append(f"| {cid} | " + " | ".join(cells) + f" | {mean_cell} |")
-    lines += ["", "## 维度判定", "", "| 维度 | 中位数 | 判定 |", "|---|---|---|"]
-    failures = []
-    for d in dims:
-        vals = per_dim[d]
-        if not vals:
-            reason = ("本语料没有适用这一维的 case" if any(
-                (e["dimensions"].get(d) or {}).get("notApplicable") for e in results.values())
-                else "本轮没有拿到分数")
-            lines.append(f"| {DIMENSIONS[d]} | — | 不可算（{reason}） |")
-            continue
-        med = statistics.median(vals)
-        ok = med >= PASS_THRESHOLD
-        lines.append(f"| {DIMENSIONS[d]} | {med:g} | {'达标' if ok else '未达'} |")
-        if not ok:
-            failures.append(f"{DIMENSIONS[d]} 中位数 {med:g} < {PASS_THRESHOLD}")
-    lines += ["", "## 逐条细节", ""]
-    for cid, entry in results.items():
-        lines.append(f"### {cid}")
-        for d in dims:
-            got = entry["dimensions"].get(d) or {}
-            if got.get("notApplicable"):
-                lines.append(f"- **{DIMENSIONS[d]}**：n/a（{got['notApplicable']}）")
-                continue
-            if got.get("error"):
-                lines.append(f"- **{DIMENSIONS[d]}**：跑失败（{got['error']}）")
-                continue
-            if got.get("score") is None:
-                lines.append(f"- **{DIMENSIONS[d]}**：未跑")
-                continue
-            lines.append(f"- **{DIMENSIONS[d]}** {got['score']}/4：{got.get('note', '')}")
-            for key_name, label in (("unsupported", "无依据"), ("missed", "漏掉"),
-                                    ("fluff", "废话"), ("missing", "缺要素")):
-                items = got.get(key_name)
-                if isinstance(items, list) and items:
-                    for it in items[:6]:
-                        if isinstance(it, dict):
-                            it = f"{it.get('claim', '')}（{it.get('kind', '')}）"
-                        lines.append(f"    - {label}：{it}")
-        lines.append("")
-    report = "\n".join(lines)
+    report, failures, unstable = render_report(
+        results, model, origin, max(1, args.repeat), summarizer_vendor_of(rows[0][2]))
     (out_dir / "report.md").write_text(report, encoding="utf-8")
     print("\n" + report)
     print(f"\n产物：{out_dir.relative_to(REPO) if out_dir.is_relative_to(REPO) else out_dir}"
@@ -527,6 +660,11 @@ def main() -> int:
             # 也就是说 --repeat 1 时「达标/未达」的结论本身可能是掷硬币的结果。
             print("\n⚠️ 这是单次跑（--repeat 1）。本机实测同一份产出的同一维度出现过 "
                   "[2, 4, 4] 的抖动 —— 拿单次分数当结论前，先跑 --repeat 3 看中位。")
+        if unstable:
+            # 「没未达」不等于「达标是可采信的」：不一致的维度会让 --check 变绿，
+            # 而那只是因为碰巧多放了几场达标的。这种绿必须自己说出来。
+            print("\n⚠️ 有维度各场中位落在线的两侧，达标与否取决于语料构成："
+                  + "；".join(unstable), file=sys.stderr)
         print(f"\n✓ 四个维度都 ≥ {PASS_THRESHOLD}")
     return 0
 

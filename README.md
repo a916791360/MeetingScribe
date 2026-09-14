@@ -56,7 +56,8 @@ swift run
 ```bash
 Scripts/quality_report.sh --check      # 免密、免网络；CI 每次改动也跑这一条
 Scripts/quality_report.sh --run --diff # 真实语料跑一遍模型，再与基线对比（需要 MS_E2E_KEY）
-Scripts/quality_report.sh --judge      # 换异厂模型当裁判，给忠实度/覆盖度/密度/可执行性打分
+Scripts/quality_report.sh --judge --repeat 3   # 换异厂模型当裁判；要用分数当依据就必须 --repeat 3
+Scripts/probe_owner_gap.py             # 「待办没写谁负责」是材料没写还是没抽出来？（决定要不要上双声道）
 ```
 
 口径、评测集与「哪些指标算不了」见 [docs/verification/quality/README.md](docs/verification/quality/README.md)。
