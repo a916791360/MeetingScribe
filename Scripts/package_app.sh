@@ -68,7 +68,12 @@ else
     BIN_DIR="$FALLBACK_BIN_DIR"
 fi
 
-rm -rf "$APP_DIR"
+BUILD_TRASH_DIR="$ROOT_DIR/.build/app-trash"
+mkdir -p "$BUILD_TRASH_DIR"
+if [[ -e "$APP_DIR" ]]; then
+    TRASHED_APP="$BUILD_TRASH_DIR/$APP_NAME.$(date +%Y%m%d%H%M%S).app"
+    mv "$APP_DIR" "$TRASHED_APP"
+fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$BIN_DIR/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"

@@ -519,32 +519,38 @@ struct WorkbenchSessionWorkspace: View {
                 .padding(AppTheme.space6)
             case .ready:
                 VStack(spacing: 0) {
-                    // 原来这里有两行：会议头（元信息 + 两个图标按钮）、结果页 Tab。
-                    // 现在元信息上移到窗口副标题，两个图标并进 Tab 同一行，
-                    // 整条包在一片液态玻璃底托里，正文少了一整行、多了一件有体积的控制件。
-                    WorkbenchResultTabBar(
-                        selection: $selectedTab,
-                        isRefreshing: store.isProcessing,
-                        openFolderAction: store.openSelectedSessionFolder,
-                        regenerateAction: { store.regenerateSummary(for: session) }
-                    )
-
-                    ScrollView {
-                        WorkbenchResultDocument(
-                            session: session,
-                            tab: selectedTab,
-                            onSelectTab: { selectedTab = $0 }
+                    // 顶部控制条和正文共用同一个居中结构列。不要让 TabBar 与 ScrollView
+                    // 各自套 `contentInset`：两边各自算一次时，最容易出现截图里那种
+                    // “上面控件在一条线，下面正文卡片又缩进去一截”的错位。
+                    VStack(spacing: 0) {
+                        // 原来这里有两行：会议头（元信息 + 两个图标按钮）、结果页 Tab。
+                        // 现在元信息上移到窗口副标题，两个图标并进 Tab 同一行。
+                        WorkbenchResultTabBar(
+                            selection: $selectedTab,
+                            isRefreshing: store.isProcessing,
+                            openFolderAction: store.openSelectedSessionFolder,
+                            regenerateAction: { store.regenerateSummary(for: session) }
                         )
-                        // 速览页的要点要能点时间锚跳播放，而播放器是这一层的
-                        // `@StateObject`（播放条也在这一层）。注入到文档子树里，
-                        // 免得把播放器一路当参数传到最底下的那一行。
-                        .environmentObject(audioPlayer)
-                        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
-                        .padding(.horizontal, AppTheme.contentInset)
-                        .padding(.top, AppTheme.space3)
-                        .padding(.bottom, AppTheme.space6)
-                        .frame(maxWidth: .infinity, alignment: .center)
+
+                        ScrollView {
+                            WorkbenchResultDocument(
+                                session: session,
+                                tab: selectedTab,
+                                onSelectTab: { selectedTab = $0 }
+                            )
+                            // 速览页的要点要能点时间锚跳播放，而播放器是这一层的
+                            // `@StateObject`（播放条也在这一层）。注入到文档子树里，
+                            // 免得把播放器一路当参数传到最底下的那一行。
+                            .environmentObject(audioPlayer)
+                            .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+                            .padding(.top, AppTheme.space3)
+                            .padding(.bottom, AppTheme.space6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
+                    .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+                    .padding(.horizontal, AppTheme.contentInset)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
                     WorkbenchAudioPlayerBar(
                         player: audioPlayer,
@@ -582,13 +588,13 @@ struct WorkbenchSessionMeta: View {
 }
 
 /// 结果页控制条：左边是一个**贴合内容宽度**的分段控件（原文 / 速览 / 纪要），
-/// 右边是本场会议的两个页内动作，整行下面收一条发丝线。
+/// 右边是本场会议的两个页内动作；不再在整行下面额外画横向分割线。
 ///
 /// 为什么不再铺液态玻璃：玻璃的质感来自折射「背后有变化的内容」。这条控制条背后是
 /// 纯色纸面，没有东西可折射，玻璃就只剩一块发灰的底——用户的原话是「不精致、没质感」。
 /// 现在的做法回到 macOS 原生的纪律：容器只包住真正需要边界的东西（三个 Tab，
 /// 而且是贴合内容而不是拉通栏），右侧两个图标干脆不要底板，
-/// 质感交给排印、2pt 内衬和 1pt 发丝线。
+/// 质感交给排印、2pt 内衬和分段控件自身的 1pt 描边。
 ///
 /// 为什么把两个图标和 Tab 放在同一行：它们和 Tab 一样都是「针对这一场会议的动作」，
 /// 分两行放既白占一整行高度，也让右上角飘着两个孤立的小方块。
@@ -664,25 +670,15 @@ struct WorkbenchResultTabBar: View {
     let regenerateAction: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: AppTheme.space4) {
-                segmentedControl
-                Spacer(minLength: AppTheme.space4)
-                pageActions
-            }
-            .frame(height: AppTheme.segmentRowHeight)
-
-            // 发丝线把控制条和正文分开。它是这一行唯一的"边界"，
-            // 所以只有 1pt，且不参与任何圆角——一旦带圆角就又变成"容器"了。
-            Rectangle()
-                .fill(AppTheme.rule)
-                .frame(height: 1)
+        HStack(spacing: AppTheme.space4) {
+            segmentedControl
+            Spacer(minLength: AppTheme.space4)
+            pageActions
         }
-        .frame(maxWidth: AppTheme.contentColumn)
-        .padding(.horizontal, AppTheme.contentInset)
+        .frame(height: AppTheme.segmentRowHeight)
         // 会议头撤掉后，这条就是正文顶部第一件东西，上方留一档气口即可。
+        // 不再在下面画 1pt 发丝线：用户截图里这条线横贯页面，读起来像多余分割。
         .padding(.top, AppTheme.space4)
-        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     /// 轨道只比三个 Tab 宽一点点（**不拉通栏**）。
