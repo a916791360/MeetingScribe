@@ -727,10 +727,35 @@ final class MeetingStore: ObservableObject {
         }
     }
 
+    var canRegenerateSummaryNow: Bool {
+        if summarySettings.provider == .localRules { return true }
+        if summarySettings.provider.requiresAPIKey {
+            return !summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return !summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var summaryRegenerationBlockedMessage: String? {
+        if summarySettings.provider.requiresAPIKey,
+           summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "为了避免后台弹出钥匙串密码框，自动整理不会直接读取已保存的 API Key。请先打开设置页授权/保存一次，或切换成本地保守整理后再重新整理。"
+        }
+        if summarySettings.provider != .localRules,
+           summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请先在设置里选择或填写一个整理模型，再重新整理。"
+        }
+        return nil
+    }
+
     func regenerateSummary(for session: MeetingSession) {
         guard session.status == .ready, !isRecording, !isProcessing else { return }
         guard !session.transcriptSegments.isEmpty else {
             statusText = "这场会议还没有逐字稿，暂时无法整理纪要。"
+            return
+        }
+        if let blockedMessage = summaryRegenerationBlockedMessage {
+            statusText = blockedMessage
+            errorMessage = blockedMessage
             return
         }
 

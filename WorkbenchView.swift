@@ -459,22 +459,19 @@ struct WorkbenchDetailView: View {
         }
     }
 
-    /// 一场会议在标题栏上只能有**一个**状态迁移动作，且必须和当前状态对得上：
-    /// 转写中 → 停止处理；录音中 → 结束并转写；失败 → 重新处理；其余 → 开始录音。
+    /// 标题栏主按钮是**全局入口**，不被当前选中的失败记录劫持：
+    /// 转写中 → 停止处理；录音中 → 结束并转写；空闲 → 开始录音。
     ///
-    /// 原来它只看 isRecording / isProcessing（都是全局开关，不看选中的是哪场会议），
-    /// 于是在一条**失败**的会议记录上，主按钮显示的是「开始录音」——
-    /// 用户正对着一条出错的记录，主按钮却在招呼他开一场新录音。
+    /// 失败会议的「重新处理 / 重新整理」是这条记录自己的上下文动作，留在内容区。
+    /// 否则当软件里只有一条失败会议时，用户会找不到最重要的全局入口「开始录音」。
     private func primaryTitle(for session: MeetingSession) -> String {
         if store.isProcessing { return "停止处理" }
         if store.isRecording { return "结束并转写" }
-        if session.status == .failed { return "重新处理" }
         return "开始录音"
     }
 
     private func primaryIcon(for session: MeetingSession) -> String {
         if store.isProcessing || store.isRecording { return "stop.fill" }
-        if session.status == .failed { return "arrow.clockwise" }
         return "record.circle"
     }
 
@@ -492,8 +489,6 @@ struct WorkbenchDetailView: View {
             store.cancelProcessing()
         } else if store.isRecording {
             store.stopRecording()
-        } else if session.status == .failed {
-            store.retryProcessing(session)
         } else {
             store.startRecording()
         }
@@ -948,7 +943,7 @@ struct WorkbenchOverviewDocument: View {
                     title: "还没有生成速览",
                     message: emptyMessage,
                     retry: retryAction,
-                    actionTitle: "打开设置选择模型",
+                    actionTitle: store.canRegenerateSummaryNow ? "打开设置选择模型" : "打开设置授权模型",
                     action: { store.showSettings = true }
                 )
             }
@@ -1010,9 +1005,15 @@ struct WorkbenchOverviewDocument: View {
             || !session.analysis.actions.isEmpty
     }
 
-    /// 只有失败过（或结果不完整）才给「重试」。没配置模型时点重试是白点。
+    /// 只有失败过（或结果不完整）且当前配置能直接整理时才给「重新整理」。
+    ///
+    /// v0.9.0 为了避免后台钥匙串弹系统密码框，自动整理不再读取钥匙串密文。
+    /// 如果 API Key 只存在钥匙串、还没被用户在设置页授权读入内存，给「重试」就是假入口：
+    /// 点了只会闪一下再回到同样的空态。这里直接不给重试，只给「打开设置授权模型」。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.noticeMessage != nil else { return nil }
+        guard session.analysis.noticeMessage != nil,
+              store.canRegenerateSummaryNow
+        else { return nil }
         return { store.regenerateSummary(for: session) }
     }
 
@@ -1042,7 +1043,10 @@ struct WorkbenchOverviewDocument: View {
 
     private var emptyMessage: String {
         if session.analysis.isLocalFallback {
-            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
+            if let blockedMessage = store.summaryRegenerationBlockedMessage {
+                return "整理没有生成结果，原文仍然保留。\(blockedMessage)"
+            }
+            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重新整理，或者更换本机 / 云端整理模型后再试。"
         }
         if session.analysis.partialNotice != nil {
             return "这次只拿到了结果的一部分（速览没生成出来）。原文仍然保留，可以直接重试。"
@@ -1307,7 +1311,7 @@ struct WorkbenchMinutesDocument: View {
                     title: "还没有生成完整纪要",
                     message: emptyMessage,
                     retry: retryAction,
-                    actionTitle: "打开设置选择模型",
+                    actionTitle: store.canRegenerateSummaryNow ? "打开设置选择模型" : "打开设置授权模型",
                     action: { store.showSettings = true }
                 )
             }
@@ -1359,9 +1363,15 @@ struct WorkbenchMinutesDocument: View {
         session.analysis.minutesText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 只有失败过（或结果不完整）才给「重试」。没配置模型时点重试是白点。
+    /// 只有失败过（或结果不完整）且当前配置能直接整理时才给「重新整理」。
+    ///
+    /// v0.9.0 为了避免后台钥匙串弹系统密码框，自动整理不再读取钥匙串密文。
+    /// 如果 API Key 只存在钥匙串、还没被用户在设置页授权读入内存，给「重试」就是假入口：
+    /// 点了只会闪一下再回到同样的空态。这里直接不给重试，只给「打开设置授权模型」。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.noticeMessage != nil else { return nil }
+        guard session.analysis.noticeMessage != nil,
+              store.canRegenerateSummaryNow
+        else { return nil }
         return { store.regenerateSummary(for: session) }
     }
 
@@ -1372,7 +1382,10 @@ struct WorkbenchMinutesDocument: View {
     /// （用户被告知"没配模型"，于是去设置里翻半天，其实模型配得好好的）。
     private var emptyMessage: String {
         if session.analysis.isLocalFallback {
-            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重试，或者更换本机 / 云端整理模型后重新整理。"
+            if let blockedMessage = store.summaryRegenerationBlockedMessage {
+                return "整理没有生成结果，原文仍然保留。\(blockedMessage)"
+            }
+            return "整理模型这次没有返回可靠结果，原文仍然保留。可以直接重新整理，或者更换本机 / 云端整理模型后再试。"
         }
         if session.analysis.partialNotice != nil {
             return "这次只拿到了结果的一部分（纪要正文没生成出来）。原文仍然保留，可以直接重试。"
@@ -1910,10 +1923,10 @@ struct WorkbenchSummaryEmptyState: View {
                     // 所以给它实底主色；「打开设置选择模型」是退一步的做法，留描边。
                     // 顺序按用户要求：重试在左。
                     Button(action: retry) {
-                        Label("重试", systemImage: "arrow.clockwise")
+                        Label("重新整理", systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-                    .help("用当前模型再整理一次")
+                    .help("用当前模型重新整理一次，不重新转写原文")
                 }
 
                 Button(action: action) {

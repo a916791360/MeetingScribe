@@ -142,4 +142,38 @@ final class TranscriptEditPersistenceTests: XCTestCase {
         )
         XCTAssertEqual(corrected[1].text, "我们把报价单模板再核一遍", "没改过的段照常替换")
     }
+
+    @MainActor
+    func testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .custom,
+            modelName: "deepseek-v4.1-flash",
+            endpoint: "https://example.com/v1"
+        )
+        store.summaryAPIKeyInput = ""
+
+        XCTAssertFalse(
+            store.canRegenerateSummaryNow,
+            "后台整理不能为了重试去读钥匙串密文，否则自签名 App 会再次弹系统密码框"
+        )
+        XCTAssertNotNil(store.summaryRegenerationBlockedMessage)
+    }
+
+    @MainActor
+    func testLocalRulesCanRegenerateWithoutAPIKey() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .localRules,
+            modelName: SummaryModelProvider.localRules.defaultModelName,
+            endpoint: SummaryModelProvider.localRules.defaultEndpoint
+        )
+        store.summaryAPIKeyInput = ""
+
+        XCTAssertTrue(
+            store.canRegenerateSummaryNow,
+            "本地保守整理不需要 API Key，应该允许直接重新整理"
+        )
+        XCTAssertNil(store.summaryRegenerationBlockedMessage)
+    }
 }
