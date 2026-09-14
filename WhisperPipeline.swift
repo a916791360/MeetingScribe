@@ -71,6 +71,42 @@ struct WhisperRawToken: Codable {
     let id: Int?
 }
 
+/// 麦克风权限（TCC 的 `kTCCServiceMicrophone`）。
+///
+/// `AVAudioRecorder` 和 `SCStreamConfiguration.captureMicrophone` 都要这道门，而**屏幕录制
+/// 授权管不到它** —— 两者是各自独立的权限。
+///
+/// ⚠️ 没授权时 ScreenCaptureKit **不报错、也不给样本**：`.microphone` 那一路全程 0 帧，
+/// 表现与「系统根本不支持麦克风分离」**一模一样**，只是原文里永远没有说话人标注。
+/// 2026-09-14 实测就栽在这里 —— 采集层、接线、合并规则全对，白测两轮，
+/// 因为这条链路从来没问过麦克风权限。
+///
+/// 所以规矩是：**谁要用麦克风，谁就先问一次，并把"问之前什么状态、问完给没给"写进日志。**
+enum MicrophoneAccess {
+    /// 请求授权（必要时弹系统窗口），返回最终结果。
+    ///
+    /// 已经授权过 / 已经拒绝过时**不弹窗**，直接返回当前状态。
+    static func request() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+
+    /// 请求**之前**的状态。用来区分「从没问过」（`request()` 会弹窗）和
+    /// 「问过被拒」（不弹窗、只能去系统设置里改）—— 这两种情况的处置完全不同。
+    static var statusLabel: String {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return "已授权"
+        case .denied: return "曾被拒绝"
+        case .restricted: return "受系统限制"
+        case .notDetermined: return "从未询问"
+        @unknown default: return "未知状态"
+        }
+    }
+}
+
 @MainActor
 final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
     private let outputURL: URL
@@ -81,7 +117,7 @@ final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
     }
 
     func start() async throws {
-        let granted = await Self.requestMicrophoneAccess()
+        let granted = await MicrophoneAccess.request()
         guard granted else { throw PipelineError.transcriptionFailed("麦克风权限未授权。") }
 
         let settings: [String: Any] = [
@@ -105,14 +141,6 @@ final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
         recorder?.stop()
         recorder = nil
         return outputURL
-    }
-
-    static func requestMicrophoneAccess() async -> Bool {
-        await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                continuation.resume(returning: granted)
-            }
-        }
     }
 }
 
@@ -204,6 +232,27 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         guard granted else {
             throw PipelineError.transcriptionFailed(
                 "未获得屏幕与系统音频录制权限。如果刚刚允许，请完全退出并重新打开 MeetingScribe 后再试。"
+            )
+        }
+
+        // 麦克风是**另一道**权限门。缺了它 `captureMicrophone` 不会报错，
+        // 只是 `.microphone` 那一路全程 0 帧 —— 表现与"整条链路没接线"完全一样，
+        // 排查只能靠数据（2026-09-14 实测）。所以在这里问，并把结果写进日志。
+        //
+        // 授权失败**不抛**：拿不到麦克风只是没有说话人标注，录音本身照旧。
+        let microphoneStatusBefore = MicrophoneAccess.statusLabel
+        let microphoneGranted = await MicrophoneAccess.request()
+        if microphoneGranted {
+            Diagnostics.audio.notice(
+                "麦克风授权：已授权（请求前：\(microphoneStatusBefore, privacy: .public)）"
+            )
+        } else {
+            Diagnostics.audio.error(
+                """
+                麦克风授权：未拿到（请求前：\(microphoneStatusBefore, privacy: .public)）→ \
+                我方那一路不会有任何样本。去「系统设置 › 隐私与安全性 › 麦克风」允许 MeetingScribe \
+                后完全退出重开；本次录音继续，但原文不会有说话人标注。
+                """
             )
         }
 

@@ -1394,9 +1394,25 @@ final class MeetingStore: ObservableObject {
             name: DualTrackPaths.remoteNormalizedName,
             in: session
         ) else {
+            // 只有一路 → 不做说话人标注（"两路都拿到才算数"，见 DualTrackInput）。
+            // 但**必须把没用上的中间文件删掉**：`local.caf` / `remote.caf` 是中间产物，
+            // 留在会话目录里既占地方，又长得像"其实录到了两路"的证据。
+            // 2026-09-14 实测就留下过一个 1.9 MB 的 `remote.caf`（本地路缺失时提前返回，
+            // 系统声那一路还没来得及归一化）。
+            discardCaptureFiles(in: session)
+            Diagnostics.audio.notice("双声道不可用：只有一路，已退回单路且不标说话人")
             return nil
         }
         return DualTrackInput(local: local, remote: remote)
+    }
+
+    /// 兜底删掉双声道的中间文件（`.caf`）。正常路径上它们在归一化后就删了。
+    private func discardCaptureFiles(in session: MeetingSession) {
+        let urls = DualTrackPaths.captureURLs(in: storage.folderURL(for: session))
+        for url in [urls.local, urls.remote] where FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+            Diagnostics.audio.notice("清掉没用上的中间文件 \(url.lastPathComponent, privacy: .public)")
+        }
     }
 
     private func normalizedTrack(
