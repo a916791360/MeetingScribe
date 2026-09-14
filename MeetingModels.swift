@@ -294,6 +294,39 @@ enum TranscriptSpeaker: String, Codable, Hashable, Sendable {
     """
 }
 
+/// 双声道两路的**文件命名约定**（P2-2a）。
+///
+/// ## 为什么要单独抽出来
+///
+/// 这里有两组名字、四个文件，用途完全不同 —— 混起来会**静默**出事：
+///
+/// - `capture*`：录音时 `AudioTrackRecorder` 直接落的**原始**文件（`.caf`，无长度上限）。
+/// - `normalized*`：归一化之后真正交给 whisper 的 16 kHz 单声道 wav。
+///
+/// 两组名字**必须不同**：归一化是"读 `capture`、写 `normalized`"，同名会让
+/// `afconvert` 的输入输出撞在同一个文件上（要么原地截断，要么报错，两种都不是你想要的）。
+/// 这条用单测钉住（`DualTrackPathsTests`）。
+///
+/// `normalized*` 还是**存进会话记录、事后按名字找回来**用的那份
+/// （`MeetingStore.resolvedDualTracks(for:)`），所以它也**只能有这一处定义**。
+enum DualTrackPaths {
+    /// 我方（麦克风）那一路的原始录音文件名。
+    static let localCaptureName = "local.caf"
+    /// 对方（系统声）那一路的原始录音文件名。
+    static let remoteCaptureName = "remote.caf"
+    /// 归一化后的文件名；同时也是写进会话记录、事后找回来的名字。
+    static let localNormalizedName = "local.wav"
+    static let remoteNormalizedName = "remote.wav"
+
+    /// 录音开始时，两路原始文件的落盘位置。
+    static func captureURLs(in folder: URL) -> (local: URL, remote: URL) {
+        (
+            folder.appendingPathComponent(localCaptureName),
+            folder.appendingPathComponent(remoteCaptureName)
+        )
+    }
+}
+
 struct TranscriptSegment: Codable, Identifiable, Hashable, Sendable {
     var id: UUID = UUID()
     var start: TimeInterval

@@ -32,6 +32,7 @@ let package = Package(
                 "WorkbenchView.swift",
                 "WindowConfiguration.swift",
                 "MeetingModels.swift",
+                "Diagnostics.swift",
                 "MeetingStore.swift",
                 "WhisperPipeline.swift",
                 "AudioTrackRecorder.swift",

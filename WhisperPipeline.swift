@@ -167,8 +167,8 @@ private final class TrackStreamOutput: NSObject, SCStreamOutput {
 @MainActor
 final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate {
     private let movieURL: URL
-    private let localTrackURL: URL?
-    private let remoteTrackURL: URL?
+    private let localTrackURL: URL
+    private let remoteTrackURL: URL
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
     private var localRecorder: AudioTrackRecorder?
@@ -186,9 +186,14 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         label: "com.qingmeng.meetingscribe.audio-tracks"
     )
 
-    /// 双声道两路是**可选**的：不给 URL 就退化成"只录 `.mov`"，也就是改动前的行为。
-    /// 这条降级路径是故意留的 —— 说话人标注失败绝不能让录音本身失败。
-    init(movieURL: URL, localTrackURL: URL? = nil, remoteTrackURL: URL? = nil) {
+    /// 两路的落盘位置是**必填**的 —— 这里曾经是 `URL? = nil`，结果调用方忘了传，
+    /// 于是"双声道"整条链路静默退化成单路：编译通过、测试全绿、录出来一切正常，
+    /// 只是**永远没有说话人标签**（2026-09-14 实测踩到）。
+    ///
+    /// 降级仍然保留，但降级只应该发生在**运行时**（`addStreamOutput` 抛错、
+    /// 某一路全程没写出样本），不该发生在"参数没传"这种编译期就能拦下的地方。
+    /// 所以把"要不要双声道"交给**参数在不在**，而不是交给 `nil`。
+    init(movieURL: URL, localTrackURL: URL, remoteTrackURL: URL) {
         self.movieURL = movieURL
         self.localTrackURL = localTrackURL
         self.remoteTrackURL = remoteTrackURL
@@ -238,12 +243,18 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         // 这里不存在"两个独立采集源各自跑时钟、录到半小时就对不齐"的老问题。
         //
         // ⚠️ 加不上**不抛**：少一路就少一个说话人标注，录音本身照旧。
-        if let localTrackURL {
-            localRecorder = attachTrack(to: stream, url: localTrackURL, type: .microphone)
-        }
-        if let remoteTrackURL {
-            remoteRecorder = attachTrack(to: stream, url: remoteTrackURL, type: .audio)
-        }
+        localRecorder = attachTrack(
+            to: stream,
+            url: localTrackURL,
+            type: .microphone,
+            label: "我方（麦克风）"
+        )
+        remoteRecorder = attachTrack(
+            to: stream,
+            url: remoteTrackURL,
+            type: .audio,
+            label: "对方（系统声）"
+        )
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             stream.startCapture { [weak self] error in
@@ -285,14 +296,22 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     private func attachTrack(
         to stream: SCStream,
         url: URL,
-        type: SCStreamOutputType
+        type: SCStreamOutputType,
+        label: String
     ) -> AudioTrackRecorder? {
         let recorder = AudioTrackRecorder(url: url)
         let output = TrackStreamOutput(recorder: recorder, outputType: type)
         do {
             try stream.addStreamOutput(output, type: type, sampleHandlerQueue: Self.sampleQueue)
+            Diagnostics.audio.notice(
+                "挂上采样输出：\(label, privacy: .public) → \(url.lastPathComponent, privacy: .public)"
+            )
         } catch {
-            // 比如系统版本不认识 `.microphone`。少一路不算错，录音继续。
+            // 比如系统版本不认识 `.microphone`。少一路不算错，录音继续 ——
+            // 但**要留下痕迹**：静默少一路和"整条链路没接线"长得一模一样。
+            Diagnostics.audio.error(
+                "挂不上采样输出：\(label, privacy: .public)（\(error.localizedDescription, privacy: .public)）"
+            )
             return nil
         }
         trackOutputs.append(output)
@@ -309,7 +328,16 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     }
 
     private func makeResult() -> MixedRecordingResult {
-        MixedRecordingResult(
+        // 这一行是排查双声道问题的**分水岭**：写着"0 帧"= 挂上了但系统没投递样本；
+        // 写着"没挂上采样输出"= `addStreamOutput` 就失败了（上一行有 error 日志）。
+        Diagnostics.audio.notice(
+            """
+            两路收尾：我方 \(self.localRecorder?.diagnosticSummary ?? "没挂上采样输出", privacy: .public)；\
+            对方 \(self.remoteRecorder?.diagnosticSummary ?? "没挂上采样输出", privacy: .public)
+            """
+        )
+
+        return MixedRecordingResult(
             movieURL: movieURL,
             // 没写出内容的轨道当作"没有这一路"，别把一个 0 字节的文件交出去。
             localTrackURL: (localRecorder?.didWriteAudio ?? false) ? localTrackURL : nil,

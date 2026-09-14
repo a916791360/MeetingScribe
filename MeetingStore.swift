@@ -257,8 +257,20 @@ final class MeetingStore: ObservableObject {
         summaryRegenerationID = nil
         savePreferences()
 
+        // 两路的落盘位置必须**在这里**交给录音会话（`local.caf` / `remote.caf`）。
+        // 2026-09-14 这里漏过：构造时只传了 `movieURL`，另外两个参数吃默认值 nil，
+        // 于是双声道整条链路静默退化成单路 —— 录出来一切正常，就是永远没有说话人标签。
+        let trackURLs = DualTrackPaths.captureURLs(in: storage.folderURL(for: draft))
+        Diagnostics.audio.notice(
+            """
+            录音会话接线：我方 \(trackURLs.local.lastPathComponent, privacy: .public)、\
+            对方 \(trackURLs.remote.lastPathComponent, privacy: .public)
+            """
+        )
         let recorder = MixedRecordingSession(
-            movieURL: storage.sourceURL(for: draft, preferredFileName: "source.mov")
+            movieURL: storage.sourceURL(for: draft, preferredFileName: "source.mov"),
+            localTrackURL: trackURLs.local,
+            remoteTrackURL: trackURLs.remote
         )
         mixedSession = recorder
         Task {
@@ -1375,11 +1387,11 @@ final class MeetingStore: ObservableObject {
         guard let recording else { return nil }
         guard let local = try await normalizedTrack(
             recording.localTrackURL,
-            name: "local.wav",
+            name: DualTrackPaths.localNormalizedName,
             in: session
         ), let remote = try await normalizedTrack(
             recording.remoteTrackURL,
-            name: "remote.wav",
+            name: DualTrackPaths.remoteNormalizedName,
             in: session
         ) else {
             return nil
@@ -1392,10 +1404,14 @@ final class MeetingStore: ObservableObject {
         name: String,
         in session: MeetingSession
     ) async throws -> URL? {
-        guard let source, FileManager.default.fileExists(atPath: source.path) else { return nil }
+        guard let source, FileManager.default.fileExists(atPath: source.path) else {
+            Diagnostics.audio.notice("归一化跳过 \(name, privacy: .public)：原始录音文件不存在")
+            return nil
+        }
         let target = storage.inputURL(for: session, preferredFileName: name)
         try await transcoder.convertToWav(inputURL: source, outputURL: target)
         try? FileManager.default.removeItem(at: source)
+        Diagnostics.audio.notice("归一化完成 \(name, privacy: .public)")
         return target
     }
 
@@ -1420,7 +1436,13 @@ final class MeetingStore: ObservableObject {
 
         // 两路都没声音 = 整场就是一段静音。返回空数组，让上层按「材料不足」处理
         // （根本不调模型），而不是把一段静音交给 whisper 让它编出一整场会。
-        guard !plan.isEmpty else { return [] }
+        guard !plan.isEmpty else {
+            Diagnostics.audio.notice("转写计划为空：两路都没有可听信号，按「材料不足」处理")
+            return []
+        }
+        Diagnostics.audio.notice(
+            "转写计划：\(plan.map(\.speaker.displayName).joined(separator: "、"), privacy: .public)"
+        )
 
         var bySpeaker: [TranscriptSpeaker: [TranscriptSegment]] = [:]
         for (index, entry) in plan.enumerated() {
@@ -1438,10 +1460,14 @@ final class MeetingStore: ObservableObject {
             )
         }
 
-        return TranscriptMerger.merge(
+        let merged = TranscriptMerger.merge(
             local: bySpeaker[.local] ?? [],
             remote: bySpeaker[.remote] ?? []
         )
+        Diagnostics.audio.notice(
+            "合并结果：\(merged.count) 段，其中带说话人 \(merged.filter { $0.speaker != nil }.count) 段"
+        )
+        return merged
     }
 
     /// 这一路有没有声音。

@@ -49,6 +49,25 @@ final class AudioTrackRecorder: @unchecked Sendable {
         return failure
     }
 
+    /// 诊断用：一共写进去多少帧（`0` = 从头到尾一个样本都没写出来）。
+    ///
+    /// 这个数和 `failureReason` 一起进系统日志 —— 双声道出问题时，
+    /// "是没挂上采样输出、还是挂上了但一个样本都没来"，只能靠它们分辨。
+    var frameCount: AVAudioFramePosition {
+        lock.lock()
+        defer { lock.unlock() }
+        return framesWritten
+    }
+
+    /// 一句话讲清这一路的状态，给日志用。
+    var diagnosticSummary: String {
+        lock.lock()
+        defer { lock.unlock() }
+        if let failure { return "失败：\(failure)" }
+        if framesWritten == 0 { return "一个样本都没写出来（0 帧）" }
+        return "已写入 \(framesWritten) 帧"
+    }
+
     var outputURL: URL { url }
 
     /// `SCStreamOutput.stream(_:didOutputSampleBuffer:of:)` 的直通口。

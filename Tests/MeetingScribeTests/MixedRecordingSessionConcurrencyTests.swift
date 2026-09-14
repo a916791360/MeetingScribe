@@ -13,10 +13,14 @@ private final class UnsafeSendableBox<Value>: @unchecked Sendable {
 
 final class MixedRecordingSessionConcurrencyTests: XCTestCase {
     func testRecordingStartCallbackMayArriveOffMainActor() async throws {
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("MeetingScribe-delegate-test-\(UUID().uuidString).mov")
+        let temp = FileManager.default.temporaryDirectory
+        let outputURL = temp.appendingPathComponent("MeetingScribe-delegate-test-\(UUID().uuidString).mov")
         let session = await MainActor.run {
-            MixedRecordingSession(movieURL: outputURL)
+            MixedRecordingSession(
+                movieURL: outputURL,
+                localTrackURL: temp.appendingPathComponent("delegate-test-local-\(UUID().uuidString).caf"),
+                remoteTrackURL: temp.appendingPathComponent("delegate-test-remote-\(UUID().uuidString).caf")
+            )
         }
 
         let configuration = SCRecordingOutputConfiguration()
