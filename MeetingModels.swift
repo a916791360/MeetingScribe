@@ -260,6 +260,40 @@ struct SummaryModelSettings: Codable, Hashable, Sendable {
     }
 }
 
+/// 一段发言是**谁**说的（P2-2a 双声道）。
+///
+/// ⚠️ 取值来自**音轨来源**，不是声纹识别：`local` 是麦克风那一路（本机用户），
+/// `remote` 是系统声音那一路（会议软件里传出来的对方）。所以这个标签**只在双声道
+/// 录音里存在** —— 导入的音频、单路录音、以及升级前的全部老会话都是 `nil`，
+/// 界面与整理 prompt 遇到 `nil` 时什么都不显示，**绝不替它猜一个说话人**：
+/// 猜错的说话人是本项目最怕的那类"看不见的数据损坏"（读起来完全自然，永远没人发现）。
+enum TranscriptSpeaker: String, Codable, Hashable, Sendable {
+    /// 我方：麦克风那一路。
+    case local
+    /// 对方：系统声音那一路。
+    case remote
+
+    /// 界面上显示的名字。**同一个词只在这里写一次**，逐字稿页与整理素材共用。
+    var displayName: String {
+        switch self {
+        case .local: return "我方"
+        case .remote: return "对方"
+        }
+    }
+
+    /// 给整理模型看的**说话人约定**。只在材料里真的带了说话人时才拼进 prompt ——
+    /// 对一份没有说话人的材料解释"[我方] 表示什么"，是往 prompt 里塞假信息。
+    ///
+    /// 这一段是 P2-2a 的**目的本身**：`actionsWithOwnerRatio` 长期卡在 16%，
+    /// 材料侧天花板只有 22.9%，而这 22.9% 里相当一部分是"你负责"这类**跨方指代** ——
+    /// 双声道把它变得可判定之后，必须同时告诉模型"可以判定了"，否则它还是照旧写"会上讨论了"。
+    static let materialLegend = """
+    原文里的 [我方] 指本机麦克风里的说话人，[对方] 指会议软件里传来的声音；没有这两个标记的行就是没分出来，别猜。
+    凡原文标了说话人：结论、决策与待办都要写清**归属** —— 谁提的、谁答应的、谁负责，不要混成"会上讨论了"。
+    待办要能从原文看出归属就写进"谁来做"（写"我方"或"对方"），看不出来就留空，不要编。
+    """
+}
+
 struct TranscriptSegment: Codable, Identifiable, Hashable, Sendable {
     var id: UUID = UUID()
     var start: TimeInterval
@@ -277,8 +311,27 @@ struct TranscriptSegment: Codable, Identifiable, Hashable, Sendable {
     /// 也不会往没有编辑过的段上写一个多余的 `null`。
     var manuallyEditedAt: Date?
 
+    /// 这一段的说话人（P2-2a）。**只有双声道录音才有值**，见 `TranscriptSpeaker`。
+    ///
+    /// 同样必须 Optional：升级前的老会话里没有这个键，非 Optional 会让**所有老会话
+    /// 都读不出来**（Swift 合成的 `Decodable` 不理会属性默认值）。
+    var speaker: TranscriptSpeaker?
+
     var timeLabel: String {
         "\(start.clockLabel) - \(end.clockLabel)"
+    }
+
+    /// 送进整理模型的**唯一**行格式。
+    ///
+    /// 为什么必须钉在模型上、而不是留在 `SummaryEngine` 里：转写正文与分章**两处**
+    /// 都要拼这一行。两处各写一遍，就会出现"正文带着说话人、分章没带"这种
+    /// 静默不一致（本项目铁律：同一判据出现在第 2 处就必须抽函数 + 补单测）。
+    ///
+    /// 说话人缺失时**整段前缀都不出现**，不写 `[不明]` 之类的占位 —— 那会变成
+    /// 一条模型必须解释的假信息。
+    var materialLine: String {
+        let prefix = speaker.map { "[\($0.displayName)] " } ?? ""
+        return "[\(start.oneDecimalSeconds)] \(prefix)\(text)"
     }
 }
 
@@ -672,6 +725,13 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var status: MeetingStatus
     var sourceFileName: String
     var inputAudioFileName: String?
+    /// 双声道（P2-2a）两路音频的文件名：`local` 是麦克风（我方），`remote` 是系统声（对方）。
+    ///
+    /// 存下来是为了**重新处理**这条路径 —— 那一条不走录音，只能靠会话记录里这两个名字
+    /// 把两路找回来。老会话没有这两个键，所以必须 Optional（合成 `Decodable` 不理会默认值，
+    /// 写成非 Optional 会让升级后的所有老会话直接读不出来）。
+    var localAudioFileName: String?
+    var remoteAudioFileName: String?
     var transcriptText: String
     var transcriptSegments: [TranscriptSegment]
     var analysis: MeetingAnalysis
@@ -743,6 +803,14 @@ extension TimeInterval {
             return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
         }
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    /// 送进整理模型的时间戳（`12.3`）。
+    ///
+    /// 原来它是 `SummaryEngine.swift` 里的 `private extension`，`TranscriptSegment.materialLine`
+    /// 用不到它 —— 于是"正文拼一遍、分章再拼一遍"。挪到这里是为了让两处共用同一份实现。
+    var oneDecimalSeconds: String {
+        String(format: "%.1f", max(0, self))
     }
 }
 

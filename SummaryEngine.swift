@@ -263,6 +263,11 @@ struct MeetingSummaryEngine: Sendable {
         // 章节摘要是后面综合**唯一**的输入，专名在这里就该写对 —— 综合那一步拿不到原文，
         // 这里写错了后面没有任何机会纠正。所以术语约束也要给到这一层。
         let terminology = glossary.summaryInstruction
+        // 说话人约定同理只在**这一层**给：分章摘要之后的所有步骤都拿不到原文行，
+        // 也就不可能再看见 [我方]/[对方]。而且只有材料里真的有说话人时才给（P2-2a）。
+        let speakerLegend = segments.contains { $0.speaker != nil }
+            ? TranscriptSpeaker.materialLegend
+            : ""
         var batchStart = 0
 
         while batchStart < chapters.count {
@@ -281,6 +286,7 @@ struct MeetingSummaryEngine: Sendable {
                         输出简洁的章节摘要，并分别列出明确结论和明确待办。
                         待办必须包含清晰动作和对象；没有把握就留空。
                         \(terminology ?? "")
+                        \(speakerLegend)
                         输出格式：
                         章节摘要：……
                         明确结论：
@@ -1408,9 +1414,9 @@ struct MeetingSummaryEngine: Sendable {
     }
 
     private func makeTranscript(from segments: [TranscriptSegment]) -> String {
-        segments.map {
-            "[\($0.start.oneDecimalSeconds)] \($0.text)"
-        }.joined(separator: "\n")
+        // 行格式只有 `TranscriptSegment.materialLine` 一处实现（含说话人前缀），
+        // 下面分章用的也是它 —— 两处必须逐字一致，否则模型会拿到两套口径的同一份材料。
+        segments.map(\.materialLine).joined(separator: "\n")
     }
 
     private func makeChapters(
@@ -1422,7 +1428,7 @@ struct MeetingSummaryEngine: Sendable {
         var count = 0
 
         for segment in segments {
-            let line = "[\(segment.start.oneDecimalSeconds)] \(segment.text)"
+            let line = segment.materialLine
             if !current.isEmpty && count + line.count > maxCharacters {
                 chapters.append(current.joined(separator: "\n"))
                 current = []
@@ -1491,11 +1497,5 @@ struct MeetingSummaryEngine: Sendable {
     /// 但写成待办时它就是一件要做的事。
     static func looksUndecidedForAction(_ text: String) -> Bool {
         ["可能", "也许", "大概", "是否", "待定", "不确定"].contains(where: text.contains)
-    }
-}
-
-private extension TimeInterval {
-    var oneDecimalSeconds: String {
-        String(format: "%.1f", max(0, self))
     }
 }

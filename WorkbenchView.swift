@@ -1676,6 +1676,8 @@ struct WorkbenchTranscriptDocumentRow: View {
     /// 正文的左边界仍然自然对齐。
     private var reader: some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+            WorkbenchSpeakerLabel(speaker: segment.speaker)
+
             Text(segment.start.clockLabel)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.muted)
@@ -1748,6 +1750,10 @@ struct WorkbenchTranscriptDocumentRow: View {
     private var editor: some View {
         VStack(alignment: .leading, spacing: AppTheme.space2) {
             HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                // 编辑态也要带说话人标签：只读态有、编辑态没有的话，
+                // 一进编辑整行会横向跳一下（同一行宽 = 结构列的理由）。
+                WorkbenchSpeakerLabel(speaker: segment.speaker)
+
                 Text(segment.start.clockLabel)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.muted)
@@ -3029,6 +3035,8 @@ struct WorkbenchTranscriptRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
+            WorkbenchSpeakerLabel(speaker: segment.speaker)
+
             Text(segment.timeLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.muted)
@@ -3045,6 +3053,35 @@ struct WorkbenchTranscriptRow: View {
             }
 
             Spacer(minLength: 0)
+        }
+    }
+}
+
+/// 逐字稿里的说话人标签（P2-2a 双声道）。
+///
+/// **只写这一处**：原文页（可编辑的那一页）与速览/纪要里的逐字稿小节都要显示同一个东西，
+/// 各写一遍就会出现"有一处带标签、另一处不带"的静默不一致。
+///
+/// 没有说话人就什么都不画 —— 老会话、导入的音频、以及只录到一路的情况本来就没有说话人，
+/// **不许猜一个**（猜错的说话人读起来完全自然，永远没人发现）。
+struct WorkbenchSpeakerLabel: View {
+    let speaker: TranscriptSpeaker?
+
+    /// 固定宽度，让我方/对方两列对齐。两个字都是 2 个字宽，所以够用。
+    private let width: CGFloat = 32
+
+    var body: some View {
+        if let speaker {
+            Text(speaker.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                // 与同一行的时间戳、置信度**同一档** token。浅色下这档对比度低于 AA，
+                // 属于已知待修项（与 2D 状态行、2E「已校正」同族），不在这里单独调色 ——
+                // 单独调会让这一行出现第三种灰。
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: width, alignment: .leading)
+                .accessibilityLabel(speaker.displayName)
         }
     }
 }

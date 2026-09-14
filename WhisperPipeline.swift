@@ -116,19 +116,82 @@ final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
     }
 }
 
+/// 一次「混合录音」的产物（P2-2a 双声道）。
+///
+/// 保留原来的单路 `.mov`（播放与兜底转写都靠它），另外给出分开的两路：
+/// `local` 是麦克风（我方），`remote` 是系统声音（对方）。
+///
+/// **两路都可能缺**：系统版本不给 `.microphone` output、权限没给、ScreenCaptureKit
+/// 干脆没投递 —— 任何一种情况都必须能退回单路。缺一路不算错，只是没有说话人标注。
+struct MixedRecordingResult {
+    let movieURL: URL
+    let localTrackURL: URL?
+    let remoteTrackURL: URL?
+}
+
+/// 已经归一化成 16 kHz 单声道、可以直接送进 whisper 的两路音频。
+///
+/// **两路必须同时存在**。只有一路时宁可不做说话人标注：麦克风那一路本来就混着
+/// 外放出来的对方声音，只按它标"我方"会把对方说的话算成我方 —— 那是看不见的数据损坏。
+struct DualTrackInput {
+    let local: URL
+    let remote: URL
+}
+
+/// 把一路 `SCStreamOutput` 接到 `AudioTrackRecorder` 上的薄适配层。
+///
+/// `AudioTrackRecorder` 刻意**不认识 ScreenCaptureKit**：它只负责"给我 PCM，我落文件"。
+/// 于是它的搬运逻辑可以用手工拼出来的 `CMSampleBuffer` 单测（见 `AudioTrackRecorderTests`）——
+/// 否则录音这条链路上就没有任何一处是能自动验证的。
+private final class TrackStreamOutput: NSObject, SCStreamOutput {
+    private let recorder: AudioTrackRecorder
+    private let outputType: SCStreamOutputType
+
+    init(recorder: AudioTrackRecorder, outputType: SCStreamOutputType) {
+        self.recorder = recorder
+        self.outputType = outputType
+    }
+
+    func stream(
+        _ stream: SCStream,
+        didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
+        of type: SCStreamOutputType
+    ) {
+        // 同一个 `SCStream` 上挂了多个 output，回调按 output 分别来。
+        // 类型对不上就是别人的样本，扔掉。
+        guard type == outputType else { return }
+        recorder.append(sampleBuffer)
+    }
+}
+
 @MainActor
 final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate {
     private let movieURL: URL
+    private let localTrackURL: URL?
+    private let remoteTrackURL: URL?
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
+    private var localRecorder: AudioTrackRecorder?
+    private var remoteRecorder: AudioTrackRecorder?
+    /// `SCStream` 不持有 output，得自己留着，否则挂上去就没了。
+    private var trackOutputs: [TrackStreamOutput] = []
     private var didStartRecording = false
     private var didFinishRecording = false
     private var stopRequested = false
-    private var stopContinuation: CheckedContinuation<URL, Error>?
+    private var stopContinuation: CheckedContinuation<MixedRecordingResult, Error>?
     private var stopError: Error?
 
-    init(movieURL: URL) {
+    /// 两路音频**共用一个串行队列**：写文件的顺序就是采样顺序，两路之间也不会互相打架。
+    private static let sampleQueue = DispatchQueue(
+        label: "com.qingmeng.meetingscribe.audio-tracks"
+    )
+
+    /// 双声道两路是**可选**的：不给 URL 就退化成"只录 `.mov`"，也就是改动前的行为。
+    /// 这条降级路径是故意留的 —— 说话人标注失败绝不能让录音本身失败。
+    init(movieURL: URL, localTrackURL: URL? = nil, remoteTrackURL: URL? = nil) {
         self.movieURL = movieURL
+        self.localTrackURL = localTrackURL
+        self.remoteTrackURL = remoteTrackURL
     }
 
     func start() async throws {
@@ -168,6 +231,20 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         self.stream = stream
         self.recordingOutput = recordingOutput
 
+        // 双声道（P2-2a）：在**同一个** `SCStream` 上再挂两个 output。
+        //
+        // macOS 15 的 ScreenCaptureKit 本来就把两路分开投递：麦克风走 `.microphone`、
+        // 系统声走 `.audio`。而"同一个 stream = 同一个时钟"，两路的时间戳天然对齐 ——
+        // 这里不存在"两个独立采集源各自跑时钟、录到半小时就对不齐"的老问题。
+        //
+        // ⚠️ 加不上**不抛**：少一路就少一个说话人标注，录音本身照旧。
+        if let localTrackURL {
+            localRecorder = attachTrack(to: stream, url: localTrackURL, type: .microphone)
+        }
+        if let remoteTrackURL {
+            remoteRecorder = attachTrack(to: stream, url: remoteTrackURL, type: .audio)
+        }
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             stream.startCapture { [weak self] error in
                 if let error {
@@ -182,7 +259,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         }
     }
 
-    func stop() async throws -> URL {
+    func stop() async throws -> MixedRecordingResult {
         guard let stream else { throw PipelineError.failedToStopCapture }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -202,6 +279,42 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
                 }
             }
         }
+    }
+
+    /// 把一路音频接到 stream 上。失败返回 nil（这一路就没有）。
+    private func attachTrack(
+        to stream: SCStream,
+        url: URL,
+        type: SCStreamOutputType
+    ) -> AudioTrackRecorder? {
+        let recorder = AudioTrackRecorder(url: url)
+        let output = TrackStreamOutput(recorder: recorder, outputType: type)
+        do {
+            try stream.addStreamOutput(output, type: type, sampleHandlerQueue: Self.sampleQueue)
+        } catch {
+            // 比如系统版本不认识 `.microphone`。少一路不算错，录音继续。
+            return nil
+        }
+        trackOutputs.append(output)
+        return recorder
+    }
+
+    /// 收尾两路文件。
+    private func finishTrackRecorders() {
+        // 先把采样队列排空：`finish()` 之后进来的样本会被丢掉，
+        // 不排空的话最后几十毫秒的音频会**静默**消失。
+        Self.sampleQueue.sync {}
+        localRecorder?.finish()
+        remoteRecorder?.finish()
+    }
+
+    private func makeResult() -> MixedRecordingResult {
+        MixedRecordingResult(
+            movieURL: movieURL,
+            // 没写出内容的轨道当作"没有这一路"，别把一个 0 字节的文件交出去。
+            localTrackURL: (localRecorder?.didWriteAudio ?? false) ? localTrackURL : nil,
+            remoteTrackURL: (remoteRecorder?.didWriteAudio ?? false) ? remoteTrackURL : nil
+        )
     }
 
     nonisolated func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
@@ -235,6 +348,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         guard stopRequested else { return }
 
         if let error = stopError {
+            finishTrackRecorders()
             stopContinuation?.resume(throwing: error)
             stopContinuation = nil
             cleanup()
@@ -242,7 +356,8 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         }
 
         guard didFinishRecording else { return }
-        stopContinuation?.resume(returning: movieURL)
+        finishTrackRecorders()
+        stopContinuation?.resume(returning: makeResult())
         stopContinuation = nil
         cleanup()
     }
@@ -250,6 +365,9 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     private func cleanup() {
         stream = nil
         recordingOutput = nil
+        trackOutputs.removeAll()
+        localRecorder = nil
+        remoteRecorder = nil
         stopRequested = false
         didStartRecording = false
         didFinishRecording = false
@@ -313,6 +431,40 @@ struct AudioDurationReader {
             throw PipelineError.audioDurationUnavailable
         }
         return Double(file.length) / sampleRate
+    }
+}
+
+/// 读一段音频的峰值电平，用来判断某一路是不是**全程静音**（P2-2a）。
+struct AudioLevelProbe {
+    /// 低于它就算静音（约 -40 dBFS）。
+    static let silenceThreshold: Float = 0.01
+
+    /// 这一路有没有超过静音线的地方。
+    ///
+    /// 为什么值得单独做这一件事：一路全程静音的通道送进 whisper，不但白花一半时间，
+    /// 还会在静音上**幻觉出一整段话**（whisper 的经典毛病）—— 那会把一整段虚构内容
+    /// 写进逐字稿，比"不转这一路"糟得多。所以"跳过静音的一路"既是省时间，也是防幻觉。
+    func hasAudibleSignal(at url: URL) throws -> Bool {
+        let file = try AVAudioFile(forReading: url)
+        let format = file.processingFormat
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16_384) else {
+            throw PipelineError.audioDurationUnavailable
+        }
+
+        while file.framePosition < file.length {
+            try Task.checkCancellation()
+            try file.read(into: buffer)
+            guard buffer.frameLength > 0, let channels = buffer.floatChannelData else { break }
+
+            let frames = Int(buffer.frameLength)
+            for channel in 0..<Int(format.channelCount) {
+                let samples = channels[channel]
+                for index in 0..<frames where abs(samples[index]) > Self.silenceThreshold {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }
 

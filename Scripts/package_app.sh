@@ -26,8 +26,8 @@ if [[ ! -f "$WHISPER_MODEL" ]]; then
     exit 1
 fi
 
-if swift build --configuration "$CONFIGURATION"; then
-    BIN_DIR="$(swift build --configuration "$CONFIGURATION" --show-bin-path)"
+if swift build --configuration "$CONFIGURATION" --disable-sandbox; then
+    BIN_DIR="$(swift build --configuration "$CONFIGURATION" --disable-sandbox --show-bin-path)"
 else
     print -u2 "SwiftPM 构建不可用，改用本机 Xcode Swift 编译器继续打包。"
     FALLBACK_BIN_DIR="$ROOT_DIR/.build/$CONFIGURATION"
@@ -38,6 +38,18 @@ else
     if [[ "$CONFIGURATION" == "release" ]]; then
         OPTIMIZATION=(-O)
     fi
+
+    # 源文件清单**从仓库根目录现取**，不再手写。
+    #
+    # 为什么：这份清单原来是一串写死的文件名，于是它与 `Package.swift` 的 sources
+    # **悄悄漂移**了 —— 2D 加进来的 `Glossary.swift` 一直不在里面，谁新增一个 .swift
+    # 都只会在**打包时**炸（`swift test` 全绿，看不出任何问题）。
+    # 排除 `Package.swift` 自己：它是 manifest，带进来会撞上 `-parse-as-library`。
+    SOURCE_FILES=()
+    for source in "$ROOT_DIR"/*.swift; do
+        [[ "$(basename "$source")" == "Package.swift" ]] && continue
+        SOURCE_FILES+=("$source")
+    done
 
     "$SWIFTC_PATH" "${OPTIMIZATION[@]}" \
         -parse-as-library \
@@ -52,18 +64,7 @@ else
         -framework Security \
         -framework UniformTypeIdentifiers \
         -o "$FALLBACK_BIN_DIR/$APP_NAME" \
-        "$ROOT_DIR/MeetingScribeApp.swift" \
-        "$ROOT_DIR/ContentView.swift" \
-        "$ROOT_DIR/AppTheme.swift" \
-        "$ROOT_DIR/WorkbenchView.swift" \
-        "$ROOT_DIR/WindowConfiguration.swift" \
-        "$ROOT_DIR/MeetingModels.swift" \
-        "$ROOT_DIR/MeetingStore.swift" \
-        "$ROOT_DIR/WhisperPipeline.swift" \
-        "$ROOT_DIR/SummaryEngine.swift" \
-        "$ROOT_DIR/SummaryModelDiscovery.swift" \
-        "$ROOT_DIR/KeychainStore.swift" \
-        "$ROOT_DIR/AudioPlayback.swift"
+        "${SOURCE_FILES[@]}"
     BIN_DIR="$FALLBACK_BIN_DIR"
 fi
 
