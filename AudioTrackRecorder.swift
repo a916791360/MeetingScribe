@@ -29,6 +29,8 @@ final class AudioTrackRecorder: @unchecked Sendable {
     private var framesWritten: AVAudioFramePosition = 0
     private var failure: String?
     private var isFinished = false
+    /// 这一路第一次见到的样本格式（诊断用）。`nil` = 一个样本都没来过。
+    private var sourceFormat: String?
 
     init(url: URL) {
         self.url = url
@@ -63,9 +65,10 @@ final class AudioTrackRecorder: @unchecked Sendable {
     var diagnosticSummary: String {
         lock.lock()
         defer { lock.unlock() }
-        if let failure { return "失败：\(failure)" }
-        if framesWritten == 0 { return "一个样本都没写出来（0 帧）" }
-        return "已写入 \(framesWritten) 帧"
+        let format = sourceFormat.map { "，首个样本 \($0)" } ?? ""
+        if let failure { return "失败：\(failure)\(format)" }
+        if framesWritten == 0 { return "一个样本都没写出来（0 帧）\(format)" }
+        return "已写入 \(framesWritten) 帧\(format)"
     }
 
     var outputURL: URL { url }
@@ -78,8 +81,13 @@ final class AudioTrackRecorder: @unchecked Sendable {
         guard !isFinished, failure == nil else { return }
         guard CMSampleBufferGetNumSamples(sampleBuffer) > 0 else { return }
 
+        let incomingFormat = Self.describe(sampleBuffer)
+        if sourceFormat == nil {
+            sourceFormat = incomingFormat
+        }
+
         guard let format = Self.format(of: sampleBuffer) else {
-            failure = "音频样本不是标准的线性 PCM 格式。"
+            failure = "音频样本不是可落盘的线性 PCM 格式（首个样本：\(incomingFormat)）。"
             return
         }
 
@@ -193,17 +201,57 @@ final class AudioTrackRecorder: @unchecked Sendable {
         return .success(AVAudioFramePosition(buffer.frameLength))
     }
 
-    /// 从样本里读出标准格式。**不是标准格式就返回 nil**：宁可放弃这一路，
-    /// 也不要为了兼容它去手写格式转换（那正是会静默产出噪音的地方）。
+    /// 从样本里读出格式。**只认线性 PCM，但不再要求 `AVAudioFormat.isStandard`。**
+    ///
+    /// ⚠️ 这条 `isStandard` 判断是 2026-09-14 那场"永远没有说话人标签"的**真凶**：
+    /// 强化版探针（`Scripts/probe_dual_track_delivery.swift`）实测出两路的格式并不对称 ——
+    ///
+    /// | 路 | 实测格式 | `isStandard` |
+    /// |---|---|---|
+    /// | `.microphone`（我方） | 48 kHz / 1 声道 / **Float32 交错** | **false** → 被这一句丢掉 |
+    /// | `.audio`（对方） | 16 kHz / 1 声道 / Float32 非交错 | true → 一直正常 |
+    ///
+    /// `AVAudioFormat.isStandard` 只认「非交错 Float32」与「交错 Int16/Int32」，
+    /// **交错的 Float32 它判成非标准** —— 于是麦克风那一路 575 个样本、294400 帧
+    /// 全被拒掉，`local.caf` 永远是 0 字节（随后被 `finish()` 删掉），
+    /// 表现和"系统根本不支持麦克风分离"**一模一样**。这个不对称正是线索。
+    ///
+    /// 现在只要求「线性 PCM + 采样率/声道数/每帧字节数都合理」。落盘用**源格式原样**写
+    /// （`AVAudioFile(forWriting:settings:)` 认这套 settings，探针实测 48 kHz 交错 Float32
+    /// 也能一路写出去），格式归一化交给后面统一的 afconvert。
     private static func format(of sampleBuffer: CMSampleBuffer) -> AVAudioFormat? {
         guard let description = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(description),
-              asbd.pointee.mFormatID == kAudioFormatLinearPCM else {
+              asbd.pointee.mFormatID == kAudioFormatLinearPCM,
+              asbd.pointee.mSampleRate > 0,
+              asbd.pointee.mChannelsPerFrame > 0,
+              asbd.pointee.mBytesPerFrame > 0 else {
             return nil
         }
-        guard let format = AVAudioFormat(streamDescription: asbd), format.isStandard else {
-            return nil
+        return AVAudioFormat(streamDescription: asbd)
+    }
+
+    /// 一句话描述这一路样本的格式，**只进日志**。
+    ///
+    /// 为什么非要记：上面那场事故里日志只写了"我方 0 帧"，而"0 帧"同时对应
+    /// 「系统没投递样本（权限）」与「投递了但格式被我们拒了」两种完全不同的病因 ——
+    /// 只有把格式打出来，才不用再让人多录一次。所以判废时**必须连格式一起报**。
+    private static func describe(_ sampleBuffer: CMSampleBuffer) -> String {
+        guard let description = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(description) else {
+            return "格式未知"
         }
-        return format
+        let value = asbd.pointee
+        let flags = value.mFormatFlags
+        let kind: String
+        if flags & kAudioFormatFlagIsFloat != 0 {
+            kind = "Float32"
+        } else if flags & kAudioFormatFlagIsSignedInteger != 0 {
+            kind = "Int\(value.mBitsPerChannel)"
+        } else {
+            kind = "\(value.mBitsPerChannel) 位"
+        }
+        let layout = flags & kAudioFormatFlagIsNonInterleaved != 0 ? "非交错" : "交错"
+        return "\(Int(value.mSampleRate)) Hz / \(value.mChannelsPerFrame) 声道 / \(kind) / \(layout)"
     }
 }

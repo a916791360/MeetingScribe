@@ -46,6 +46,29 @@ enum PipelineError: LocalizedError {
 
 struct WhisperRawTranscript: Codable {
     let transcription: [WhisperRawSegment]
+
+    /// 解析 whisper.cpp 的 JSON 输出。
+    ///
+    /// 正常情况下严格按 UTF-8 + JSONDecoder 解析；但 2026-09-14 真机录音里撞到过
+    /// 一个坏字节（`0xFC`）混进中文文本，导致 `JSONDecoder` 报
+    /// `The given data was not valid JSON`，整场直接失败。这个坏字节来自外部 CLI 输出，
+    /// 不是我们自己的存盘格式。
+    ///
+    /// 这里的兜底只做一件事：**把非法 UTF-8 字节替换成 U+FFFD 后再 decode**。
+    /// 普通 JSON 结构错误仍然会抛出，不会被吞掉。
+    static func decodeWhisperJSON(_ data: Data) throws -> WhisperRawTranscript {
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode(Self.self, from: data)
+        } catch {
+            guard String(data: data, encoding: .utf8) == nil else {
+                throw error
+            }
+            let repaired = String(decoding: data, as: UTF8.self)
+            let repairedData = Data(repaired.utf8)
+            return try decoder.decode(Self.self, from: repairedData)
+        }
+    }
 }
 
 struct WhisperRawSegment: Codable {
@@ -689,7 +712,7 @@ actor WhisperCLIRunner {
         }
 
         let data = try Data(contentsOf: jsonURL)
-        let raw = try JSONDecoder().decode(WhisperRawTranscript.self, from: data)
+        let raw = try WhisperRawTranscript.decodeWhisperJSON(data)
         return WhisperTranscript(raw: raw)
     }
 

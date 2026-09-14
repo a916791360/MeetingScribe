@@ -65,6 +65,28 @@ final class AudioTrackRecorderTests: XCTestCase {
         XCTAssertEqual(peak, 0.75, accuracy: 0.001, "写进去的幅度必须原样回来")
     }
 
+    func testInterleavedFloat32SamplesAreAccepted() throws {
+        // ScreenCaptureKit 的 `.microphone` 路在真机上给过 48 kHz / Float32 / 交错。
+        // `AVAudioFormat.isStandard` 会把这种格式判成 false，之前就是因此把麦克风整路丢掉。
+        let format = try XCTUnwrap(
+            AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: true)
+        )
+        XCTAssertFalse(format.isStandard, "这个断言钉住事故格式：它不是 AVAudioFormat 所谓 standard，但仍是合法 PCM")
+
+        let url = temporaryDirectory.appendingPathComponent("interleaved-float.caf")
+        let recorder = AudioTrackRecorder(url: url)
+        recorder.append(try XCTUnwrap(makeSampleBuffer(format: format, frames: 2_400, amplitude: 0.4)))
+        recorder.finish()
+
+        XCTAssertNil(recorder.failureReason)
+        XCTAssertTrue(recorder.didWriteAudio)
+
+        let written = try AVAudioFile(forReading: url)
+        XCTAssertEqual(written.length, 2_400)
+        XCTAssertEqual(written.fileFormat.sampleRate, 48_000)
+        XCTAssertEqual(written.fileFormat.channelCount, 1)
+    }
+
     // MARK: - 会静默毁数据的两种情形
 
     func testFormatChangeMidStreamStopsInsteadOfMixingFormats() throws {
@@ -126,10 +148,25 @@ final class AudioTrackRecorderTests: XCTestCase {
     ) throws -> CMSampleBuffer? {
         let pcm = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
         pcm.frameLength = frames
-        guard let channel = pcm.floatChannelData?[0] else { return nil }
-        for frame in 0..<Int(frames) {
+        let sampleCount = Int(frames) * Int(format.channelCount)
+        let samples = UnsafeMutablePointer<Float>.allocate(capacity: sampleCount)
+        defer { samples.deallocate() }
+        for sample in 0..<sampleCount {
+            let frame = sample / Int(format.channelCount)
             let phase = 2 * Float.pi * 440 * Float(frame) / Float(format.sampleRate)
-            channel[frame] = amplitude * sinf(phase)
+            samples[sample] = amplitude * sinf(phase)
+        }
+
+        if format.isInterleaved {
+            guard let data = pcm.floatChannelData?[0] else { return nil }
+            data.update(from: samples, count: sampleCount)
+        } else {
+            for channelIndex in 0..<Int(format.channelCount) {
+                guard let channel = pcm.floatChannelData?[channelIndex] else { return nil }
+                for frame in 0..<Int(frames) {
+                    channel[frame] = samples[frame * Int(format.channelCount) + channelIndex]
+                }
+            }
         }
 
         var asbd = format.streamDescription.pointee
@@ -145,7 +182,7 @@ final class AudioTrackRecorderTests: XCTestCase {
             formatDescriptionOut: &formatDescription
         ) == noErr, let formatDescription else { return nil }
 
-        let byteCount = Int(frames) * MemoryLayout<Float>.size
+        let byteCount = sampleCount * MemoryLayout<Float>.size
         var blockBuffer: CMBlockBuffer?
         guard CMBlockBufferCreateWithMemoryBlock(
             allocator: kCFAllocatorDefault,
@@ -160,7 +197,7 @@ final class AudioTrackRecorderTests: XCTestCase {
         ) == kCMBlockBufferNoErr, let blockBuffer else { return nil }
 
         guard CMBlockBufferReplaceDataBytes(
-            with: channel,
+            with: samples,
             blockBuffer: blockBuffer,
             offsetIntoDestination: 0,
             dataLength: byteCount
