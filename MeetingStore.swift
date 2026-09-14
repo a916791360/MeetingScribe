@@ -1899,14 +1899,19 @@ struct SessionStorage {
     }
 
     func playbackURL(for session: MeetingSession) -> URL? {
-        var candidates: [String] = []
-        if let inputAudioFileName = session.inputAudioFileName {
-            candidates.append(inputAudioFileName)
+        let candidates: [String]
+        if session.captureMode == .imported {
+            // 导入会议要优先播放用户原始音频。
+            // `input.wav` 是给 whisper 准备的 16 kHz 单声道中间文件，音质差、也更容易被
+            // 后续重处理覆盖；如果它先被播放器拿到，一旦系统播放器不认这份中间 WAV，
+            // 用户明明导入了原音频，底栏也会显示成“暂无可播放音频”。
+            candidates = [session.sourceFileName, session.inputAudioFileName, "input.wav"].compactMap { $0 }
+        } else {
+            candidates = [session.inputAudioFileName, "input.wav", session.sourceFileName].compactMap { $0 }
         }
-        candidates.append("input.wav")
-        candidates.append(session.sourceFileName)
 
-        for name in candidates where !name.isEmpty {
+        var seen = Set<String>()
+        for name in candidates where !name.isEmpty && seen.insert(name).inserted {
             let url = sourceURL(for: session, preferredFileName: name)
             if FileManager.default.fileExists(atPath: url.path) {
                 return url

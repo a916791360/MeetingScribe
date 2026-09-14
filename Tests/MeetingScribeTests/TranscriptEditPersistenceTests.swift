@@ -176,4 +176,26 @@ final class TranscriptEditPersistenceTests: XCTestCase {
         )
         XCTAssertNil(store.summaryRegenerationBlockedMessage)
     }
+
+    @MainActor
+    func testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput() throws {
+        let storage = SessionStorage(rootURL: root)
+        var session = storage.createDraftSession(captureMode: .imported)
+        let folder = storage.folderURL(for: session)
+        let original = folder.appendingPathComponent("customer-meeting.m4a")
+        let whisperInput = folder.appendingPathComponent("input.wav")
+        try Data("original".utf8).write(to: original)
+        try Data("input".utf8).write(to: whisperInput)
+
+        session.status = .ready
+        session.sourceFileName = original.lastPathComponent
+        session.inputAudioFileName = whisperInput.lastPathComponent
+        try storage.save(session)
+
+        XCTAssertEqual(
+            storage.playbackURL(for: session)?.lastPathComponent,
+            original.lastPathComponent,
+            "导入会议底部播放条应该优先播放用户导入的原始音频；input.wav 只是 whisper 中间文件"
+        )
+    }
 }

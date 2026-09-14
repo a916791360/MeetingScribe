@@ -102,63 +102,81 @@ struct WorkbenchSidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // 交通灯区域由原生 NavigationSplitView + 标题栏统一让位，这里不再手写占位。
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.space5) {
-                    VStack(alignment: .leading, spacing: AppTheme.space3) {
-                        Text("MeetingScribe")
-                            .font(.system(size: 22, weight: .semibold, design: .default))
-                            .foregroundStyle(AppTheme.ink)
+            VStack(alignment: .leading, spacing: AppTheme.space3) {
+                Text("MeetingScribe")
+                    .font(.system(size: 22, weight: .semibold, design: .default))
+                    .foregroundStyle(AppTheme.ink)
 
-                        Text("把会议录下来，结束后直接得到可读的结果。")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("把会议录下来，结束后直接得到可读的结果。")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppTheme.space4)
+            .padding(.top, AppTheme.space4)
+            .padding(.bottom, AppTheme.space5)
+
+            if store.sessions.isEmpty {
+                Spacer(minLength: 0)
+                WorkbenchSidebarEmptyState()
                     .padding(.horizontal, AppTheme.space4)
-                    .padding(.top, AppTheme.space4)
-
-                    if store.sessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("还没有会议记录")
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.ink)
-                            Text("开始录音或导入音频，结果会显示在这里。")
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, AppTheme.space4)
-                    } else {
-                        WorkbenchSidebarSection(
-                            title: "最近会议",
-                            subtitle: "",
-                            count: store.sessions.count
-                        ) {
-                            VStack(spacing: 4) {
-                                // 失败 / 中断的会话也留在列表里（原来被 filter 掉了）。
-                                // 它们的录音还在磁盘上，藏起来用户就既看不到、也没法重新处理。
-                                ForEach(store.sessions) { session in
-                                    WorkbenchSessionRowView(
-                                        session: session,
-                                        isSelected: store.selectedSessionID == session.id
-                                    ) {
-                                        store.selectedSessionID = session.id
-                                    }
+                    .offset(y: -40) // Retina 2x 下较原居中位置约上移 80px，让空态视觉重心更自然。
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    WorkbenchSidebarSection(
+                        title: "最近会议",
+                        subtitle: "",
+                        count: store.sessions.count
+                    ) {
+                        VStack(spacing: 4) {
+                            // 失败 / 中断的会话也留在列表里（原来被 filter 掉了）。
+                            // 它们的录音还在磁盘上，藏起来用户就既看不到、也没法重新处理。
+                            ForEach(store.sessions) { session in
+                                WorkbenchSessionRowView(
+                                    session: session,
+                                    isSelected: store.selectedSessionID == session.id
+                                ) {
+                                    store.selectedSessionID = session.id
                                 }
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, AppTheme.space4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, AppTheme.space4)
             }
         }
         .frame(minWidth: 274, idealWidth: 288, maxWidth: 330)
         .background(AppTheme.paper)
     }
 
+}
+
+struct WorkbenchSidebarEmptyState: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "waveform.and.mic")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(spacing: 6) {
+                Text("还没有会议记录")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.ink)
+                Text("开始录音或导入音频，结果会显示在这里。")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
 }
 
 struct WorkbenchSessionRowView: View {
@@ -1956,7 +1974,7 @@ struct WorkbenchAudioPlayerBar: View {
                 // 左区：只在没有音频时占位，用来交代「为什么按钮是灰的」。
                 HStack(spacing: AppTheme.space2) {
                     if !player.isAvailable {
-                        Text("暂无可播放音频")
+                        Text(player.unavailableMessage)
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                             .lineLimit(1)

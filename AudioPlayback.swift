@@ -9,17 +9,21 @@ final class MeetingAudioPlayer: NSObject, ObservableObject, @preconcurrency AVAu
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var playbackRate: Float = 1
     @Published private(set) var isAvailable = false
+    @Published private(set) var unavailableMessage = "暂无可播放音频"
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var loadedURL: URL?
 
     func load(url: URL?) {
-        guard loadedURL != url else { return }
+        guard loadedURL != url || !isAvailable else { return }
         stop()
-        loadedURL = url
         guard let url else {
-            isAvailable = false
+            unavailableMessage = "暂无可播放音频"
+            return
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            unavailableMessage = "音频文件不在本机"
             return
         }
 
@@ -32,10 +36,19 @@ final class MeetingAudioPlayer: NSObject, ObservableObject, @preconcurrency AVAu
             self.player = player
             duration = player.duration
             isAvailable = player.duration > 0
+            if isAvailable {
+                loadedURL = url
+                unavailableMessage = ""
+            } else {
+                self.player = nil
+                duration = 0
+                unavailableMessage = "音频还没准备好"
+            }
         } catch {
             self.player = nil
             duration = 0
             isAvailable = false
+            unavailableMessage = "音频文件暂时无法播放"
         }
     }
 
@@ -77,6 +90,7 @@ final class MeetingAudioPlayer: NSObject, ObservableObject, @preconcurrency AVAu
         currentTime = 0
         duration = 0
         isAvailable = false
+        loadedURL = nil
     }
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
