@@ -61,7 +61,6 @@ else
         -framework AVFoundation \
         -framework ScreenCaptureKit \
         -framework CoreGraphics \
-        -framework LocalAuthentication \
         -framework Security \
         -framework UniformTypeIdentifiers \
         -o "$FALLBACK_BIN_DIR/$APP_NAME" \

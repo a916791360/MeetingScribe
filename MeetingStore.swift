@@ -1130,9 +1130,10 @@ final class MeetingStore: ObservableObject {
         try Task.checkCancellation()
         let settings = summarySettings
         let enteredKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let apiKey = enteredKey.isEmpty
-            ? keychain.string(for: settings.provider, allowAuthenticationUI: false)
-            : enteredKey
+        // 后台整理绝不能读取钥匙串密文：旧 ACL / 签名漂移时，macOS 会弹系统密码框，
+        // `LAContext.interactionNotAllowed` 对这种钥匙串访问确认框也挡不住。
+        // 自动流程只使用内存里已有的输入框值；没有就让云端整理失败并降级到本地规则。
+        let apiKey = enteredKey.isEmpty ? nil : enteredKey
 
         do {
             let analysis = try await summaryEngine.analyze(
