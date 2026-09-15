@@ -89,6 +89,322 @@ extension MeetingStatus {
     }
 }
 
+// MARK: - 整理模型的连接状态
+
+/// 设置页「获取可用模型」流程的状态。
+///
+/// **为什么要拆成 enum（而不是继续用一个 `String`）。**
+/// 原来这里是一个 `summaryTestStatus: String`，被 **9 种互不相同的语义**复用：
+/// 「正在连接」「已获取 N 个」「连接正常 · 未提供列表」「正在测试」「连接正常 · 当前模型可用」
+/// 「已选择 X」「API Key 保存失败」「error.localizedDescription」「空」。
+/// 后果有两个，都是实测出来的：
+/// 1. 界面只能靠 `hasPrefix("连接正常")` 猜颜色——**字符串前缀当类型用**；
+/// 2. 失败时把 `error.localizedDescription` 原样贴给用户（多为英文技术串），
+///    用户只知道"失败了"，不知道该改什么。
+/// 这正是本项目在摘要错误字段上已经学过的教训（§24.8「语义不同的状态必须新开字段」），
+/// 只是在设置页重犯了一遍。改成 enum 之后，每个 case 自带文案与色调，编译器保证不漏。
+enum SummaryModelTestState: Equatable, Sendable {
+    /// 无可展示的信息（刚进入 / 手动填写模型 / 刚切换服务商）。
+    case idle
+    /// 正在连接服务商、拉取模型列表。
+    case connecting
+    /// API Key 没能写进钥匙串。
+    case keySaveFailed
+    /// 连接正常并拿到模型列表；`selected` 为 nil 表示还没选定。
+    case loaded(count: Int, selected: String?)
+    /// 连接正常，但服务商没有可解析的模型列表 → 需要手动填模型 ID。
+    case noList
+    /// 正在用当前填写的模型 ID 做一次真实调用。
+    case testing(model: String)
+    /// 连接正常，当前模型可用。
+    case available(model: String)
+    /// 用户选定了某个整理模型。
+    case selected(model: String)
+    /// 失败，带一个**可操作**的原因（不再透出 `localizedDescription`）。
+    case failed(SummaryModelFailure)
+}
+
+/// 连接失败的原因分类。每一类都必须能回答"下一步做什么"。
+///
+/// 为什么是四类而不是"一条错误串"：网络不通 / Key 无效 / 地址写错 / 服务商侧出错，
+/// 这四种的用户动作**完全不同**（换网络 / 换 Key / 改地址 / 换模型或稍后重试），
+/// 混成一句话等于让用户自己猜。原始错误串仍然保留，但只写进日志（`Diagnostics`）。
+enum SummaryModelFailure: Equatable, Sendable {
+    /// 401 / 403：Key 无效、过期或无权限。
+    case auth
+    /// 地址不对：格式非法、404、或不是兼容 Chat Completions 的端点。
+    case endpoint
+    /// 网络不通：超时、连接被拒、代理异常。
+    case network
+    /// 服务商侧问题：5xx、返回内容无法解析、或指定的模型 ID 不存在。
+    case server
+
+    /// 一句话说清"错在哪"。
+    var title: String {
+        switch self {
+        case .auth:
+            return "API Key 无效或无权限"
+        case .endpoint:
+            return "服务商地址不对"
+        case .network:
+            return "连不上服务商"
+        case .server:
+            return "服务商拒绝了这次请求"
+        }
+    }
+
+    /// 一句话说清"下一步做什么"。**必须可执行**，不能只说失败。
+    var nextStep: String {
+        switch self {
+        case .auth:
+            return "检查 Key 是否复制完整，或换一个有效 Key 后重新获取模型。"
+        case .endpoint:
+            return "填入服务商 API 根地址（例如 https://example.com/v1），应用会自动补全 /chat/completions。"
+        case .network:
+            return "检查网络或代理，然后重新获取模型。"
+        case .server:
+            return "可能是服务商暂时故障，或模型 ID 不存在；稍后重试，或在设置里换成服务商列出的真实模型 ID。"
+        }
+    }
+
+    /// 把引擎错误归到四类里。**原始错误串不在这里透出**，由调用方写日志。
+    static func classify(_ error: Error) -> SummaryModelFailure {
+        if let engineError = error as? SummaryEngineError {
+            switch engineError {
+            case .missingAPIKey:
+                return .auth
+            case .invalidEndpoint:
+                return .endpoint
+            case .networkFailed:
+                return .network
+            case .requestFailed(let status, _):
+                if status == 401 || status == 403 { return .auth }
+                if status == 404 { return .endpoint }
+                return .server
+            case .invalidModelName, .modelUnavailable, .emptyResponse,
+                 .budgetExhausted, .invalidModelList, .invalidStructuredResponse:
+                return .server
+            }
+        }
+        if error is URLError {
+            return .network
+        }
+        return .server
+    }
+}
+
+/// 状态色调。**给的是语义档，不是具体色值** —— 具体颜色由视图层从 `AppTheme` 取，
+/// 这样深浅色档切换时不用改这里。
+enum SummaryModelStateTone: Equatable, Sendable {
+    case neutral
+    case success
+    case danger
+}
+
+extension SummaryModelTestState {
+    /// 屏幕上显示的文案。`.idle` 是空串（不显示）。
+    var message: String {
+        switch self {
+        case .idle:
+            return ""
+        case .connecting:
+            return "正在连接服务商…"
+        case .keySaveFailed:
+            return "API Key 保存失败。请重试保存后再获取模型。"
+        case .loaded(let count, let selected):
+            return selected == nil
+                ? "已获取 \(count) 个模型，请选择一个"
+                : "连接正常 · 已获取 \(count) 个模型"
+        case .noList:
+            return "连接正常 · 服务商未提供模型列表，请手动填写模型 ID"
+        case .testing(let model):
+            return "正在测试 \(model)…"
+        case .available(let model):
+            return "连接正常 · \(model) 可用"
+        case .selected(let model):
+            return "已选择 \(model) · 会后整理将使用它"
+        case .failed(let reason):
+            return "\(reason.title)：\(reason.nextStep)"
+        }
+    }
+
+    /// 有没有话要说。`.idle` 之外都要显示。
+    var showsMessage: Bool {
+        self != .idle
+    }
+
+    /// 是否正在忙（用于禁用按钮 / 转圈）。
+    var isBusy: Bool {
+        switch self {
+        case .connecting, .testing:
+            return true
+        case .idle, .keySaveFailed, .loaded, .noList, .available, .selected, .failed:
+            return false
+        }
+    }
+
+    var tone: SummaryModelStateTone {
+        switch self {
+        case .idle, .connecting, .noList, .testing:
+            return .neutral
+        case .loaded, .available, .selected:
+            return .success
+        case .keySaveFailed, .failed:
+            return .danger
+        }
+    }
+}
+
+/// 主窗口用的结论：**「重新整理」这一下会不会真的干活。**
+///
+/// 与设置页那次连接测试无关 —— 它只回答"现在点重新整理，会发生什么"。
+/// 为什么需要它：设置页那次连接的结论只活在设置面板里，主窗口的「重新整理」
+/// 看起来永远可用（`canRegenerateSummaryNow` 只判本地配置，不判模型可达性），
+/// 用户点了才发现没配好。这里把结论抬到主窗口常驻。
+enum SummaryModelReadiness: Equatable, Sendable {
+    /// 本地保守整理，永远可用。
+    case localRules
+    /// 云端 + 有 Key + 有模型名。可用（但**未做真实可达性验证**）。
+    case configured(provider: String, model: String)
+    /// 云端，但内存里没有 Key（启动时故意不读钥匙串密文）。
+    case needsKey(provider: String)
+    /// 云端，但没选 / 没填模型。
+    case needsModel(provider: String)
+
+    var isReady: Bool {
+        switch self {
+        case .localRules, .configured:
+            return true
+        case .needsKey, .needsModel:
+            return false
+        }
+    }
+
+    /// 一行状态描述（可用时用中性文案，不可用时说清缺什么）。
+    var summary: String {
+        switch self {
+        case .localRules:
+            return "整理模型：本地保守整理（不需要网络）"
+        case .configured(let provider, let model):
+            return "整理模型：\(provider) · \(model)"
+        case .needsKey(let provider):
+            return "整理模型：\(provider) 还没有可用的 API Key"
+        case .needsModel(let provider):
+            return "整理模型：\(provider) 还没有选择模型"
+        }
+    }
+
+    /// 需要用户动作时给出的提示（可用时为 nil，主窗口因此不显示任何东西）。
+    var attentionMessage: String? {
+        switch self {
+        case .localRules, .configured:
+            return nil
+        case .needsKey:
+            return "自动整理不会直接读钥匙串（避免弹系统密码框）。打开设置保存一次 Key，或切换成本地保守整理。"
+        case .needsModel:
+            return "打开设置选择或填写一个模型，就能生成完整纪要。"
+        }
+    }
+
+    /// 提示条上那颗按钮的标题。
+    var actionTitle: String {
+        switch self {
+        case .localRules, .configured:
+            return "打开设置"
+        case .needsKey:
+            return "打开设置授权模型"
+        case .needsModel:
+            return "打开设置选择模型"
+        }
+    }
+}
+
+// MARK: - 录音权限（只 preflight，不请求）
+
+/// 系统音频（屏幕录制）权限。
+///
+/// **macOS 的特殊行为必须讲给用户**：这个权限**刚授权后不会补发给正在运行的进程**，
+/// 必须完全退出重开。这不是 App 的 bug，所以文案要把它说成一句可操作的说明，
+/// 而不是一句"失败了"。
+enum ScreenCapturePermission: Equatable, Sendable {
+    case granted
+    case denied
+
+    var isGranted: Bool { self == .granted }
+
+    var label: String {
+        switch self {
+        case .granted: return "已授权"
+        case .denied: return "未授权"
+        }
+    }
+}
+
+/// 麦克风权限。
+///
+/// 三种状态要分开：`denied` 不会再弹系统窗口（只能去系统设置改），
+/// `notDetermined` 在录音开始时会弹一次 —— 处置完全不同。
+enum MicrophonePermission: Equatable, Sendable {
+    case granted
+    /// 曾被拒绝，或受系统限制。
+    case denied
+    /// 从未询问过。
+    case notDetermined
+
+    var isGranted: Bool { self == .granted }
+
+    var label: String {
+        switch self {
+        case .granted: return "已授权"
+        case .denied: return "未授权"
+        case .notDetermined: return "尚未询问"
+        }
+    }
+}
+
+/// 开始录音**之前**就能看清的两道门。
+///
+/// 为什么要有这个东西：原来两道权限的检查都发生在**用户点了录音之后**
+/// （`MixedRecordingSession.start()` 里），而且两道门塌成一句合并文案、
+/// 麦克风那一道**失败不抛**（只写日志）—— 界面上完全看不见。
+/// 结果是用户录完半小时才发现"原文没有我方/对方"，而原因早就存在于一个他不知道的权限里。
+enum CaptureReadiness: Equatable, Sendable {
+    case ready
+    /// 缺系统音频权限 —— **录不了**，必须先授权。
+    case missingSystemAudio(microphone: MicrophonePermission)
+    /// 系统音频 OK、缺麦克风 —— **录得了**，只是不会有说话人标注。
+    case missingMicrophoneOnly
+
+    var canStartRecording: Bool {
+        switch self {
+        case .ready, .missingMicrophoneOnly:
+            return true
+        case .missingSystemAudio:
+            return false
+        }
+    }
+
+    /// 拦住录音时给一句**可执行**的说明（不拦时为 nil）。
+    var blockingMessage: String? {
+        switch self {
+        case .ready, .missingMicrophoneOnly:
+            return nil
+        case .missingSystemAudio:
+            return "还没有获得「屏幕与系统音频录制」权限，现在录音采不到对方的声音。请在系统设置里允许 MeetingScribe，然后完全退出并重新打开这个应用（系统不会把刚给的权限补发给正在运行的进程）。"
+        }
+    }
+
+    /// 不拦录音、但必须说清后果的一条旁注（都齐了时为 nil）。
+    var microphoneCaveat: String? {
+        switch self {
+        case .missingSystemAudio, .missingMicrophoneOnly:
+            return "没有麦克风权限：录音照常，但原文不会区分「我方 / 对方」。"
+        case .ready:
+            return nil
+        }
+    }
+}
+
 enum PriorityLevel: String, Codable, CaseIterable, Sendable {
     case p1
     case p2

@@ -53,7 +53,17 @@ final class MeetingStore: ObservableObject {
     @Published var summarySettings: SummaryModelSettings
     @Published var summaryAPIKeyInput: String = ""
     @Published var summaryAPIKeyStatus: String = ""
-    @Published var summaryTestStatus: String = ""
+    /// 设置页「获取可用模型」的状态。原来是一个 `String` 扛 9 种语义，
+    /// 见 `SummaryModelTestState` 的注释。
+    @Published var summaryModelState: SummaryModelTestState = .idle
+
+    // 两道录音权限的当前状态。**只 preflight，不请求** ——
+    // 目的是在用户点「开始录音」之前就把状态摆在屏幕上，
+    // 而不是等他点了、录完了半小时才发现没有对方的声音。
+    @Published var screenCapturePermission: ScreenCapturePermission = .denied
+    @Published var microphonePermission: MicrophonePermission = .notDetermined
+    /// 缺系统音频权限被拦下时，界面上要显示的一条说明（正常为 nil）。
+    @Published var captureBlockedNotice: String?
     @Published var availableSummaryModels: [String] = []
     @Published var canEditSummaryModelManually = false
     @Published var isLoadingSummaryModels = false
@@ -243,6 +253,18 @@ final class MeetingStore: ObservableObject {
 
     func startRecording() {
         guard !isRecording, !isProcessing else { return }
+
+        // 录音前先当场看一眼两道权限门（纯 preflight，不弹窗）。
+        //
+        // 为什么必须**在开录之前**判：缺系统音频权限时 ScreenCaptureKit 不报错、
+        // 也不给样本，录出来是一段**没有对方声音**的文件 —— 用户要等听完才发现，
+        // 半小时的会就这么白丢。所以这里当场拦下，并给出可执行的下一步。
+        refreshCapturePermissions()
+        guard captureReadiness.canStartRecording else {
+            captureBlockedNotice = captureReadiness.blockingMessage
+            statusText = "缺「屏幕与系统音频录制」权限，录音没有开始"
+            return
+        }
 
         // A single recording action captures both system audio and the Mac microphone.
         captureMode = .mixed
@@ -435,7 +457,7 @@ final class MeetingStore: ObservableObject {
         )
         summaryAPIKeyInput = keychain.string(for: provider) ?? ""
         summaryAPIKeyStatus = summaryAPIKeyInput.isEmpty ? "未保存" : "已保存到钥匙串"
-        summaryTestStatus = ""
+        summaryModelState = .idle
         availableSummaryModels = []
         canEditSummaryModelManually = false
         isLoadingSummaryModels = false
@@ -489,7 +511,7 @@ final class MeetingStore: ObservableObject {
         // by a failed summary because the key was only held in the text field.
         let enteredAPIKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard saveSummaryAPIKey() else {
-            summaryTestStatus = "API Key 保存失败，请重试后再获取模型"
+            summaryModelState = .keySaveFailed
             return
         }
         savePreferences()
@@ -502,7 +524,7 @@ final class MeetingStore: ObservableObject {
         )
         let discoveryID = UUID()
         summaryModelDiscoveryID = discoveryID
-        summaryTestStatus = "正在连接服务商…"
+        summaryModelState = .connecting
         isLoadingSummaryModels = true
 
         summaryModelDiscoveryTask = Task { [weak self] in
@@ -530,17 +552,18 @@ final class MeetingStore: ObservableObject {
                     summarySettings.modelName = retainedSelection ?? ""
                     pendingSummaryModelSelection = nil
                     savePreferences()
-                    summaryTestStatus = retainedSelection == nil
-                        ? "已获取 \(models.count) 个模型，请选择一个"
-                        : "连接正常 · 已获取 \(models.count) 个模型"
+                    summaryModelState = .loaded(
+                        count: models.count,
+                        selected: retainedSelection
+                    )
                 } else {
                     availableSummaryModels = []
                     canEditSummaryModelManually = true
                     let currentModel = selectionCandidate.trimmingCharacters(in: .whitespacesAndNewlines)
                     if currentModel.isEmpty {
-                        summaryTestStatus = "连接正常 · 服务商未提供模型列表，请手动填写模型 ID"
+                        summaryModelState = .noList
                     } else {
-                        summaryTestStatus = "正在测试当前模型…"
+                        summaryModelState = .testing(model: currentModel)
                         var fallbackSettings = settings
                         fallbackSettings.modelName = currentModel
                         try await summaryEngine.test(settings: fallbackSettings, apiKey: apiKey)
@@ -553,7 +576,7 @@ final class MeetingStore: ObservableObject {
                         summarySettings.modelName = currentModel
                         pendingSummaryModelSelection = nil
                         savePreferences()
-                        summaryTestStatus = "连接正常 · 当前模型可用"
+                        summaryModelState = .available(model: currentModel)
                     }
                 }
             } catch {
@@ -566,7 +589,12 @@ final class MeetingStore: ObservableObject {
                 if settings.provider != .localRules && availableSummaryModels.isEmpty {
                     canEditSummaryModelManually = true
                 }
-                summaryTestStatus = error.localizedDescription
+                summaryModelState = .failed(SummaryModelFailure.classify(error))
+                // 原始错误串**不再贴给用户**（多半是英文技术串，说了也不知道改什么），
+                // 但必须留下来可查：用户报「连不上」时，先看这一行。
+                Diagnostics.pipeline.error(
+                    "整理模型连接失败：\(String(describing: error), privacy: .public)"
+                )
             }
         }
     }
@@ -578,7 +606,7 @@ final class MeetingStore: ObservableObject {
         summarySettings.modelName = cleanModel
         pendingSummaryModelSelection = nil
         canEditSummaryModelManually = false
-        summaryTestStatus = "已选择 \(cleanModel) · 会后整理将使用它"
+        summaryModelState = .selected(model: cleanModel)
         savePreferences()
     }
 
@@ -586,7 +614,7 @@ final class MeetingStore: ObservableObject {
         cancelSummaryModelDiscovery()
         pendingSummaryModelSelection = nil
         summarySettings.modelName = model
-        summaryTestStatus = ""
+        summaryModelState = .idle
         savePreferences()
     }
 
@@ -601,7 +629,7 @@ final class MeetingStore: ObservableObject {
             }
             summarySettings.modelName = ""
         }
-        summaryTestStatus = ""
+        summaryModelState = .idle
         savePreferences()
     }
 
@@ -637,7 +665,7 @@ final class MeetingStore: ObservableObject {
         guard summarySettings.provider != .localRules,
               !summarySettings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               availableSummaryModels.isEmpty,
-              summaryTestStatus.isEmpty,
+              summaryModelState == .idle,
               !isLoadingSummaryModels else {
             return
         }
@@ -727,12 +755,84 @@ final class MeetingStore: ObservableObject {
         }
     }
 
+    /// 主窗口常驻的「整理模型到底能不能用」结论。
+    ///
+    /// 为什么要在主窗口再说一遍：设置页那次连接测试的结论只活在设置面板里，
+    /// 主窗口看起来永远配好了。用户点了「重新整理」才发现没 Key，那一下只能失望。
+    ///
+    /// 注意它**不判真实可达性**（那要发一次网络请求，不适合常驻）；
+    /// 它判的是"本地这一侧齐了没有"：要不要 Key、要不要模型名。
+    var summaryModelReadiness: SummaryModelReadiness {
+        if summarySettings.provider == .localRules {
+            return .localRules
+        }
+        let providerTitle = summarySettings.provider.title
+        if summarySettings.provider.requiresAPIKey,
+           summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .needsKey(provider: providerTitle)
+        }
+        let model = summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.isEmpty {
+            return .needsModel(provider: providerTitle)
+        }
+        return .configured(provider: providerTitle, model: model)
+    }
+
+    // MARK: - 录音权限（preflight）
+
+    /// 两道录音门现在合起来是什么结论。
+    var captureReadiness: CaptureReadiness {
+        if !screenCapturePermission.isGranted {
+            return .missingSystemAudio(microphone: microphonePermission)
+        }
+        if !microphonePermission.isGranted {
+            return .missingMicrophoneOnly
+        }
+        return .ready
+    }
+
+    /// 刷新两道权限的当前状态。
+    ///
+    /// **纯 preflight，不弹任何系统窗口**，所以可以放心地在窗口激活、
+    /// 进入空闲时调用。用户在系统设置里改完权限切回来，这里就会自动更新。
+    func refreshCapturePermissions() {
+        screenCapturePermission = MixedRecordingSession.screenCapturePreflight
+        microphonePermission = MicrophoneAccess.permission
+        // 权限补齐后，之前那条"被拦下"的提示要自己消失，别留在屏幕上。
+        if captureReadiness.canStartRecording {
+            captureBlockedNotice = nil
+        }
+    }
+
+    func openScreenCaptureSettings() {
+        openPrivacySettings(anchor: "Privacy_ScreenCapture")
+    }
+
+    func openMicrophoneSettings() {
+        openPrivacySettings(anchor: "Privacy_Microphone")
+    }
+
+    private func openPrivacySettings(anchor: String) {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        ) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// 「现在点重新整理，会不会真的干活」。
+    ///
+    /// **原实现漏了一格**：云端服务商这一支只判内存里有没有 Key，
+    /// 完全没判有没有选模型。于是"有 Key 但一个模型都没选"时它返回 `true`，
+    /// 界面照样给出「重新整理」，点下去必然失败——典型的假入口。
+    /// （阶段 1-1 补的单测 `testReadinessNeedsModelWhenKeyPresentButModelEmpty` 钉住了这一格。）
     var canRegenerateSummaryNow: Bool {
         if summarySettings.provider == .localRules { return true }
+        let model = summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty else { return false }
         if summarySettings.provider.requiresAPIKey {
             return !summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        return !summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return true
     }
 
     var summaryRegenerationBlockedMessage: String? {

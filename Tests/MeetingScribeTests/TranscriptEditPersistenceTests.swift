@@ -198,4 +198,94 @@ final class TranscriptEditPersistenceTests: XCTestCase {
             "导入会议底部播放条应该优先播放用户导入的原始音频；input.wav 只是 whisper 中间文件"
         )
     }
+
+    // MARK: - 阶段 1-1：主窗口的「整理模型到底能不能用」
+
+    @MainActor
+    func testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .deepSeek,
+            modelName: "deepseek-v4",
+            endpoint: "https://api.deepseek.com/v1"
+        )
+        // 启动时故意不读钥匙串密文，所以内存里是空的。
+        store.summaryAPIKeyInput = ""
+
+        guard case .needsKey = store.summaryModelReadiness else {
+            return XCTFail("云端服务商 + 内存无 Key 应是 needsKey，实际 \(store.summaryModelReadiness)")
+        }
+        XCTAssertFalse(store.summaryModelReadiness.isReady)
+        XCTAssertNotNil(
+            store.summaryModelReadiness.attentionMessage,
+            "不可用时必须给主窗口一条可执行的提示"
+        )
+    }
+
+    @MainActor
+    func testReadinessNeedsModelWhenKeyPresentButModelEmpty() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .deepSeek,
+            modelName: "",
+            endpoint: "https://api.deepseek.com/v1"
+        )
+        store.summaryAPIKeyInput = "sk-test"
+
+        guard case .needsModel = store.summaryModelReadiness else {
+            return XCTFail("有 Key 但没选模型应是 needsModel，实际 \(store.summaryModelReadiness)")
+        }
+        XCTAssertFalse(store.summaryModelReadiness.isReady)
+        XCTAssertNotNil(
+            store.summaryModelReadiness.attentionMessage,
+            "缺模型时主窗口也要有一条常驻提示"
+        )
+        // 两层的职责不同，都在：`readiness` 管"主窗口常驻怎么说"，
+        // `summaryRegenerationBlockedMessage` 管"点了重新整理之后拦不拦"。
+        XCTAssertNotNil(
+            store.summaryRegenerationBlockedMessage,
+            "缺模型时点重新整理会被拦下，这一层也该给文案"
+        )
+        XCTAssertFalse(store.canRegenerateSummaryNow, "缺模型时不该放行重新整理")
+    }
+
+    @MainActor
+    func testReadinessLocalRulesIsAlwaysReady() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .localRules,
+            modelName: SummaryModelProvider.localRules.defaultModelName,
+            endpoint: SummaryModelProvider.localRules.defaultEndpoint
+        )
+        store.summaryAPIKeyInput = ""
+
+        XCTAssertEqual(store.summaryModelReadiness, .localRules)
+        XCTAssertTrue(store.summaryModelReadiness.isReady)
+        XCTAssertNil(
+            store.summaryModelReadiness.attentionMessage,
+            "本地整理任何时候都可用，主窗口不该出现提示条"
+        )
+    }
+
+    @MainActor
+    func testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent() throws {
+        let (_, _, store) = try makeReadySession()
+        store.summarySettings = SummaryModelSettings(
+            provider: .deepSeek,
+            modelName: "deepseek-v4",
+            endpoint: "https://api.deepseek.com/v1"
+        )
+        store.summaryAPIKeyInput = "sk-test"
+
+        guard case .configured(let provider, let model) = store.summaryModelReadiness else {
+            return XCTFail("三样齐了应是 configured，实际 \(store.summaryModelReadiness)")
+        }
+        XCTAssertFalse(provider.isEmpty)
+        XCTAssertEqual(model, "deepseek-v4")
+        XCTAssertTrue(store.summaryModelReadiness.isReady)
+        XCTAssertNil(
+            store.summaryModelReadiness.attentionMessage,
+            "配好了就别再占用主窗口的注意力"
+        )
+    }
 }

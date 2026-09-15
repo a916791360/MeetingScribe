@@ -47,6 +47,8 @@ extension MeetingSession {
 
 struct ContentView: View {
     @EnvironmentObject private var store: MeetingStore
+    /// 应用重新回到前台时刷新权限 —— 用户很可能刚去系统设置里点过授权。
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationSplitView {
@@ -81,6 +83,13 @@ struct ContentView: View {
             }
         } message: {
             Text(store.errorMessage ?? "")
+        }
+        // 启动时先看一眼两道录音权限（纯 preflight，不会弹窗）。
+        .task { store.refreshCapturePermissions() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                store.refreshCapturePermissions()
+            }
         }
     }
 
@@ -388,6 +397,21 @@ struct WorkbenchDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        // 有会话时，空态不在屏幕上，所以"被权限拦下"那条说明得由这一层来显示。
+        // 空态自己已经会显示同一条，所以这里限定 `workspaceSession != nil`，避免同一屏说两遍。
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let blocked = store.captureBlockedNotice, store.workspaceSession != nil {
+                WorkbenchInlineNotice(
+                    message: blocked,
+                    actionTitle: "打开系统设置",
+                    action: { store.openScreenCaptureSettings() }
+                )
+                .frame(maxWidth: 620)
+                .padding(.horizontal, AppTheme.contentInset)
+                .padding(.top, AppTheme.space3)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
         .background(AppTheme.paper)
         .navigationTitle(store.workspaceSession?.title ?? "会议")
         .navigationSubtitle(navigationSubtitleText)
@@ -550,6 +574,18 @@ struct WorkbenchSessionWorkspace: View {
                             regenerateAction: { store.regenerateSummary(for: session) }
                         )
 
+                        // 模型没配好、而这一屏**又有内容**时，压一条常驻提示。
+                        // 这正是用户会误判的时刻：他以为屏上就是整理结果，
+                        // 其实那是本地兜底或上一次留下的旧产物。
+                        if let readinessHint = modelReadinessHint(for: session) {
+                            WorkbenchInlineNotice(
+                                message: readinessHint,
+                                actionTitle: store.summaryModelReadiness.actionTitle,
+                                action: { store.showSettings = true }
+                            )
+                            .padding(.top, AppTheme.space2)
+                        }
+
                         ScrollView {
                             WorkbenchResultDocument(
                                 session: session,
@@ -585,6 +621,16 @@ struct WorkbenchSessionWorkspace: View {
             selectedTab = .overview
             audioPlayer.load(url: store.audioURL(for: session))
         }
+    }
+
+    /// 结果页顶部「整理模型没配好」提示的文案；不需要显示时返回 nil。
+    ///
+    /// **只在有内容时提示。** 空态自己已经在说这件事（`WorkbenchSummaryEmptyState`
+    /// 里那颗「打开设置授权模型」），同一屏两处说同一件事就是噪音（§24.4 的教训）。
+    /// 反过来，屏上**有**内容却又是本地兜底时，用户最容易误判——那一格才需要说话。
+    private func modelReadinessHint(for session: MeetingSession) -> String? {
+        guard session.analysis.hasStructuredFindings else { return nil }
+        return store.summaryModelReadiness.attentionMessage
     }
 
 }
@@ -752,22 +798,6 @@ struct WorkbenchResultDocument: View {
             WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab)
         case .minutes:
             WorkbenchMinutesDocument(session: session, onSelectTab: onSelectTab)
-        }
-    }
-}
-
-struct WorkbenchDocumentHeading: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.system(size: 22, weight: .semibold, design: .default))
-                .foregroundStyle(AppTheme.ink)
-            Text(subtitle)
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
         }
     }
 }
@@ -1900,6 +1930,48 @@ struct WorkbenchSummaryFallbackNotice: View {
     }
 }
 
+/// 结果页顶部的一条常驻提示：整理模型还没配好，而屏上已经有内容。
+///
+/// 为什么是「常驻」而不是只放在设置页：设置页那次连接测试的结论只活在设置面板里，
+/// 用户在主窗口看不到。这里把 `SummaryModelReadiness` 的结论抬到主窗口，
+/// 并且**只给出路（打开设置）**，不堆解释。
+///
+/// 视觉口径：图标用 `warning` 语义色，正文用 `ink` 可读色 —— 语义色不是正文色
+/// （浅色档下对比度不达 AA），这也是阶段 3-1 的统一口径。
+struct WorkbenchInlineNotice: View {
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(AppTheme.warning)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(AppTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 8)
+
+            Button(actionTitle, action: action)
+                .buttonStyle(.plain)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.accent)
+                .fixedSize()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            AppTheme.warning.opacity(0.10),
+            in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+        )
+    }
+}
+
 struct WorkbenchSummaryEmptyState: View {
     let title: String
     let message: String
@@ -2693,73 +2765,6 @@ struct WorkbenchTypingDots: View {
     }
 }
 
-struct WorkbenchSnapshotBand: View {
-    let session: MeetingSession
-    let openFolderAction: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        WorkbenchDarkChip(text: session.status.title, systemImage: session.status.icon)
-                        if let duration = session.duration {
-                            WorkbenchDarkChip(text: duration.clockLabel, systemImage: "clock")
-                        }
-                        WorkbenchDarkChip(text: "置信度 \(session.analysis.confidence.confidenceLabel)", systemImage: "scope")
-                    }
-
-                    Text(session.title)
-                        .font(.system(size: 30, weight: .semibold, design: .default))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(summaryLine)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 8) {
-                    Button {
-                        openFolderAction()
-                    } label: {
-                        Label("打开文件夹", systemImage: "folder")
-                    }
-                    .buttonStyle(WorkbenchDarkButtonStyle())
-                }
-            }
-
-            HStack(spacing: 10) {
-                WorkbenchDarkMeta(text: "更新 \(session.updatedAt.formatted(date: .omitted, time: .shortened))")
-                WorkbenchDarkMeta(text: session.inputAudioFileName ?? session.sourceFileName)
-                if let errorMessage = session.errorMessage, !errorMessage.isEmpty {
-                    WorkbenchDarkMeta(text: errorMessage, tint: AppTheme.danger)
-                }
-            }
-        }
-        .workbenchDarkPanel()
-    }
-
-    private var summaryLine: String {
-        if let first = session.analysis.overview.first {
-            return first.label
-        }
-        if let firstTranscript = session.transcriptSegments.first {
-            return firstTranscript.text.trimmedForPreview(limit: 120)
-        }
-        if let errorMessage = session.errorMessage, !errorMessage.isEmpty {
-            return errorMessage
-        }
-        return "转写完成后，速览、决策点和待办会出现在这里。"
-    }
-
-}
-
 struct WorkbenchMetricStrip: View {
     let session: MeetingSession
 
@@ -2831,266 +2836,6 @@ struct WorkbenchMetricCard: View {
     }
 }
 
-struct WorkbenchSectionStack: View {
-    let session: MeetingSession
-
-    var body: some View {
-        VStack(spacing: 20) {
-            WorkbenchSectionPanel(
-                title: "速览",
-                subtitle: "最先读的东西。",
-                count: session.analysis.overview.count
-            ) {
-                sectionBody(for: session.analysis.overview, emptyText: "还没有足够明确的速览。") { item in
-                    WorkbenchInsightRow(item: item)
-                }
-            }
-
-            WorkbenchSectionPanel(
-                title: "待办",
-                subtitle: "优先级、依据和截止时间。",
-                count: session.analysis.actions.count
-            ) {
-                sectionBody(for: session.analysis.actions, emptyText: "暂时没有提取到待办。") { item in
-                    WorkbenchActionRow(item: item)
-                }
-            }
-
-            WorkbenchSectionPanel(
-                title: "时间切块",
-                subtitle: "按时间切开看会议节奏。",
-                count: session.analysis.timeline.count
-            ) {
-                sectionBody(for: session.analysis.timeline, emptyText: "没有足够的时间块。") { item in
-                    WorkbenchTimelineRow(item: item)
-                }
-            }
-
-            WorkbenchSectionPanel(
-                title: "决策点",
-                subtitle: "只收录有把握的结论。",
-                count: session.analysis.decisions.count
-            ) {
-                sectionBody(for: session.analysis.decisions, emptyText: "没有提取到明确决策。") { item in
-                    WorkbenchInsightRow(item: item)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func sectionBody<Item: Identifiable, Row: View>(
-        for items: [Item],
-        emptyText: String,
-        @ViewBuilder row: @escaping (Item) -> Row
-    ) -> some View {
-        if items.isEmpty {
-            WorkbenchEmptyHint(text: emptyText)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    row(item)
-                    if index != items.count - 1 {
-                        Divider()
-                            .overlay(AppTheme.rule)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct WorkbenchSectionPanel<Content: View>: View {
-    let title: String
-    let subtitle: String
-    let count: Int
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.ink)
-                    Text(subtitle)
-                        .font(.callout)
-                        .foregroundStyle(AppTheme.muted)
-                }
-
-                Spacer(minLength: 8)
-
-                Text("\(count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(AppTheme.accentSoft, in: Capsule())
-            }
-
-            Divider()
-                .overlay(AppTheme.rule)
-
-            content()
-        }
-        .workbenchPanel()
-    }
-}
-
-struct WorkbenchTranscriptPanel: View {
-    let session: MeetingSession
-
-    var body: some View {
-        WorkbenchSectionPanel(
-            title: "逐字稿",
-            subtitle: "原汁原味保留原文。",
-            count: session.transcriptSegments.count
-        ) {
-            if session.transcriptSegments.isEmpty {
-                WorkbenchEmptyHint(text: "转写完成后，这里会出现逐字稿。")
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(session.transcriptSegments.enumerated()), id: \.element.id) { index, segment in
-                        WorkbenchTranscriptRow(segment: segment)
-                        if index != session.transcriptSegments.count - 1 {
-                            Divider()
-                                .overlay(AppTheme.rule)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct WorkbenchInsightRow: View {
-    let item: InsightItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(item.label)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 8)
-
-                WorkbenchConfidenceChip(value: item.confidence)
-            }
-
-            if let timestamp = item.timestamp {
-                WorkbenchMetaText(text: timestamp.clockLabel)
-            }
-
-            Text(item.evidence)
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-struct WorkbenchTimelineRow: View {
-    let item: TimelineChunk
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(item.title)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 8)
-
-                WorkbenchConfidenceChip(value: item.confidence)
-            }
-
-            Text(item.summary)
-                .font(.callout)
-                .foregroundStyle(AppTheme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(item.evidence)
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-struct WorkbenchActionRow: View {
-    let item: ActionItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(item.label)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 8)
-
-                if let priority = item.priority {
-                    WorkbenchPriorityChip(priority: priority)
-                }
-
-                WorkbenchConfidenceChip(value: item.confidence)
-            }
-
-            HStack(spacing: 10) {
-                if let dueText = item.dueText {
-                    WorkbenchMetaText(text: "截止 \(dueText)")
-                }
-                if let timestamp = item.timestamp {
-                    WorkbenchMetaText(text: timestamp.clockLabel)
-                }
-            }
-
-            Text(item.evidence)
-                .font(.callout)
-                .foregroundStyle(AppTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-struct WorkbenchTranscriptRow: View {
-    let segment: TranscriptSegment
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            WorkbenchSpeakerLabel(speaker: segment.speaker)
-
-            Text(segment.timeLabel)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.muted)
-                .monospacedDigit()
-                .frame(width: 78, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(segment.text)
-                    .font(.body)
-                    .foregroundStyle(AppTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                WorkbenchConfidenceChip(value: segment.confidence)
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-/// 逐字稿里的说话人标签（P2-2a 双声道）。
-///
-/// **只写这一处**：原文页（可编辑的那一页）与速览/纪要里的逐字稿小节都要显示同一个东西，
-/// 各写一遍就会出现"有一处带标签、另一处不带"的静默不一致。
-///
-/// 没有说话人就什么都不画 —— 老会话、导入的音频、以及只录到一路的情况本来就没有说话人，
-/// **不许猜一个**（猜错的说话人读起来完全自然，永远没人发现）。
 struct WorkbenchSpeakerLabel: View {
     let speaker: TranscriptSpeaker?
 
@@ -3169,11 +2914,123 @@ struct WorkbenchEmptyState: View {
                 .disabled(store.isRecording || store.isProcessing)
             }
 
+            // 点了「开始录音」却被权限拦下时的那条说明。
+            if let blocked = store.captureBlockedNotice {
+                WorkbenchInlineNotice(
+                    message: blocked,
+                    actionTitle: "打开系统设置",
+                    action: { store.openScreenCaptureSettings() }
+                )
+                .frame(maxWidth: 460)
+            }
+
+            captureReadinessPanel
         }
         .frame(maxWidth: 620)
         .padding(.horizontal, 48)
         .padding(.vertical, 56)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        // 纯 preflight，不会弹系统窗口；从系统设置授权完切回来就能即时更新。
+        .onAppear { store.refreshCapturePermissions() }
+    }
+
+    /// 录音条件：把「录一场会需要什么」摆在录音按钮下面。
+    ///
+    /// 为什么放在空态：这里是用户**准备开始**的地方，也正是两道权限门最该被看见的时刻。
+    /// 放在录音之后（原来那样）等于让用户先踩坑、再解释。
+    ///
+    /// 为什么多数时候只有一行：都齐了就没什么好说的，占一块地方只会让空态变重。
+    /// 只有真缺权限时才展开明细。
+    @ViewBuilder
+    private var captureReadinessPanel: some View {
+        if store.captureReadiness == .ready {
+            Label("录音条件就绪", systemImage: "checkmark.seal")
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("录音条件")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.muted)
+
+                capturePermissionRow(
+                    title: "系统音频（屏幕录制）",
+                    state: store.screenCapturePermission.label,
+                    isGranted: store.screenCapturePermission.isGranted,
+                    action: { store.openScreenCaptureSettings() }
+                )
+
+                capturePermissionRow(
+                    title: "麦克风",
+                    state: store.microphonePermission.label,
+                    isGranted: store.microphonePermission.isGranted,
+                    action: { store.openMicrophoneSettings() }
+                )
+
+                if let caveat = store.captureReadiness.microphoneCaveat {
+                    Text(caveat)
+                        .font(.caption2)
+                        .foregroundStyle(AppTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(
+                AppTheme.paperSoft,
+                in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+            )
+        }
+    }
+
+    /// 权限一行：状态图标 + 名称 + 当前状态 + （缺的时候）去授权。
+    /// 图标留给语义色，文字用可读色 —— 语义色不是正文色（阶段 3-1 的口径）。
+    private func capturePermissionRow(
+        title: String,
+        state: String,
+        isGranted: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(isGranted ? AppTheme.accent : AppTheme.warning)
+                .accessibilityHidden(true)
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(AppTheme.ink)
+
+            Spacer(minLength: 8)
+
+            Text(state)
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
+
+            if !isGranted {
+                Button("去授权", action: action)
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .fixedSize()
+            }
+        }
+    }
+}
+
+/// 整理模型状态的色调 → 具体颜色。
+///
+/// 语义档（`SummaryModelStateTone`）在模型层，具体色值在视图层 —— 这样的话
+/// 深浅色档调整时不用动模型层，而模型层也不会因为"要显示成什么颜色"绑死。
+func summaryModelToneColor(_ tone: SummaryModelStateTone) -> Color {
+    switch tone {
+    case .neutral:
+        return AppTheme.muted
+    case .success:
+        return AppTheme.success
+    case .danger:
+        return AppTheme.danger
     }
 }
 
@@ -3383,19 +3240,17 @@ struct WorkbenchSettingsPane: View {
                                                 store.isLoadingSummaryModels
                                         )
 
-                                        if !store.summaryTestStatus.isEmpty {
-                                            Text(store.summaryTestStatus)
+                                        if store.summaryModelState.showsMessage {
+                                            // 色调由 enum 的 `tone` 给出 —— 不再靠
+                                            // `hasPrefix("连接正常")` 猜颜色（那正是
+                                            // "字符串前缀当类型用"）。
+                                            Text(store.summaryModelState.message)
                                                 .font(.caption)
                                                 .foregroundStyle(
-                                                    store.summaryTestStatus.hasPrefix("连接正常") ||
-                                                        store.summaryTestStatus.hasPrefix("已获取") ||
-                                                        store.summaryTestStatus.hasPrefix("已选择")
-                                                        ? AppTheme.success
-                                                        : store.summaryTestStatus.hasPrefix("正在")
-                                                            ? AppTheme.muted
-                                                            : AppTheme.danger
+                                                    summaryModelToneColor(store.summaryModelState.tone)
                                                 )
-                                                .lineLimit(3)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .lineLimit(4)
                                         }
                                     }
 
@@ -3829,66 +3684,6 @@ struct WorkbenchSettingsPathRow: View {
     }
 }
 
-struct WorkbenchSettingsPathCard: View {
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    @Binding var path: String
-    let defaultPath: String
-    let isValid: Bool
-    let restoreAction: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.ink)
-
-                    Text(subtitle)
-                        .font(.callout)
-                        .foregroundStyle(AppTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                WorkbenchPathState(isValid: isValid)
-            }
-
-            TextField("请输入本机路径", text: $path)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.body, design: .monospaced))
-
-            Text("默认值：\(defaultPath)")
-                .font(.caption)
-                .foregroundStyle(AppTheme.muted)
-                .textSelection(.enabled)
-
-            HStack {
-                Button("恢复默认") {
-                    restoreAction()
-                }
-                .buttonStyle(WorkbenchLightButtonStyle())
-
-                Spacer(minLength: 8)
-
-                Text(isValid ? "路径已找到" : "当前路径未找到，会在运行时回落到默认路径。")
-                    .font(.caption)
-                    .foregroundStyle(isValid ? AppTheme.success : AppTheme.warning)
-            }
-        }
-        .workbenchPanel()
-    }
-}
-
 struct WorkbenchPathState: View {
     let isValid: Bool
 
@@ -3930,14 +3725,6 @@ struct WorkbenchStatusDot: View {
     }
 }
 
-struct WorkbenchStatusChip: View {
-    let status: MeetingStatus
-
-    var body: some View {
-        WorkbenchDarkChip(text: status.title, systemImage: status.icon)
-    }
-}
-
 struct WorkbenchDarkChip: View {
     let text: String
     var systemImage: String? = nil
@@ -3962,44 +3749,6 @@ struct WorkbenchDarkChip: View {
     }
 }
 
-struct WorkbenchDarkMeta: View {
-    let text: String
-    var tint: Color = .white.opacity(0.72)
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.white.opacity(0.06), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            )
-    }
-}
-
-struct WorkbenchMetaText: View {
-    let text: String
-    var inverse: Bool = false
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(inverse ? .white.opacity(0.78) : AppTheme.muted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(inverse ? Color.white.opacity(0.08) : AppTheme.accentSoft, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(inverse ? Color.white.opacity(0.12) : Color.clear, lineWidth: 1)
-            )
-    }
-}
-
-/// 自定义 ButtonStyle 不会自动响应 `.disabled()`，这里统一读环境开关降透明度，
-/// 保证「没有音频可播 / 正在重新整理」这类不可用状态看得出来。
 struct WorkbenchDisabledDim<Content: View>: View {
     @Environment(\.isEnabled) private var isEnabled
     private let content: Content

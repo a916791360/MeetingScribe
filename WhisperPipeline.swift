@@ -128,6 +128,21 @@ enum MicrophoneAccess {
         @unknown default: return "未知状态"
         }
     }
+
+    /// 当前权限状态（**不请求、不弹窗**）。用于在用户点「开始录音」之前
+    /// 就把状态摆在屏幕上 —— `statusLabel` 是给人看的日志串，这个是给界面用的。
+    static var permission: MicrophonePermission {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            return .granted
+        case .denied, .restricted:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .denied
+        }
+    }
 }
 
 @MainActor
@@ -479,6 +494,14 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
             return true
         }
         return CGRequestScreenCaptureAccess()
+    }
+
+    /// 屏幕录制权限的**当前**状态（不请求、不弹窗）。
+    ///
+    /// `CGPreflightScreenCaptureAccess()` 只回答"现在有没有"，
+    /// 所以它可以在用户点录音之前安全地调用。
+    static var screenCapturePreflight: ScreenCapturePermission {
+        CGPreflightScreenCaptureAccess() ? .granted : .denied
     }
 }
 
