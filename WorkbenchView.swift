@@ -199,7 +199,7 @@ struct WorkbenchSessionRowView: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(session.title)
                         .font(.body.weight(.semibold))
@@ -226,8 +226,10 @@ struct WorkbenchSessionRowView: View {
                 .foregroundStyle(subtitleColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
+            .padding(.horizontal, AppTheme.space3)
+            // 行高 11 → 8、行内间距 6 → 4（阶段 4-1）：三行文本 + 22pt 内衬
+            // 撑到约 80pt，是 macOS 列表行的两倍，侧栏一屏只放得下四条（§六 记录项）。
+            .padding(.vertical, AppTheme.space2)
             .background(backgroundColor, in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
             .overlay(alignment: .leading) {
                 if isSelected {
@@ -426,7 +428,9 @@ struct WorkbenchDetailView: View {
     /// 终态（已完成 / 失败）本来就写在元信息里，不会丢。
     private var navigationSubtitleText: Text {
         guard let session = store.workspaceSession else {
-            return Text(store.statusText)
+            // 空态副标题原来是 `store.statusText`（初始值就是「准备就绪」四个字）——
+            // 一整条宽度换不来任何信息（§六 记录项 ⑤）。改成交代"这一屏现在能做什么"。
+            return Text("还没有会议 · 可以直接开始录音，或者导入一段已有音频")
         }
         if store.isRecording || store.isProcessing {
             // 进行中：`statusText` 本身已经说明了状态（「正在录音」/「正在转写第 1/2 段 · 0%」），
@@ -608,7 +612,8 @@ struct WorkbenchSessionWorkspace: View {
 
                     WorkbenchAudioPlayerBar(
                         player: audioPlayer,
-                        audioURL: store.audioURL(for: session)
+                        audioURL: store.audioURL(for: session),
+                        openFolderAction: store.openSelectedSessionFolder
                     )
                 }
             }
@@ -888,7 +893,10 @@ struct WorkbenchOverviewDocument: View {
                     message: notice,
                     headline: session.analysis.isLocalFallback
                         ? "整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。"
-                        : "整理模型这次的结果不完整，下面可能缺少部分内容。"
+                        : "整理模型这次的结果不完整，下面可能缺少部分内容。",
+                    retry: store.canRegenerateSummaryNow
+                        ? { store.regenerateSummary(for: session) }
+                        : nil
                 )
             }
 
@@ -1899,6 +1907,13 @@ struct WorkbenchSummaryFallbackNotice: View {
     /// 这两种情况的出路不一样：前者多半要换模型/查配置，后者直接重试通常就好。
     var headline: String = "整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。"
 
+    /// 「重新整理」入口。**只在真的点得动时才传进来**（`canRegenerateSummaryNow`）。
+    ///
+    /// 状态表 C6 原来这格是空的 —— 用户看到"下面只显示本地保守结果"，
+    /// 却没有任何一步可走，只能猜。缺 Key / 缺模型时仍然不给，
+    /// 因为那时点它只会闪一下再回到同一个横幅，那是假入口（§24 的老教训）。
+    var retry: (() -> Void)?
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "info.circle")
@@ -1918,10 +1933,25 @@ struct WorkbenchSummaryFallbackNotice: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
+
+            // 状态表 C6 原来是「横幅内无动作」——用户看到"只显示本地保守结果"，
+            // 却没有任何一步可走。这里补上唯一可行的那一步：用当前模型重来一次。
+            if let retry {
+                Button(action: retry) {
+                    Label("重新整理", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.accent)
+                .fixedSize()
+            }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
-        .background(AppTheme.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
+        // 底色 0.10 → 0.06（阶段 3-1）。原来那层黄把 `muted` 压到 **4.46:1**，
+        // 差 0.04 不达 AA —— 又一处"贴线不达标"；0.06 下是 4.60:1。
+        // 黄色底只是"这里有事要说"的一层暗示，本身不承载信息，淡一点不影响警示。
+        .background(AppTheme.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
                 .stroke(AppTheme.warning.opacity(0.22), lineWidth: 1)
@@ -1966,7 +1996,8 @@ struct WorkbenchInlineNotice: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(
-            AppTheme.warning.opacity(0.10),
+            // 与 `WorkbenchSummaryFallbackNotice` 同一档：0.10 会把次级文字压到 4.46:1。
+            AppTheme.warning.opacity(0.06),
             in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
         )
     }
@@ -2031,6 +2062,11 @@ struct WorkbenchSummaryEmptyState: View {
 struct WorkbenchAudioPlayerBar: View {
     @ObservedObject var player: MeetingAudioPlayer
     let audioURL: URL?
+    /// 音频不可播时的那一步去处 —— 「打开文件夹」。
+    ///
+    /// 状态表 D6 原来只说"不能播"，不说去哪；音频真丢了的时候，
+    /// 用户至少要知道文件在哪儿、还剩什么，而不是只看到一句无法行动的话。
+    var openFolderAction: () -> Void = {}
 
     private static let rateOptions: [Float] = [1, 1.25, 1.5, 2]
 
@@ -2050,6 +2086,13 @@ struct WorkbenchAudioPlayerBar: View {
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                             .lineLimit(1)
+
+                        // 只说"不能播"是死路一条。给一步能走的。
+                        Button("打开文件夹", action: openFolderAction)
+                            .buttonStyle(.plain)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.accent)
+                            .fixedSize()
                     }
                     Spacer(minLength: 0)
                 }
@@ -2078,7 +2121,15 @@ struct WorkbenchAudioPlayerBar: View {
             .disabled(!player.isAvailable)
             .accessibilityLabel("录音进度")
         }
+        // 内容对齐上方 800 结构列（阶段 4-3）。
+        //
+        // 原来这条底栏是通栏 + 左右各 32pt 内边距，于是**播放键落在窗口的中点**，
+        // 而上面 TabBar 与正文落在 800 列的中点 —— 同一条竖线上看不见的两条中线，
+        // 全应用就这一处对不上（用户把它列进"仍未处理"挂了 4 天、跨了 6 个 tag）。
+        // 现在：**背景仍然通栏**（底栏该有的分区感保留），内容归位到 800 列。
+        .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
         .padding(.horizontal, AppTheme.contentInset)
+        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.top, AppTheme.space3)
         .padding(.bottom, AppTheme.space4)
         // 这里**不再**压一条 1pt `rule` 发丝线。
