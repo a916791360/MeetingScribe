@@ -28,12 +28,27 @@
 
 ## 运行
 
+App 界面本身不依赖 `whisper.cpp`，可以直接起：
+
 ```bash
 swift build
 swift run
 ```
 
+但**转写**需要 `whisper-cli` 和模型文件，见下面「转写引擎与模型」。没有它们 App 能打开、能录音，
+逐字稿会报「找不到 whisper-cli」。
+
 ## 打包与安装
+
+**先准备好转写引擎与模型**（见下一节），并且让打包脚本能找到它们 —— 默认路径是你自己机器上的，
+要用环境变量指过去：
+
+```bash
+WHISPER_ROOT=/path/to/whisper.cpp ./Scripts/package_app.sh
+```
+
+脚本会把 `whisper-cli`、它依赖的 `*.dylib` 和 `ggml-small.bin` 一起复制进 `Resources/whisper/`，
+打出来的 `.app` 因此是**自包含**的（约 483MB，其中模型占 465MB），拷给别人也能用。
 
 生成标准 macOS `.app` 包：
 
@@ -62,12 +77,67 @@ Scripts/probe_owner_gap.py             # 「待办没写谁负责」是材料没
 
 口径、评测集与「哪些指标算不了」见 [docs/verification/quality/README.md](docs/verification/quality/README.md)。
 
-## 默认依赖
+## 转写引擎与模型
 
-- `whisper-cli`：`~/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp/build/bin/whisper-cli`
-- 模型：`~/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp/models/ggml-small.bin`
+逐字稿由 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 在本机完成，需要两样东西：
+`whisper-cli` 可执行文件，和一个 `ggml-*.bin` 模型。
 
-可在设置里改成你自己的本地路径。
+**1. 装 whisper.cpp**
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp
+cd whisper.cpp
+cmake -B build && cmake --build build -j --config Release
+```
+
+**2. 下载模型**（`small` 约 466MB，中文效果与体积的平衡点）
+
+```bash
+./models/download-ggml-model.sh small
+```
+
+**3. 让 App 用上**（两种方式，任选）
+
+- **打包时指定**：`WHISPER_ROOT=/path/to/whisper.cpp ./Scripts/package_app.sh`，
+  产物自包含，拷给别人也能用。
+- **运行时指定**：在 App 的「设置」里分别填 `whisper-cli` 和模型文件的路径。
+
+**换个更强的模型**：把任意 `ggml-*.bin` 放进
+`~/Library/Application Support/MeetingScribe/models/`，重启即生效。
+优先级 `large-v3-turbo` > `large-v3` > `medium` > `small` > `base` > `tiny`，
+用户目录里的模型优先于 App 内置的那个。
+
+> 早期版本把路径写死成开发者本机目录（`~/Documents/Codex/...`），那只是历史兜底；
+> 现在两者都不存在时会明确报「找不到 whisper-cli」，不再静默失败。
+
+## 分发给别人安装
+
+打包脚本默认用本机自签证书，**没有经过 Apple 公证**。别人下载后 macOS 会拦下来，
+弹「Apple 无法验证…」的框，且按钮只有「完成」和「移到废纸篓」。这不是文件坏了，是 Gatekeeper 在起作用。
+
+对方有三条路可走（按推荐程度排）：
+
+1. **自己从源码编译**（最干净）：`swift build && swift run`。
+   本机编译出来的产物**不带**隔离标记，不会被拦，也不会弹任何警告。
+2. **在系统设置里放行**：先双击一次 `MeetingScribe.app`（会弹出被拦的框），
+   然后打开「系统设置 → 隐私与安全性」，向下滚动找到刚被拦的记录，点「仍要打开」。
+   之后这个 App 会被记为例外，以后双击即可（Apple 官方文档路径）。
+3. **终端去掉隔离标记**：
+
+   ```bash
+   xattr -d com.apple.quarantine /Applications/MeetingScribe.app
+   ```
+
+**注意**：macOS 15 起 Apple 移除了「按住 Control 点按图标 → 打开」这条老办法，
+弹框里也不会再有「打开」按钮，只能走上面第 2 条的设置页。
+
+**要彻底免掉这一步**，需要 Apple Developer Program（99 美元/年）：签 Developer ID → 开硬运行时 →
+送 Apple 公证 → 装订票据。仓库里已经备好材料：
+
+```bash
+./Scripts/notarize_app.sh --check      # 先体检，看缺什么
+./Scripts/notarize_app.sh              # 五步走完（需先存好公证凭据）
+```
 
 ## 开源协议
 
