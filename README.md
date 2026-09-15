@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前版本：`0.10.0`
+当前版本：`0.10.1`
 
 ## 目标
 
@@ -25,6 +25,22 @@
 4. 测试成功后，从服务商返回的模型列表中选择模型。
 
 如果服务商没有提供标准 `/models` 列表，应用会保留手动填写模型 ID 的兜底方式。
+
+## 下载安装
+
+不想编译的话，到 [Releases](https://github.com/a916791360/MeetingScribe/releases/latest)
+下载 `MeetingScribe-<版本>-macOS.zip`，解压后把 `MeetingScribe.app` 拖进「应用程序」。
+**包内自带转写引擎和模型，不需要另外安装任何东西。**
+
+首次打开会被 macOS Gatekeeper 拦下（本 App 未做 Apple 公证），**这不是文件损坏**——
+按下面「分发给别人安装」第 2 条，在「系统设置 → 隐私与安全性 → 安全性」里放行一次即可，
+之后不再提示。zip 里附了 `首次打开请看这里.txt`，写的就是这几步。
+
+下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
+
+```bash
+shasum -a 256 MeetingScribe-0.10.1-macOS.zip
+```
 
 ## 运行
 
