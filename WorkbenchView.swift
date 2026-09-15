@@ -139,7 +139,7 @@ struct WorkbenchSidebarView: View {
                         subtitle: "",
                         count: store.sessions.count
                     ) {
-                        VStack(spacing: 4) {
+                        VStack(spacing: AppTheme.space1) {
                             // 失败 / 中断的会话也留在列表里（原来被 filter 掉了）。
                             // 它们的录音还在磁盘上，藏起来用户就既看不到、也没法重新处理。
                             ForEach(store.sessions) { session in
@@ -215,7 +215,7 @@ struct WorkbenchSessionRowView: View {
                     .font(.caption)
                     .foregroundStyle(subtitleColor)
 
-                HStack(spacing: 6) {
+                HStack(spacing: AppTheme.space1) {
                     if let duration = session.duration {
                         Text(duration.clockLabel)
                         Text("·")
@@ -236,7 +236,7 @@ struct WorkbenchSessionRowView: View {
                     Capsule()
                         .fill(AppTheme.accent)
                         .frame(width: 3, height: 28)
-                        .padding(.leading, 4)
+                        .padding(.leading, AppTheme.space1)
                 }
             }
         }
@@ -302,8 +302,8 @@ struct WorkbenchRenameSessionSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: AppTheme.space4) {
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
                 Text("重命名会议")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(AppTheme.ink)
@@ -334,7 +334,7 @@ struct WorkbenchRenameSessionSheet: View {
                 .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(24)
+        .padding(AppTheme.space6)
         .frame(width: 380)
         .background(AppTheme.paper)
         .onAppear {
@@ -357,9 +357,9 @@ struct WorkbenchSidebarSection<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: AppTheme.space3) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
+                VStack(alignment: .leading, spacing: AppTheme.space1) {
                     Text(title)
                         .font(.headline)
                         .foregroundStyle(AppTheme.ink)
@@ -376,8 +376,8 @@ struct WorkbenchSidebarSection<Content: View>: View {
                 Text("\(count)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AppTheme.muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, AppTheme.space2)
+                    .padding(.vertical, AppTheme.space1)
                     .background(AppTheme.accentSoft, in: Capsule())
             }
 
@@ -679,7 +679,7 @@ struct WorkbenchSegmentStrip<Item: Hashable>: View {
     @Binding var selection: Item
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: AppTheme.space1) {
             ForEach(items, id: \.self) { item in
                 Button {
                     selection = item
@@ -718,7 +718,7 @@ struct WorkbenchSegmentStrip<Item: Hashable>: View {
                 .accessibilityAddTraits(isCurrent(item) ? .isSelected : [])
             }
         }
-        .padding(2)
+        .padding(AppTheme.space1)
         .background(
             AppTheme.segmentTrack,
             in: RoundedRectangle(cornerRadius: AppTheme.segmentRadius, style: .continuous)
@@ -1298,7 +1298,7 @@ struct WorkbenchSectionMoreButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 3) {
+            HStack(spacing: AppTheme.space1) {
                 Text("查看全部")
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
@@ -1457,7 +1457,7 @@ struct WorkbenchOriginalDocument: View {
     @State private var editingSegmentID: UUID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: AppTheme.space4) {
             header
 
             if session.transcriptSegments.isEmpty {
@@ -1491,7 +1491,7 @@ struct WorkbenchOriginalDocument: View {
     /// 就不是事实了，而它看上去毫无异常（同 2C 的 `summaryModel`：留 nil 才是字面事实）。
     /// 换成的这句同时解释了为什么被改过的段尾不再有机器置信度。
     private var header: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: AppTheme.space2) {
             Text(session.createdAt.formatted(date: .numeric, time: .shortened))
                 .foregroundStyle(AppTheme.muted)
                 .monospacedDigit()
@@ -1718,7 +1718,7 @@ struct WorkbenchTranscriptDocumentRow: View {
         }
         // 行宽 = 结构列：编辑态也不改，否则一进编辑整页会横向跳一下。
         .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
-        .padding(.vertical, 12)
+        .padding(.vertical, AppTheme.space3)
         .onChange(of: isEditing) { _, editing in
             guard editing else { return }
             draft = segment.text
@@ -1835,8 +1835,8 @@ struct WorkbenchTranscriptDocumentRow: View {
                     .lineLimit(1...12)
                     .focused($isFocused)
                     .onExitCommand { onCancel() }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, AppTheme.space2)
+                    .padding(.vertical, AppTheme.space2)
                     .background(
                         AppTheme.paperSoft,
                         in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
@@ -1872,7 +1872,7 @@ struct WorkbenchTranscriptDocumentRow: View {
                 // "图标 / 描边 / 底盘"的量级调出来的，直接当 11pt 正文用，浅色下实测
                 // 只有 4.42:1（AA 要 4.5:1），而且看上去"只是红了一点"，
                 // 谁也不会为此报个 bug。措辞本身已经说清了这是拒绝，颜色只是提示。
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
                     Image(systemName: "exclamationmark.circle")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.danger)
@@ -1915,10 +1915,10 @@ struct WorkbenchSummaryFallbackNotice: View {
     var retry: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: AppTheme.space2) {
             Image(systemName: "info.circle")
                 .foregroundStyle(AppTheme.warning)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
                 Text(headline)
                     .font(.callout)
                     .foregroundStyle(AppTheme.ink)
@@ -1946,8 +1946,8 @@ struct WorkbenchSummaryFallbackNotice: View {
                 .fixedSize()
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(.vertical, AppTheme.space3)
+        .padding(.horizontal, AppTheme.space4)
         // 底色 0.10 → 0.06（阶段 3-1）。原来那层黄把 `muted` 压到 **4.46:1**，
         // 差 0.04 不达 AA —— 又一处"贴线不达标"；0.06 下是 4.60:1。
         // 黄色底只是"这里有事要说"的一层暗示，本身不承载信息，淡一点不影响警示。
@@ -1974,7 +1974,7 @@ struct WorkbenchInlineNotice: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundStyle(AppTheme.warning)
@@ -1993,8 +1993,8 @@ struct WorkbenchInlineNotice: View {
                 .foregroundStyle(AppTheme.accent)
                 .fixedSize()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, AppTheme.space2)
+        .padding(.horizontal, AppTheme.space3)
         .background(
             // 与 `WorkbenchSummaryFallbackNotice` 同一档：0.10 会把次级文字压到 4.46:1。
             AppTheme.warning.opacity(0.06),
@@ -2019,7 +2019,7 @@ struct WorkbenchSummaryEmptyState: View {
     var actionIcon: String = "gearshape"
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: AppTheme.space3) {
             Image(systemName: "doc.text")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(AppTheme.muted)
@@ -2051,7 +2051,7 @@ struct WorkbenchSummaryEmptyState: View {
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
             }
-            .padding(.top, 4)
+            .padding(.top, AppTheme.space1)
         }
         // 限宽：空态那段话是要读完的，铺到 560pt 以上就不成句了。
         .frame(maxWidth: 420)
@@ -2278,9 +2278,9 @@ struct WorkbenchFailureState: View {
     let retryAction: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppTheme.space4) {
+            HStack(alignment: .top, spacing: AppTheme.space4) {
+                VStack(alignment: .leading, spacing: AppTheme.space2) {
                     WorkbenchDarkChip(text: session.status.title, systemImage: session.status.icon)
 
                     // 会议名不在这里重复——窗口标题栏已经有它（第四轮已确立的规矩）。
@@ -2292,7 +2292,7 @@ struct WorkbenchFailureState: View {
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 8) {
+                HStack(spacing: AppTheme.space2) {
                     Button {
                         retryAction()
                     } label: {
@@ -2781,7 +2781,7 @@ struct WorkbenchLevelBars: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
-            HStack(alignment: .center, spacing: 3) {
+            HStack(alignment: .center, spacing: AppTheme.space1) {
                 ForEach(0..<barCount, id: \.self) { index in
                     Capsule()
                         .fill(AppTheme.accent.opacity(0.78))
@@ -2805,7 +2805,7 @@ struct WorkbenchTypingDots: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.4)) { context in
             let step = Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 3
-            HStack(spacing: 4) {
+            HStack(spacing: AppTheme.space1) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
                         .fill(AppTheme.accent.opacity(index == step ? 0.95 : 0.28))
@@ -2827,17 +2827,17 @@ struct WorkbenchMetricStrip: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
+            HStack(spacing: AppTheme.space3) {
                 ForEach(items.indices, id: \.self) { index in
                     WorkbenchMetricCard(item: items[index])
                 }
             }
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
+            VStack(spacing: AppTheme.space3) {
+                HStack(spacing: AppTheme.space3) {
                     WorkbenchMetricCard(item: items[0])
                     WorkbenchMetricCard(item: items[1])
                 }
-                HStack(spacing: 12) {
+                HStack(spacing: AppTheme.space3) {
                     WorkbenchMetricCard(item: items[2])
                     WorkbenchMetricCard(item: items[3])
                 }
@@ -2859,7 +2859,7 @@ struct WorkbenchMetricCard: View {
     let item: WorkbenchMetricStrip.Item
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
             Text(item.title.uppercased())
                 .font(.caption2.weight(.semibold))
                 .tracking(0.08)
@@ -2924,7 +2924,7 @@ struct WorkbenchEmptyState: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: AppTheme.space6) {
             Image(systemName: "waveform.and.mic")
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
@@ -2932,7 +2932,7 @@ struct WorkbenchEmptyState: View {
                 .background(AppTheme.accentSoft, in: Circle())
                 .accessibilityHidden(true)
 
-            VStack(spacing: 9) {
+            VStack(spacing: AppTheme.space2) {
                 Text("开始记录第一场会议")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
@@ -2944,7 +2944,7 @@ struct WorkbenchEmptyState: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: AppTheme.space2) {
                 Button {
                     store.startRecording()
                 } label: {
@@ -2999,7 +2999,7 @@ struct WorkbenchEmptyState: View {
                 .font(.caption)
                 .foregroundStyle(AppTheme.muted)
         } else {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: AppTheme.space2) {
                 Text("录音条件")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AppTheme.muted)
@@ -3025,8 +3025,8 @@ struct WorkbenchEmptyState: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
+            .padding(.vertical, AppTheme.space3)
+            .padding(.horizontal, AppTheme.space4)
             .frame(maxWidth: 420, alignment: .leading)
             .background(
                 AppTheme.paperSoft,
@@ -3043,7 +3043,7 @@ struct WorkbenchEmptyState: View {
         isGranted: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppTheme.space2) {
             Image(systemName: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundStyle(isGranted ? AppTheme.accent : AppTheme.warning)
@@ -3092,8 +3092,8 @@ struct WorkbenchSettingsPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: AppTheme.space4) {
+                VStack(alignment: .leading, spacing: AppTheme.space2) {
                     Text("设置")
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(AppTheme.ink)
@@ -3116,9 +3116,9 @@ struct WorkbenchSettingsPane: View {
                 .help("关闭设置")
                 .accessibilityLabel("关闭设置")
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 22)
-            .padding(.bottom, 18)
+            .padding(.horizontal, AppTheme.space6)
+            .padding(.top, AppTheme.space5)
+            .padding(.bottom, AppTheme.space4)
             // 页头原来没有自己的底，露出来的是 sheet 的原生底色 —— 深夜模式下
             // 那是深色，于是「设置」两个字（墨色）直接消失在深底上。
             // 补一层纸底，页头与表体成为同一张纸。
@@ -3128,13 +3128,13 @@ struct WorkbenchSettingsPane: View {
                 .overlay(AppTheme.rule)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AppTheme.space6) {
                     WorkbenchSettingsGroup(
                         title: "会议整理模型",
                         subtitle: "只负责会后生成速览、纪要、决策和待办。中文逐字稿始终由本机 Whisper 完成。"
                     ) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: AppTheme.space4) {
+                            HStack(alignment: .center, spacing: AppTheme.space3) {
                                 Image(systemName: store.summarySettings.provider.icon)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(AppTheme.accent)
@@ -3144,7 +3144,7 @@ struct WorkbenchSettingsPane: View {
                                         style: .continuous
                                     ))
 
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: AppTheme.space1) {
                                     Text(store.summarySettings.displayName)
                                         .font(.body.weight(.semibold))
                                         .foregroundStyle(AppTheme.ink)
@@ -3190,7 +3190,7 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     }
                                 } label: {
-                                    HStack(spacing: 7) {
+                                    HStack(spacing: AppTheme.space2) {
                                         Text("接入方式")
                                         Image(systemName: "chevron.up.chevron.down")
                                             .font(.caption2.weight(.semibold))
@@ -3204,10 +3204,10 @@ struct WorkbenchSettingsPane: View {
                                 .overlay(AppTheme.rule)
 
                             if store.summarySettings.provider == .localRules {
-                                HStack(alignment: .top, spacing: 10) {
+                                HStack(alignment: .top, spacing: AppTheme.space2) {
                                     Image(systemName: "lock.shield")
                                         .foregroundStyle(AppTheme.success)
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: AppTheme.space1) {
                                         Text("当前不使用总结模型")
                                             .font(.callout.weight(.semibold))
                                             .foregroundStyle(AppTheme.ink)
@@ -3218,8 +3218,8 @@ struct WorkbenchSettingsPane: View {
                                     }
                                 }
                             } else {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    VStack(alignment: .leading, spacing: 6) {
+                                VStack(alignment: .leading, spacing: AppTheme.space4) {
+                                    VStack(alignment: .leading, spacing: AppTheme.space2) {
                                         Text("服务地址")
                                             .font(.callout.weight(.semibold))
                                             .foregroundStyle(AppTheme.ink)
@@ -3236,7 +3236,7 @@ struct WorkbenchSettingsPane: View {
                                     }
 
                                     if store.summarySettings.provider.requiresAPIKey {
-                                        VStack(alignment: .leading, spacing: 6) {
+                                        VStack(alignment: .leading, spacing: AppTheme.space2) {
                                             Text("API Key")
                                                 .font(.callout.weight(.semibold))
                                                 .foregroundStyle(AppTheme.ink)
@@ -3246,7 +3246,7 @@ struct WorkbenchSettingsPane: View {
                                             )
                                             .textFieldStyle(.roundedBorder)
 
-                                            HStack(spacing: 10) {
+                                            HStack(spacing: AppTheme.space2) {
                                                 Button("保存到钥匙串") {
                                                     store.saveSummaryAPIKey()
                                                 }
@@ -3265,12 +3265,12 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     }
 
-                                    HStack(alignment: .center, spacing: 12) {
+                                    HStack(alignment: .center, spacing: AppTheme.space3) {
                                         Button {
                                             store.testSummaryModel()
                                         } label: {
                                             if store.isLoadingSummaryModels {
-                                                HStack(spacing: 7) {
+                                                HStack(spacing: AppTheme.space2) {
                                                     ProgressView()
                                                         .controlSize(.small)
                                                     Text("正在获取模型…")
@@ -3305,7 +3305,7 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     }
 
-                                    VStack(alignment: .leading, spacing: 6) {
+                                    VStack(alignment: .leading, spacing: AppTheme.space2) {
                                         Text(store.canEditSummaryModelManually ? "模型 ID" : "选择服务商模型")
                                             .font(.callout.weight(.semibold))
                                             .foregroundStyle(AppTheme.ink)
@@ -3324,7 +3324,7 @@ struct WorkbenchSettingsPane: View {
                                                     }
                                                 }
                                             } label: {
-                                                HStack(spacing: 8) {
+                                                HStack(spacing: AppTheme.space2) {
                                                     Text(
                                                         store.summarySettings.modelName.isEmpty
                                                             ? "请选择一个模型"
@@ -3342,8 +3342,8 @@ struct WorkbenchSettingsPane: View {
                                                         : AppTheme.ink
                                                 )
                                                 .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 9)
+                                                .padding(.horizontal, AppTheme.space3)
+                                                .padding(.vertical, AppTheme.space2)
                                                 .background(
                                                     AppTheme.paper,
                                                     in: RoundedRectangle(
@@ -3398,8 +3398,8 @@ struct WorkbenchSettingsPane: View {
                         title: "本地转写",
                         subtitle: "录音结束后，Whisper 在这台 Mac 上生成原汁原味的逐字稿。"
                     ) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: AppTheme.space4) {
+                            HStack(alignment: .center, spacing: AppTheme.space3) {
                                 Image(systemName: transcriptionReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                                     .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(transcriptionReady ? AppTheme.success : AppTheme.warning)
@@ -3409,7 +3409,7 @@ struct WorkbenchSettingsPane: View {
                                         in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
                                     )
 
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: AppTheme.space1) {
                                     Text("中文 Whisper")
                                         .font(.body.weight(.semibold))
                                         .foregroundStyle(AppTheme.ink)
@@ -3431,7 +3431,7 @@ struct WorkbenchSettingsPane: View {
                                 "高级：转写组件路径",
                                 isExpanded: $showTranscriptionDetails
                             ) {
-                                VStack(alignment: .leading, spacing: 16) {
+                                VStack(alignment: .leading, spacing: AppTheme.space4) {
                                     WorkbenchSettingsPathRow(
                                         title: "转写命令",
                                         subtitle: "本机 whisper-cli 的可执行文件。",
@@ -3459,7 +3459,7 @@ struct WorkbenchSettingsPane: View {
                                         }
                                     )
                                 }
-                                .padding(.top, 8)
+                                .padding(.top, AppTheme.space2)
                             }
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(AppTheme.ink)
@@ -3471,13 +3471,13 @@ struct WorkbenchSettingsPane: View {
                         subtitle: "一行一个词，逗号后面的写法会被换成前面的。例如「多模态, 多摩泰」"
                             + "表示把听到的「多摩泰」改成「多模态」。转写、逐字稿纠错、整理三处都用它。"
                     ) {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: AppTheme.space2) {
                             TextEditor(text: $store.glossaryText)
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundStyle(AppTheme.ink)
                                 .scrollContentBackground(.hidden)
                                 .frame(minHeight: 132)
-                                .padding(8)
+                                .padding(AppTheme.space2)
                                 .background(
                                     AppTheme.paper,
                                     in: RoundedRectangle(
@@ -3494,7 +3494,7 @@ struct WorkbenchSettingsPane: View {
                                 )
                                 .accessibilityLabel("识别术语表")
 
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
                                 // **颜色只管图标，文字一律走 muted / ink。**
                                 // 这里踩过一个坑：`success` / `warning` 这类语义色是给图标
                                 // 和底盘用的，直接拿去当 11pt 正文色，浅色下只有 2.7:1 ——
@@ -3523,7 +3523,7 @@ struct WorkbenchSettingsPane: View {
                             }
 
                             if let warning = glossaryBudgetWarning {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
                                     Image(systemName: "exclamationmark.triangle")
                                         .font(.caption)
                                         .foregroundStyle(AppTheme.warning)
@@ -3545,7 +3545,7 @@ struct WorkbenchSettingsPane: View {
                         WorkbenchAppearanceSettingRow()
                     }
                 }
-                .padding(24)
+                .padding(AppTheme.space6)
             }
             .background(AppTheme.paper)
         }
@@ -3621,7 +3621,7 @@ struct WorkbenchAppearanceSettingRow: View {
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: AppTheme.space3) {
             Image(systemName: iconName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
@@ -3631,7 +3631,7 @@ struct WorkbenchAppearanceSettingRow: View {
                     in: RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
                 )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
                 Text(store.appearance.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(AppTheme.ink)
@@ -3667,8 +3667,8 @@ struct WorkbenchSettingsGroup<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: AppTheme.space4) {
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
                 Text(title)
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(AppTheme.ink)
@@ -3680,7 +3680,7 @@ struct WorkbenchSettingsGroup<Content: View>: View {
 
             content()
         }
-        .padding(20)
+        .padding(AppTheme.space5)
         .background(AppTheme.paperSoft)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.radius, style: .continuous)
@@ -3699,9 +3699,9 @@ struct WorkbenchSettingsPathRow: View {
     let restoreAction: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: AppTheme.space2) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
+                VStack(alignment: .leading, spacing: AppTheme.space1) {
                     Text(title)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(AppTheme.ink)
@@ -3717,7 +3717,7 @@ struct WorkbenchSettingsPathRow: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
 
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.space2) {
                 Text("默认：\(defaultPath)")
                     .font(.caption)
                     .foregroundStyle(AppTheme.muted)
@@ -3739,15 +3739,15 @@ struct WorkbenchPathState: View {
     let isValid: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: AppTheme.space2) {
             Image(systemName: isValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.caption2.weight(.semibold))
             Text(isValid ? "已找到" : "未找到")
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(isValid ? AppTheme.success : AppTheme.warning)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, AppTheme.space2)
+        .padding(.vertical, AppTheme.space1)
         .background(AppTheme.accentSoft, in: Capsule())
     }
 }
@@ -3781,7 +3781,7 @@ struct WorkbenchDarkChip: View {
     var systemImage: String? = nil
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: AppTheme.space2) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.caption2.weight(.semibold))
@@ -3790,8 +3790,8 @@ struct WorkbenchDarkChip: View {
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(.white.opacity(0.92))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, AppTheme.space2)
+        .padding(.vertical, AppTheme.space1)
         .background(Color.white.opacity(0.09), in: Capsule())
         .overlay(
             Capsule()
@@ -3905,8 +3905,8 @@ struct WorkbenchConfidenceChip: View {
         Text("把握 \(value.confidenceLabel)")
             .font(.caption.weight(.semibold))
             .foregroundStyle(AppTheme.muted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, AppTheme.space2)
+            .padding(.vertical, AppTheme.space1)
             .background(AppTheme.accentSoft, in: Capsule())
     }
 }
@@ -3918,8 +3918,8 @@ struct WorkbenchPriorityChip: View {
         Text("\(priority.friendlyLabel)优先")
             .font(.caption.weight(.semibold))
             .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, AppTheme.space2)
+            .padding(.vertical, AppTheme.space1)
             .background(background, in: Capsule())
     }
 
@@ -3948,7 +3948,7 @@ struct WorkbenchLightButtonStyle: ButtonStyle {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(emphasized ? .white : AppTheme.ink)
                 .padding(.horizontal, AppTheme.space3)
-                .padding(.vertical, 10)
+                .padding(.vertical, AppTheme.space2)
                 .background(emphasized ? AppTheme.accentFill : AppTheme.paperSoft)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
@@ -3969,7 +3969,7 @@ struct WorkbenchDarkButtonStyle: ButtonStyle {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(emphasized ? .white : .white.opacity(0.90))
                 .padding(.horizontal, AppTheme.space3)
-                .padding(.vertical, 10)
+                .padding(.vertical, AppTheme.space2)
                 .background(emphasized ? AppTheme.accentFill : Color.white.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)

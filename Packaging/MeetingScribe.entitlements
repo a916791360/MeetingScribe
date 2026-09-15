@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 硬运行时（options runtime）下，麦克风访问必须显式声明这个 entitlement，
+	     光有 Info.plist 的 NSMicrophoneUsageDescription 不够，会被系统直接拒绝。 -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- 屏幕录制（ScreenCaptureKit）走 TCC 授权，非沙盒应用不需要 entitlement。
+	     应用没有开启 App Sandbox，所以这里不列 app-sandbox 那一条。 -->
+
+	<!-- 如果 whisper-cli（Resources/whisper/bin 下的独立进程）在公证后无法启动，
+	     说明它带的 dylib 没通过库校验。优先做法是逐个签名 dylib
+	     （notarize_app.sh 已做 inside-out 签名），实在不行才解开下面这一条：
+	     com.apple.security.cs.disable-library-validation = true
+	-->
+</dict>
+</plist>
