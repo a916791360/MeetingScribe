@@ -132,7 +132,6 @@ final class MeetingStore: ObservableObject {
     init(storage: SessionStorage? = nil) {
         self.storage = storage ?? SessionStorage()
         let defaults = Self.defaultRuntimePaths()
-        let legacyDefaults = Self.legacyRuntimePaths()
         let storedCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath)
         let storedModelPath = UserDefaults.standard.string(forKey: Preferences.whisperModelPath)
         let summaryProvider = SummaryModelProvider(
@@ -151,13 +150,15 @@ final class MeetingStore: ObservableObject {
         // New recordings always use the combined system-audio and microphone path.
         // Keep CaptureMode on the model for backwards compatibility with old sessions.
         captureMode = .mixed
-        whisperCLIPath = storedCLIPath == nil || storedCLIPath == legacyDefaults.cliURL.path
+        // 引擎与模型路径的迁移判据：**没存过，或存的那个路径在本机不存在**。
+        // 刻意不拿具体的旧路径做字面量比对 —— 旧实现正是这么写的，结果把开发机的
+        // 私人目录结构编进了二进制，随安装包一起分发了出去。
+        // 「文件不存在」这条判据对两类人都成立（老用户：旧路径已随目录变动失效；
+        // 陌生人：从未存过），而且不依赖任何人的机器上有什么。
+        whisperCLIPath = Self.shouldUseDefaultPath(storedCLIPath)
             ? defaults.cliURL.path
             : storedCLIPath!
-        // 模型路径只在「用户没自己挑过模型」时才跟着默认值走。
-        // 判定依据是存的值等于某个内置默认路径（内置 small / 历史外部路径 / 上一次自动选定）——
-        // 只要用户在设置里指过别的文件，这里就一个字都不动。
-        whisperModelPath = storedModelPath == nil || Self.isImplicitModelPath(storedModelPath!)
+        whisperModelPath = Self.shouldUseDefaultPath(storedModelPath)
             ? defaults.modelURL.path
             : storedModelPath!
         // 没存过就给出厂词表（就是 1D 实测用过的那一版），用户改过就一个字不动。
@@ -1879,22 +1880,43 @@ final class MeetingStore: ObservableObject {
         return nil
     }
 
-    /// 是否是「应用自己选定的」模型路径，即用户没表达过偏好。
-    private static func isImplicitModelPath(_ path: String) -> Bool {
-        var implicit = [legacyRuntimePaths().modelURL.path, defaultRuntimePaths().modelURL.path]
-        if let bundled = bundledModelURL() {
-            implicit.append(bundled.path)
+    /// 「这个存下来的路径该不该被默认值取代」。
+    ///
+    /// 只有两条判据：没存过，或存的那个路径在本机**不存在**。
+    /// 刻意不做字面量比对 —— 那需要把某个具体路径写死在源码里，而它会被编进二进制、
+    /// 随安装包一起分发。旧实现就是这么写的，把开发机的私人目录结构泄了出去。
+    private static func shouldUseDefaultPath(_ stored: String?) -> Bool {
+        guard let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return true
         }
-        return implicit.contains(path)
+        return !FileManager.default.fileExists(atPath: stored)
     }
 
+    /// 开发期的外部兜底路径：**只在显式声明时才生效**。
+    ///
+    /// 打包后的 app 自带引擎与模型（`bundledCLIURL` / `bundledModelURL` 总能命中），
+    /// 走不到这里；它存在的意义只是让 `swift run` 不必每次去设置里填路径。
+    /// 想用就自己声明，例如：
+    /// `MS_DEV_WHISPER_ROOT=/path/to/whisper.cpp swift run`
+    /// 默认值 `~/whisper.cpp` 正好是 README 推荐的安装位置，是个中性路径，
+    /// 不含任何人的项目名。
     private static func legacyRuntimePaths() -> (cliURL: URL, modelURL: URL) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let whisperRoot = home
-            .appendingPathComponent("Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp")
-        let cli = whisperRoot.appendingPathComponent("build/bin/whisper-cli")
-        let model = whisperRoot.appendingPathComponent("models/ggml-small.bin")
-        return (cli, model)
+        let declared = ProcessInfo.processInfo.environment["MS_DEV_WHISPER_ROOT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let root: URL
+        if let declared, !declared.isEmpty {
+            root = URL(
+                fileURLWithPath: (declared as NSString).expandingTildeInPath,
+                isDirectory: true
+            )
+        } else {
+            root = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("whisper.cpp", isDirectory: true)
+        }
+        return (
+            root.appendingPathComponent("build/bin/whisper-cli"),
+            root.appendingPathComponent("models/ggml-small.bin")
+        )
     }
 }
 

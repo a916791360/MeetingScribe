@@ -7,7 +7,16 @@ APP_NAME="MeetingScribe"
 APP_DIR="${APP_DIR:-$ROOT_DIR/.build/$APP_NAME.app}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 ASSET_OUTPUT="$(mktemp -d /private/tmp/meetingscribe-assets.XXXXXX)"
-WHISPER_ROOT="${WHISPER_ROOT:-$HOME/Documents/Codex/易运盈/outputs/crm-mall-flow/whisper.cpp}"
+# whisper.cpp 的位置。三种给法，优先级从高到低：
+#   1. 环境变量：WHISPER_ROOT=/path/to/whisper.cpp ./Scripts/package_app.sh
+#   2. Scripts/local.env（本机私有，不进仓库）：WHISPER_ROOT="/path/to/whisper.cpp"
+#   3. 默认 ~/whisper.cpp —— README 里推荐的安装位置
+# 刻意不预置任何人的私人目录：这个脚本是公开的，写死路径等于把开发机的
+# 目录结构随仓库发出去。
+if [[ -f "$ROOT_DIR/Scripts/local.env" ]]; then
+    source "$ROOT_DIR/Scripts/local.env"
+fi
+WHISPER_ROOT="${WHISPER_ROOT:-$HOME/whisper.cpp}"
 WHISPER_BIN_DIR="$WHISPER_ROOT/build/bin"
 WHISPER_MODEL="$WHISPER_ROOT/models/ggml-small.bin"
 
@@ -113,3 +122,6 @@ codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_DIR" >/dev/null
 
 print "Packaged: $APP_DIR"
 print "Signed with: $SIGNING_IDENTITY"
+
+# 这道审计放在签名之后 —— 扫的就是最终要发出去的那一份。
+"$ROOT_DIR/Scripts/audit_release.sh" "$APP_DIR"

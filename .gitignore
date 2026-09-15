@@ -5,6 +5,9 @@ xcuserdata
 *.xcuserstate
 .DS_Store
 
+# 本机私有配置（打包脚本的 WHISPER_ROOT 等），绝不进仓库
+Scripts/local.env
+
 # 质量评测集：含真实会议内容，只在本机留存，绝不进仓库
 docs/verification/quality/cases/
 docs/verification/quality/runs/

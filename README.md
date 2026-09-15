@@ -107,10 +107,21 @@ cmake -B build && cmake --build build -j --config Release
 优先级 `large-v3-turbo` > `large-v3` > `medium` > `small` > `base` > `tiny`，
 用户目录里的模型优先于 App 内置的那个。
 
-> 早期版本把路径写死成开发者本机目录（`~/Documents/Codex/...`），那只是历史兜底；
-> 现在两者都不存在时会明确报「找不到 whisper-cli」，不再静默失败。
+> 早期版本把引擎路径写死成开发者本机目录，那只是历史兜底；现在解析顺序是
+> **App 内置 → `~/whisper.cpp` → 明确报错**，不再静默失败。
 
 ## 分发给别人安装
+
+**包里有什么**：`MeetingScribe.app` 是自包含的（约 483MB）—— 主程序 + `whisper-cli` +
+依赖 dylib + `ggml-small.bin`（约 466MB）。对方**不需要另外装 whisper 或下模型**，解压即用。
+想换更强的模型，把 `ggml-*.bin` 丢进 `~/Library/Application Support/MeetingScribe/models/`，
+重启即生效（优先级见上一节）。
+
+**包里没有什么**：不含任何使用者数据。API Key 存在 **macOS 钥匙串**
+（service `MeetingScribe.summary-model`，按服务商分条）；大模型配置（服务商／模型名／端点）
+与术语表存在 **UserDefaults**；会议录音与纪要存在
+`~/Library/Application Support/MeetingScribe/`。**这三类都是「按用户」落在本机 `~/Library` 下，
+物理上不在应用包里** —— 所以拷 `MeetingScribe.app` 给别人，不会带走你的 Key、配置或会议记录。
 
 打包脚本默认用本机自签证书，**没有经过 Apple 公证**。别人下载后 macOS 会拦下来，
 弹「Apple 无法验证…」的框，且按钮只有「完成」和「移到废纸篓」。这不是文件坏了，是 Gatekeeper 在起作用。
