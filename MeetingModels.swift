@@ -684,6 +684,46 @@ struct TranscriptSegment: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// 播放头落在哪一段（原文页的「当前句」高亮用它）。
+///
+/// **判据是「最后一段的起点 ≤ t」，不是「t 落在 start...end 之间」。**
+/// whisper 在有停顿时不产段，段与段之间是**真实的空隙**（几秒很常见）。
+/// 用区间判断的话，播放到空隙里就会返回 nil —— 界面上表现为「高亮忽然消失一下
+/// 又出现」，而用户完全不知道为什么。按"最后一段起点"算，空隙里仍然高亮上一句，
+/// 这才是"我正听到哪里"的正确回答。
+extension Array where Element == TranscriptSegment {
+
+    /// 当前段的**序号**。空数组、或 `t` 落在第一段之前（还没开口）时为 nil。
+    ///
+    /// 二分而不是线性：逐字稿一场会上千段，而这个函数跟着播放头每 0.25 秒被问一次。
+    /// 线性虽然也跑得动，但这是"随时可能被放到更热的地方"的那种代码。
+    func playheadIndex(at time: TimeInterval) -> Int? {
+        guard !isEmpty else { return nil }
+        // 第一段还没开始：此刻没有"当前句"可言，别硬指到第一句上 ——
+        // 那会让人以为"已经听到第一句了"，而其实播放头还在它前面。
+        guard time >= self[0].start else { return nil }
+
+        var low = 0
+        var high = count - 1
+        var answer = 0
+        while low <= high {
+            let mid = (low + high) / 2
+            if self[mid].start <= time {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
+    }
+
+    /// 当前段本身（原文页要高亮它、要滚到它）。
+    func playheadSegment(at time: TimeInterval) -> TranscriptSegment? {
+        playheadIndex(at: time).map { self[$0] }
+    }
+}
+
 struct InsightItem: Codable, Identifiable, Hashable, Sendable {
     var id: UUID = UUID()
     var label: String

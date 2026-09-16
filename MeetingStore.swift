@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 /// 一个转写分块在整段音频里的位置（秒）。
 ///
@@ -64,6 +65,13 @@ final class MeetingStore: ObservableObject {
     @Published var microphonePermission: MicrophonePermission = .notDetermined
     /// 缺系统音频权限被拦下时，界面上要显示的一条说明（正常为 nil）。
     @Published var captureBlockedNotice: String?
+    /// 导出失败时的一条说明（正常为 nil）。
+    ///
+    /// **只在失败时非 nil**：导出成功不弹任何东西 —— SavePanel 自己关掉就是成功，
+    /// 这是 macOS 的惯例，再补一句「导出成功」属于画蛇添足。
+    /// 也**不覆盖 `captureBlockedNotice`**：两者语义不同（一个是录音被拦、一个是文件没写成），
+    /// 共用一条会让人在权限出错时读到磁盘错误。
+    @Published var exportNotice: String?
     @Published var availableSummaryModels: [String] = []
     @Published var canEditSummaryModelManually = false
     @Published var isLoadingSummaryModels = false
@@ -427,6 +435,53 @@ final class MeetingStore: ObservableObject {
         guard let session = selectedSession else { return }
         let folderURL = storage.folderURL(for: session)
         NSWorkspace.shared.activateFileViewerSelecting([folderURL])
+    }
+
+    /// 把当前选中的会议导出成一个 Markdown 文件。
+    ///
+    /// 走 `NSSavePanel` 而不是固定落点：用户可能把它存进项目文件夹、也可能存桌面，
+    /// 这是他的决定。
+    ///
+    /// **取消不是错误** —— SavePanel 返回 `.cancel` 时直接返回，不写日志、不弹提示。
+    /// 把「用户主动取消」和「写入失败」混成同一件事，会让人以后不敢点取消。
+    func exportSelectedSession() {
+        guard let session = selectedSession else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = MeetingExporter.fileName(for: session)
+        panel.canCreateDirectories = true
+        panel.title = "导出会议纪要"
+        panel.message = "导出为 Markdown：粘进飞书文档、腾讯文档、Notion 都能直接识别标题与列表。"
+        panel.prompt = "导出"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try MeetingExporter.markdown(for: session)
+                .write(to: url, atomically: true, encoding: .utf8)
+            exportNotice = nil
+        } catch {
+            exportNotice = "导出失败：\(error.localizedDescription)"
+            Diagnostics.pipeline.error("导出会议失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 把当前选中的会议整份复制到剪贴板。
+    ///
+    /// 导出文件与复制到剪贴板**必须是同一份文本**（都走 `MeetingExporter.markdown`）：
+    /// 两条路各写一遍拼接逻辑，就会出现"复制的和导出的不一样"这种没人发现的分叉。
+    /// `board` 默认 `.general` —— 调用点不传参就是写系统剪贴板，行为与以前完全一样。
+    ///
+    /// 留这个参数不是为了"扩展性"，是为了**单测能证明这件事又不碰用户的剪贴板**：
+    /// 「按一下复制，粘出来的是不是那份导出文本」只能靠读剪贴板来验，
+    /// 而测试进程去动 `.general` 会把用户当下复制的东西冲掉（他可能刚复制了一段重要的内容）。
+    /// 注入一个具名粘贴板，同一段逻辑零副作用可验。
+    @discardableResult
+    func copySelectedSessionToPasteboard(to board: NSPasteboard = .general) -> Bool {
+        guard let session = selectedSession else { return false }
+        board.clearContents()
+        board.setString(MeetingExporter.markdown(for: session), forType: .string)
+        return true
     }
 
     func audioURL(for session: MeetingSession) -> URL? {

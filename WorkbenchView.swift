@@ -401,23 +401,42 @@ struct WorkbenchDetailView: View {
         }
         // 有会话时，空态不在屏幕上，所以"被权限拦下"那条说明得由这一层来显示。
         // 空态自己已经会显示同一条，所以这里限定 `workspaceSession != nil`，避免同一屏说两遍。
+        //
+        // 导出失败走 `else if` 挂在同一条位置上：两者**不会同时出现**（一个在没开始录音时才可能，
+        // 一个在结果页才可能），而各写一个并列的 notice 会让这一条区域在极端情况下叠成两行。
+        // 字段是分开的（`captureBlockedNotice` / `exportNotice`），所以谁也不覆盖谁。
         .safeAreaInset(edge: .top, spacing: 0) {
             if let blocked = store.captureBlockedNotice, store.workspaceSession != nil {
-                WorkbenchInlineNotice(
-                    message: blocked,
-                    actionTitle: "打开系统设置",
-                    action: { store.openScreenCaptureSettings() }
-                )
-                .frame(maxWidth: 620)
-                .padding(.horizontal, AppTheme.contentInset)
-                .padding(.top, AppTheme.space3)
-                .frame(maxWidth: .infinity, alignment: .center)
+                topNotice(blocked, actionTitle: "打开系统设置") {
+                    store.openScreenCaptureSettings()
+                }
+            } else if let exportNotice = store.exportNotice {
+                topNotice(exportNotice, actionTitle: "知道了") {
+                    store.exportNotice = nil
+                }
             }
         }
         .background(AppTheme.paper)
         .navigationTitle(store.workspaceSession?.title ?? "会议")
         .navigationSubtitle(navigationSubtitleText)
         .toolbar { workbenchToolbar }
+    }
+
+    /// 顶部提示条的**唯一**一处排版口径（宽度 620 / 居中 / 上留一档气口）。
+    ///
+    /// 抽出来是因为它现在有两个使用者（权限被拦、导出失败）。两处各写一遍的话，
+    /// 迟早出现"一条宽 620、另一条宽 560"这种一眼看不出、但并排时很明显的错位。
+    @ViewBuilder
+    private func topNotice(
+        _ message: String,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        WorkbenchInlineNotice(message: message, actionTitle: actionTitle, action: action)
+            .frame(maxWidth: 620)
+            .padding(.horizontal, AppTheme.contentInset)
+            .padding(.top, AppTheme.space3)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     /// 副标题原来只放一句「准备就绪」，一整条宽度只承载四个字，信息密度太低。
@@ -546,6 +565,17 @@ struct WorkbenchSessionWorkspace: View {
     @EnvironmentObject private var store: MeetingStore
     @State private var selectedTab: MeetingResultTab = .overview
     @StateObject private var audioPlayer = MeetingAudioPlayer()
+    /// 播放头当前落在哪一段（原文页据此高亮）。
+    ///
+    /// 存 **段 id 而不是秒数**：`currentTime` 每 0.25 秒变一次，把它当参数往下传，
+    /// 会让原文页那一千多行逐字稿**每秒重建四次**；段 id 只在一句话结束时才变，
+    /// 重建频率降到每十几秒一次。
+    @State private var playheadSegmentID: UUID?
+    /// 「跳到当前句」的一次性触发。
+    ///
+    /// 用**递增计数**而不是 `Bool`：连点两次要滚两次，`Bool` 第二次不触发（值没变），
+    /// 表现为「按钮偶尔失灵」——而用户会以为是自己没点到。
+    @State private var scrollToPlayheadTick = 0
 
     var body: some View {
         Group {
@@ -575,7 +605,9 @@ struct WorkbenchSessionWorkspace: View {
                             selection: $selectedTab,
                             isRefreshing: store.isProcessing,
                             openFolderAction: store.openSelectedSessionFolder,
-                            regenerateAction: { store.regenerateSummary(for: session) }
+                            regenerateAction: { store.regenerateSummary(for: session) },
+                            exportAction: { store.exportSelectedSession() },
+                            copyAction: { store.copySelectedSessionToPasteboard() }
                         )
 
                         // 模型没配好、而这一屏**又有内容**时，压一条常驻提示。
@@ -589,24 +621,47 @@ struct WorkbenchSessionWorkspace: View {
                             )
                             .padding(.top, AppTheme.space2)
                         }
+                    }
+                    // 控制条与正文**各自**钉在同一个 800 列上（原来是一次性套在外层 VStack 上）。
+                    //
+                    // 为什么拆开：正文里「当前句」那条 2pt 主色竖条站在内容列**左界之外** 8pt 处，
+                    // 而 `ScrollView` 会把越界内容裁掉 —— 两者挤在同一个 800 列里时，
+                    // **那条竖条会被整条裁掉**（像素实证：偏移 -8 时正文区找不到任何主色像素，
+                    // 偏移 0 时立刻出现在 x 420.5..422.5pt）。所以正文那个 ScrollView 要比
+                    // 内容列宽一档；列本身仍居中，左右位置不变（420.5..1220.5 不变）。
+                    .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
+                    .padding(.horizontal, AppTheme.contentInset)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
+                    ScrollViewReader { proxy in
                         ScrollView {
                             WorkbenchResultDocument(
                                 session: session,
                                 tab: selectedTab,
-                                onSelectTab: { selectedTab = $0 }
+                                onSelectTab: { selectedTab = $0 },
+                                onJump: playerJump,
+                                playheadSegmentID: playheadSegmentID,
+                                onScrollToPlayhead: { scrollToPlayheadTick += 1 }
                             )
-                            // 速览页的要点要能点时间锚跳播放，而播放器是这一层的
-                            // `@StateObject`（播放条也在这一层）。注入到文档子树里，
-                            // 免得把播放器一路当参数传到最底下的那一行。
-                            .environmentObject(audioPlayer)
                             .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
                             .padding(.top, AppTheme.space3)
                             .padding(.bottom, AppTheme.space6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            // 居中（原来写 `.leading`）：ScrollView 现在比内容列宽，
+                            // 再靠 `.leading` 会把整列推到左边去。居中后仍是 420.5..1220.5。
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        // 只有按了「跳到当前句」才滚 —— **不做自动跟随**。
+                        //
+                        // 自动跟随要在每个段边界把页面拽一下，而用户此刻可能正
+                        // 往上翻着看前面某一句；一场一小时的会上千段，这种"拽回去"
+                        // 会反复发生，是那种让人最后干脆不用这一页的问题。
+                        .onChange(of: scrollToPlayheadTick) { _, _ in
+                            guard let id = playheadSegmentID else { return }
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo(id, anchor: .center)
+                            }
                         }
                     }
-                    .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
                     .padding(.horizontal, AppTheme.contentInset)
                     .frame(maxWidth: .infinity, alignment: .center)
 
@@ -624,7 +679,30 @@ struct WorkbenchSessionWorkspace: View {
         }
         .onChange(of: session.id) { _, _ in
             selectedTab = .overview
+            playheadSegmentID = nil
             audioPlayer.load(url: store.audioURL(for: session))
+        }
+        // 播放头动了就重算"当前段"。**赋值本身不会引起重绘**（值没变时 SwiftUI 会跳过），
+        // 所以这里不需要额外判断"和上次一样吗"。
+        .onChange(of: audioPlayer.currentTime) { _, time in
+            playheadSegmentID = session.transcriptSegments.playheadSegment(at: time)?.id
+        }
+    }
+
+    /// 点时间锚的**唯一**语义：先定位、再开始播。
+    ///
+    /// 只定位不播的话，用户点了之后还要再去按一次播放键 —— 而点一个时间锚的
+    /// 全部意图就是「我要听这一段」。已经在播的就不打断（只挪位置）。
+    ///
+    /// 音频没加载出来时返回 nil：三页的时间锚一起退化成纯文字。
+    /// **一处判断、三页生效** —— 各页自己判断会出"速览能跳、原文不能跳"的不一致。
+    private var playerJump: ((TimeInterval) -> Void)? {
+        guard audioPlayer.isAvailable else { return nil }
+        return { seconds in
+            audioPlayer.seek(to: seconds)
+            if !audioPlayer.isPlaying {
+                audioPlayer.togglePlayback()
+            }
         }
     }
 
@@ -737,6 +815,16 @@ struct WorkbenchResultTabBar: View {
     let isRefreshing: Bool
     let openFolderAction: () -> Void
     let regenerateAction: () -> Void
+    /// 导出成一个 Markdown 文件。
+    let exportAction: () -> Void
+    /// 整份复制到剪贴板。**返回是否真的复制成功** —— 它决定要不要给勾选反馈，
+    /// 所以不能写成 `() -> Void`（没有内容时不复制，也不该假装复制了）。
+    let copyAction: () -> Bool
+    /// 「刚复制过」的瞬时反馈。
+    ///
+    /// 它是**视图局部状态**，不进 `store`：它描述的是「这颗按钮刚刚被按过」，
+    /// 不是任何跨视图的语义状态。放进 store 只会往状态表里塞一条无意义的行。
+    @State private var didCopyRecently = false
 
     var body: some View {
         HStack(spacing: AppTheme.space4) {
@@ -762,6 +850,32 @@ struct WorkbenchResultTabBar: View {
 
     private var pageActions: some View {
         HStack(spacing: AppTheme.space1) {
+            // 导出与复制排在**最左**：这一组里它们是"把结果拿走"，
+            // 而「重新整理」是重跑、「打开文件夹」是去找源文件 —— 两件事都比它们靠里一层。
+            Button {
+                exportAction()
+            } label: {
+                Image(systemName: "arrow.down.document")
+            }
+            .buttonStyle(WorkbenchStripIconButtonStyle())
+            .help("导出为 Markdown 文件")
+            .accessibilityLabel("导出为 Markdown 文件")
+
+            Button {
+                // 复制失败（没有会话）时什么都不做，不给勾 —— 反馈必须诚实。
+                guard copyAction() else { return }
+                didCopyRecently = true
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    didCopyRecently = false
+                }
+            } label: {
+                Image(systemName: didCopyRecently ? "checkmark" : "doc.on.doc")
+            }
+            .buttonStyle(WorkbenchStripIconButtonStyle())
+            .help(didCopyRecently ? "已复制到剪贴板" : "复制全文")
+            .accessibilityLabel(didCopyRecently ? "已复制到剪贴板" : "复制全文")
+
             Button {
                 regenerateAction()
             } label: {
@@ -794,15 +908,29 @@ struct WorkbenchResultDocument: View {
     let tab: MeetingResultTab
     /// 换页的回调。速览页的「查看全部」要跳到纪要页 —— 只在那里摊得开。
     let onSelectTab: (MeetingResultTab) -> Void
+    /// 点时间锚 → 回放那一段，三页共用同一个入口。
+    ///
+    /// **一处判断、三页生效**：`nil` 表示音频不可用，三页的时间锚同时退化成纯文字。
+    /// 各页自己判断的话，会出现"速览能跳、原文不能跳"这种同一屏内的不一致。
+    let onJump: ((TimeInterval) -> Void)?
+    /// 播放头当前在哪一段（只有原文页用得上）。
+    let playheadSegmentID: UUID?
+    /// 「跳到当前句」。只有原文页会调它。
+    let onScrollToPlayhead: (() -> Void)?
 
     var body: some View {
         switch tab {
         case .original:
-            WorkbenchOriginalDocument(session: session)
+            WorkbenchOriginalDocument(
+                session: session,
+                onJump: onJump,
+                playheadSegmentID: playheadSegmentID,
+                onScrollToPlayhead: onScrollToPlayhead
+            )
         case .overview:
-            WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab)
+            WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab, onJump: onJump)
         case .minutes:
-            WorkbenchMinutesDocument(session: session, onSelectTab: onSelectTab)
+            WorkbenchMinutesDocument(session: session, onSelectTab: onSelectTab, onJump: onJump)
         }
     }
 }
@@ -869,11 +997,13 @@ struct WorkbenchOverviewDocument: View {
     let session: MeetingSession
     /// 跳到别的结果页。摘要行尾的「查看全部」用它。
     let onSelectTab: (MeetingResultTab) -> Void
+    /// 点时间锚 → 回放那一段。nil = 不可跳（音频没加载出来）。
+    ///
+    /// 由**上层**（`WorkbenchSessionWorkspace`，播放器的持有者）传进来，
+    /// 而不是在这一页自己拿播放器：「先 seek 再播」这条语义现在有 6 个使用者，
+    /// 各自判断一次「音频可用吗」，迟早出现"速览能跳、纪要不能跳"的不一致。
+    let onJump: ((TimeInterval) -> Void)?
     @EnvironmentObject private var store: MeetingStore
-    /// 时间锚要能跳播放，所以这一页要拿到播放器。
-    /// 走 `environmentObject` 而不是逐层传参：`WorkbenchResultDocument` 只是
-    /// 一个 switch，不该为了传一个播放器而被改造成转发管道。
-    @EnvironmentObject private var player: MeetingAudioPlayer
 
     /// 速览页最多列几条决策 / 待办。超出的走行尾「查看全部」。
     ///
@@ -907,8 +1037,7 @@ struct WorkbenchOverviewDocument: View {
             if !bullets.isEmpty {
                 WorkbenchOverviewBulletsSection(
                     bullets: bullets,
-                    // 播放器没加载出音频时不给跳转 —— 点了没反应比不可点更糟。
-                    onJump: player.isAvailable ? { jump(to: $0) } : nil
+                    onJump: onJump
                 )
             }
 
@@ -918,7 +1047,8 @@ struct WorkbenchOverviewDocument: View {
                     WorkbenchOverviewSummaryRow.Item(
                         time: $0.timestamp?.clockLabel,
                         label: $0.label,
-                        owner: nil
+                        owner: nil,
+                        seconds: $0.timestamp
                     )
                 }
             )
@@ -929,7 +1059,8 @@ struct WorkbenchOverviewDocument: View {
                     WorkbenchOverviewSummaryRow.Item(
                         time: $0.timestamp?.clockLabel,
                         label: $0.label,
-                        owner: $0.owner
+                        owner: $0.owner,
+                        seconds: $0.timestamp
                     )
                 }
             )
@@ -971,7 +1102,7 @@ struct WorkbenchOverviewDocument: View {
                     }
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(session.analysis.timeline.enumerated()), id: \.element.id) { index, item in
-                            WorkbenchTimelineDocumentRow(item: item)
+                            WorkbenchTimelineDocumentRow(item: item, onJump: onJump)
                             if index != session.analysis.timeline.count - 1 {
                                 WorkbenchDocumentRowDivider()
                             }
@@ -1018,23 +1149,12 @@ struct WorkbenchOverviewDocument: View {
                 .padding(.bottom, AppTheme.space2)
 
                 ForEach(Array(items.prefix(Self.summaryLimit).enumerated()), id: \.offset) { index, item in
-                    WorkbenchOverviewSummaryRow(item: item)
+                    WorkbenchOverviewSummaryRow(item: item, onJump: onJump)
                     if index != min(items.count, Self.summaryLimit) - 1 {
                         WorkbenchDocumentRowDivider()
                     }
                 }
             }
-        }
-    }
-
-    /// 点时间锚：**先定位再播**。
-    ///
-    /// 只定位不播的话，用户点了之后还要再去按一次播放键 —— 而点一个时间锚的
-    /// 全部意图就是"我要听这一段"。已经在播的就不打断（只挪位置）。
-    private func jump(to seconds: TimeInterval) {
-        player.seek(to: seconds)
-        if !player.isPlaying {
-            player.togglePlayback()
         }
     }
 
@@ -1181,26 +1301,15 @@ struct WorkbenchOverviewBulletsSection: View {
 
     @ViewBuilder
     private func anchor(for bullet: OverviewBullet) -> some View {
-        if let seconds = bullet.seconds, let onJump {
-            Button {
-                onJump(seconds)
-            } label: {
-                Text(seconds.clockLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(AppTheme.accent)
-                    // 不给交互元素换行 —— 宽度提案一紧它就折成两行。
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .buttonStyle(.plain)
-            .help("从 \(seconds.clockLabel) 开始播放")
-        } else if let seconds = bullet.seconds {
-            Text(seconds.clockLabel)
-                .font(.system(size: 11, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(AppTheme.muted)
-                .lineLimit(1)
+        // 没有锚的条目**这一列什么都不画**（原来是 `else if`，效果一样）：
+        // 印一个空字符串的 `Text` 在肉眼上看不出，但它会让这一列多出一个可被
+        // 辅助功能读到的空节点。
+        if let seconds = bullet.seconds {
+            WorkbenchTimeAnchor(
+                text: seconds.clockLabel,
+                font: .system(size: 11, weight: .semibold),
+                action: onJump.map { jump in { jump(seconds) } }
+            )
         }
     }
 }
@@ -1216,18 +1325,25 @@ struct WorkbenchOverviewSummaryRow: View {
         var label: String
         /// 待办才有；决策为 nil。
         var owner: String?
+        /// 时间戳的秒数。**与 `time` 分开存**：`time` 是给人看的（`12:30`），
+        /// 这个是给播放器用的（750）。从字符串反解秒数会在超过 1 小时时算错。
+        var seconds: TimeInterval?
     }
 
     let item: Item
+    /// 点摘要行的时间能回放。
+    var onJump: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
             if let time = item.time {
-                Text(time)
-                    .font(AppType.documentMeta)
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
-                    .lineLimit(1)
+                WorkbenchTimeAnchor(
+                    text: time,
+                    font: AppType.documentMeta,
+                    action: item.seconds.flatMap { seconds in
+                        onJump.map { jump in { jump(seconds) } }
+                    }
+                )
             }
 
             Text(item.label)
@@ -1320,6 +1436,8 @@ struct WorkbenchMinutesDocument: View {
     /// 空态里「查看原文」要用它。这一页平时是终点（不给"下一站"），
     /// 只有材料不足那一种空态需要一个出口，而出口通向原文页。
     let onSelectTab: (MeetingResultTab) -> Void
+    /// 点条目上的时间 → 回放那一段。见 `WorkbenchOverviewDocument.onJump`。
+    let onJump: ((TimeInterval) -> Void)?
     @EnvironmentObject private var store: MeetingStore
 
     var body: some View {
@@ -1381,7 +1499,7 @@ struct WorkbenchMinutesDocument: View {
                 )
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(session.analysis.decisions.enumerated()), id: \.element.id) { index, item in
-                        WorkbenchDecisionDocumentRow(item: item)
+                        WorkbenchDecisionDocumentRow(item: item, onJump: onJump)
                         if index != session.analysis.decisions.count - 1 {
                             WorkbenchDocumentRowDivider()
                         }
@@ -1401,7 +1519,7 @@ struct WorkbenchMinutesDocument: View {
                 )
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(session.analysis.actions.enumerated()), id: \.element.id) { index, item in
-                        WorkbenchActionDocumentRow(item: item)
+                        WorkbenchActionDocumentRow(item: item, onJump: onJump)
                         if index != session.analysis.actions.count - 1 {
                             WorkbenchDocumentRowDivider()
                         }
@@ -1448,6 +1566,16 @@ struct WorkbenchMinutesDocument: View {
 
 struct WorkbenchOriginalDocument: View {
     let session: MeetingSession
+    /// 点某一段的时间 → 回放那一句。见 `WorkbenchOverviewDocument.onJump`。
+    let onJump: ((TimeInterval) -> Void)?
+    /// 播放头当前在哪一段 —— 它就是这一页的「当前句」。
+    let playheadSegmentID: UUID?
+    /// 「跳到当前句」：把滚动条挪到当前句。
+    ///
+    /// **刻意不做自动跟随**（见工作区里那段注释）：每个段边界都把页面拽一下，
+    /// 在"往上翻着看前面"的场景里是纯粹的干扰。给一个按钮，就把"要不要跟"
+    /// 交回给用户，而且这个按钮本身就是"我在哪儿"的提示。
+    let onScrollToPlayhead: (() -> Void)?
     /// 就地编辑要**写回盘**（`updateTranscriptSegment`），所以这一页需要 store；
     /// 注入链和纪要页一样，由上层给。
     @EnvironmentObject private var store: MeetingStore
@@ -1471,8 +1599,13 @@ struct WorkbenchOriginalDocument: View {
                             canEdit: canEdit,
                             onBeginEditing: { editingSegmentID = segment.id },
                             onCancel: { editingSegmentID = nil },
-                            onCommit: { text in commit(text, for: segment) }
+                            onCommit: { text in commit(text, for: segment) },
+                            onJump: onJump.map { jump in { jump(segment.start) } },
+                            isPlayhead: playheadSegmentID == segment.id
                         )
+                        // 「跳到当前句」靠它定位。`ForEach` 的 id 只管 diff，
+                        // `ScrollViewReader.scrollTo` 要的是这条 `.id()`。
+                        .id(segment.id)
                         if index != session.transcriptSegments.count - 1 {
                             // 三页共用同一条分隔线画法（`WorkbenchDocumentRowDivider`），
                             // 起笔线也同一个 —— 原来这里是手写的一份,现在收归一处。
@@ -1497,6 +1630,27 @@ struct WorkbenchOriginalDocument: View {
                 .monospacedDigit()
             Text(editedCount > 0 ? "已人工校正 \(editedCount) 处" : "原汁原味保留转写")
                 .foregroundStyle(AppTheme.ink)
+
+            Spacer(minLength: AppTheme.space3)
+
+            // 「播放到哪一句」是这一页此刻最有用的一个答案，给个入口就能一步回去 ——
+            // 而且这颗按钮本身就在回答"我听到哪儿了"。
+            //
+            // **只在真有当前句时给**：没播过、或音频不可用时摆一颗点了没反应的按钮，
+            // 比不给还糟（同时间锚那套判断）。
+            //
+            // 纯文字、不带图标：这一行本来就是「日期 · 状态」的纯文字眉标，
+            // 塞一个图标进去会让它变成控件条；而且符号名写错时会**静默渲染成空白**。
+            if let onScrollToPlayhead, playheadSegmentID != nil {
+                Button("跳到当前句") {
+                    onScrollToPlayhead()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.accent)
+                .lineLimit(1)
+                .fixedSize()
+                .help("把页面滚到正在播放的那一句")
+            }
         }
         .font(.system(size: 12, weight: .medium))
     }
@@ -1559,14 +1713,17 @@ struct WorkbenchDocumentRowDivider: View {
 /// 主角是下面那句话，拿正文档（15pt 常规）。
 struct WorkbenchTimelineDocumentRow: View {
     let item: TimelineChunk
+    /// 「经过」这一栏点区间标签能回到那一段。跳**起点**而不是终点：
+    /// 用户的意图是"从这儿开始听"，跳到终点等于把这一段跳过去了。
+    var onJump: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.space2) {
-            Text(item.rangeLabel)
-                .font(AppType.documentMeta)
-                .foregroundStyle(AppTheme.muted)
-                .monospacedDigit()
-                .lineLimit(1)
+            WorkbenchTimeAnchor(
+                text: item.rangeLabel,
+                font: AppType.documentMeta,
+                action: onJump.map { jump in { jump(item.start) } }
+            )
 
             Text(item.summary)
                 .font(AppType.documentBody)
@@ -1579,6 +1736,43 @@ struct WorkbenchTimelineDocumentRow: View {
         // （同 `WorkbenchDocumentItemRow` 里那条注释）。
         .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
         .padding(.vertical, AppType.documentItemPadding)
+    }
+}
+
+/// 可点的时间锚：**它是一个把手，不是一段文字**。
+///
+/// 抽出来的理由：现在有 6 个使用者（要点 / 速览摘要 / 纪要决策 / 纪要待办 / 时间轨 / 逐字稿）。
+/// 各自写一遍的话，迟早出现「要点那个能点、纪要那个看着一模一样却点不动」这种不一致 ——
+/// 而**同一个东西在相邻两页长得一样、行为不一样**，是用户最难发现、也最恼火的一类问题。
+///
+/// `action` 为 nil 时退化成纯文字（`muted` 档），**不留一个点了没反应的按钮**：
+/// 没时间戳、没加载出音频时都属于这一类。
+struct WorkbenchTimeAnchor: View {
+    let text: String
+    /// 字号档。要点与逐字稿用 11pt semibold，纪要元信息行用 `AppType.documentMeta`。
+    let font: Font
+    let action: (() -> Void)?
+
+    var body: some View {
+        if let action {
+            Button(action: action) {
+                Text(text)
+                    .font(font)
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.accent)
+                    // 不给交互元素换行 —— 宽度提案一紧它就折成两行。
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .buttonStyle(.plain)
+            .help("从 \(text) 开始播放")
+        } else {
+            Text(text)
+                .font(font)
+                .monospacedDigit()
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -1600,6 +1794,10 @@ struct WorkbenchDocumentItemRow<Trailing: View>: View {
     let time: String?
     let label: String
     let evidence: String
+    /// 点时间能回放那一段。nil = 不可跳（本条没有时间戳，或音频不可用）。
+    ///
+    /// 给了默认值：调用点不传就是纯文字，**行为与加这个参数之前逐字一致**。
+    var onJump: (() -> Void)? = nil
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -1607,11 +1805,7 @@ struct WorkbenchDocumentItemRow<Trailing: View>: View {
             // 没有时间就不画这一行：在行首印一个孤零零的「—」比不给还糟，
             // 而且空着的那一行会把「这条没定位」放大成视觉噪音。
             if let time {
-                Text(time)
-                    .font(AppType.documentMeta)
-                    .foregroundStyle(AppTheme.muted)
-                    .monospacedDigit()
-                    .lineLimit(1)
+                WorkbenchTimeAnchor(text: time, font: AppType.documentMeta, action: onJump)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
@@ -1654,26 +1848,37 @@ struct WorkbenchDocumentItemRow<Trailing: View>: View {
 
 struct WorkbenchDecisionDocumentRow: View {
     let item: InsightItem
+    /// 点那一行的时间能回放。与 `WorkbenchOverviewBulletsSection.onJump` 同一套语义。
+    var onJump: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         WorkbenchDocumentItemRow(
             time: item.timestamp?.clockLabel,
             label: item.label,
-            evidence: item.evidence
+            evidence: item.evidence,
+            // 没时间戳（模型没给）时不给入口 —— 按了也到不了任何地方。
+            onJump: jumpAction
         ) {
             WorkbenchConfidenceChip(value: item.confidence)
         }
+    }
+
+    private var jumpAction: (() -> Void)? {
+        guard let seconds = item.timestamp, let onJump else { return nil }
+        return { onJump(seconds) }
     }
 }
 
 struct WorkbenchActionDocumentRow: View {
     let item: ActionItem
+    var onJump: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         WorkbenchDocumentItemRow(
             time: item.timestamp?.clockLabel,
             label: item.label,
-            evidence: item.evidence
+            evidence: item.evidence,
+            onJump: jumpAction
         ) {
             HStack(spacing: AppTheme.space2) {
                 // 截止日期并进这一簇：它和「高优先」是同一层的判断依据。
@@ -1689,6 +1894,11 @@ struct WorkbenchActionDocumentRow: View {
             }
         }
     }
+
+    private var jumpAction: (() -> Void)? {
+        guard let seconds = item.timestamp, let onJump else { return nil }
+        return { onJump(seconds) }
+    }
 }
 
 struct WorkbenchTranscriptDocumentRow: View {
@@ -1701,6 +1911,14 @@ struct WorkbenchTranscriptDocumentRow: View {
     let onCancel: () -> Void
     /// 返回拒绝理由；nil = 通过。
     let onCommit: (String) -> String?
+    /// 点这一行的时间 → 回放这一句。
+    ///
+    /// **为什么把时间戳做成把手，而不是整行可点**：整行已经有「双击进编辑」，
+    /// 再挂一个单击跳转，双击时会发生"先跳一下、再进编辑"的连锁 —— 而这里
+    /// 是逐字稿，跳走之后想改的那一句已经不在眼前了。
+    var onJump: (() -> Void)? = nil
+    /// 这一句正被播放到（播放头落在这一段上）。
+    var isPlayhead: Bool = false
 
     @State private var draft = ""
     /// 就地拒绝的理由（比如"不能改成空"）。它必须显示在**这一行**上 ——
@@ -1719,6 +1937,29 @@ struct WorkbenchTranscriptDocumentRow: View {
         // 行宽 = 结构列：编辑态也不改，否则一进编辑整页会横向跳一下。
         .frame(maxWidth: AppTheme.documentRowWidth, alignment: .leading)
         .padding(.vertical, AppTheme.space3)
+        // 当前句的高亮**只动底色与左侧一条竖线，不动字号字重** ——
+        // 一改字重，这一行的高度就会和上下不同，播放时整页会随着高亮来回抖。
+        //
+        // 底色与竖线**两个一起给**：`accentSoft` 与纸面的明度差只有约 1.2:1，
+        // 单靠底色在浅色档下几乎看不出来；竖线是实色，任何主题下都读得出来。
+        .background {
+            if isPlayhead {
+                RoundedRectangle(cornerRadius: AppTheme.radiusSmall, style: .continuous)
+                    .fill(AppTheme.accent.opacity(0.10))
+            }
+        }
+        .overlay(alignment: .leading) {
+            if isPlayhead {
+                Capsule()
+                    .fill(AppTheme.accent)
+                    .frame(width: 2)
+                    .padding(.vertical, AppTheme.space1)
+                    // 往左挪出正文之外：贴在行首会和说话人标签叠在一起。
+                    // **必须留在 ScrollView 的界内** —— 正文那个 ScrollView 已被放宽一档
+                    // （见 `WorkbenchSessionWorkspace` 里的注释），否则这一条会被裁掉。
+                    .offset(x: -AppTheme.space2)
+            }
+        }
         .onChange(of: isEditing) { _, editing in
             guard editing else { return }
             draft = segment.text
@@ -1743,11 +1984,11 @@ struct WorkbenchTranscriptDocumentRow: View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.space3) {
             WorkbenchSpeakerLabel(speaker: segment.speaker)
 
-            Text(segment.start.clockLabel)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.muted)
-                .monospacedDigit()
-                .lineLimit(1)
+            WorkbenchTimeAnchor(
+                text: segment.start.clockLabel,
+                font: .system(size: 11, weight: .semibold),
+                action: onJump
+            )
 
             Text(segment.text)
                 .font(.system(size: 14.5, weight: .regular, design: .default))

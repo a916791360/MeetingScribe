@@ -40,6 +40,7 @@ let package = Package(
                 "TranscriptMaterial.swift",
                 "TranscriptEditor.swift",
                 "Glossary.swift",
+                "MeetingExport.swift",
                 "SummaryEngine.swift",
                 "SummaryModelDiscovery.swift",
                 "KeychainStore.swift",
