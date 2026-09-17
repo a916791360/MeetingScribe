@@ -82,6 +82,15 @@ WHISPER_ROOT=/path/to/whisper.cpp ./Scripts/package_app.sh
 ./Scripts/install_app.sh
 ```
 
+打对外分发的 zip（App + `首次打开请看这里.txt`，并打印 SHA-256）：
+
+```bash
+./Scripts/make_release_zip.sh   # → ../dist/MeetingScribe-<版本>-macOS.zip
+```
+
+这个脚本会在压缩前**再跑一次分发审计**（扫的是最终要发出去的那一份），
+并且要求签名在复制后依然完好 —— 任何一项不过就直接不出包。
+
 应用包使用标准 `Info.plist`、`.icns` 图标和可调整大小的主窗口，最低支持 macOS 15。
 
 ## 质量指标
