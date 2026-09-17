@@ -122,6 +122,16 @@ struct MeetingSummaryEngine: Sendable {
 
         try Task.checkCancellation()
 
+        // 整条整理链路上**唯一**的三个分叉依据（与"这场会是录的还是导入的"无关）：
+        //
+        //   1. 材料量够不够   → `TranscriptMaterial` 门禁（够不着就根本不调模型）
+        //   2. 材料有多长     → ≤2.4 万字一次调用；更长先分章再综合
+        //   3. 有没有说话人   → 决定要不要给「写清归属」这条指令
+        //
+        // 采集方式（录音 / 导入 / 单路）在这里**一个字都不影响**：它只决定上游有没有
+        // 说话人数据、以及音频文件长什么样。prompt、解析、渲染三处都只有一套。
+        let hasSpeakers = segments.hasSpeakerLabels
+
         let transcript = makeTranscript(from: segments)
         // Keep direct requests small enough for local models and 8K/32K cloud contexts.
         if transcript.count <= 24_000 {
@@ -130,6 +140,7 @@ struct MeetingSummaryEngine: Sendable {
                 endpoint: endpoint,
                 settings: settings,
                 apiKey: apiKey,
+                hasSpeakers: hasSpeakers,
                 glossary: glossary
             )
         }
@@ -150,6 +161,7 @@ struct MeetingSummaryEngine: Sendable {
             settings: settings,
             apiKey: apiKey,
             sourceIsChapterSummary: true,
+            hasSpeakers: hasSpeakers,
             glossary: glossary
         )
     }
@@ -262,12 +274,16 @@ struct MeetingSummaryEngine: Sendable {
         let batchSize = min(3, max(1, chapters.count))
         // 章节摘要是后面综合**唯一**的输入，专名在这里就该写对 —— 综合那一步拿不到原文，
         // 这里写错了后面没有任何机会纠正。所以术语约束也要给到这一层。
-        let terminology = glossary.summaryInstruction
-        // 说话人约定同理只在**这一层**给：分章摘要之后的所有步骤都拿不到原文行，
-        // 也就不可能再看见 [我方]/[对方]。而且只有材料里真的有说话人时才给（P2-2a）。
-        let speakerLegend = segments.contains { $0.speaker != nil }
-            ? TranscriptSpeaker.materialLegend
-            : ""
+        //
+        // 说话人约定同理要给到这一层（它既看得见标记、也需要归属），但构造方式与
+        // 速览 / 纪要那两段**共用同一个** `directives` —— 三处各拼各的，
+        // 早晚出现"这一处改了、那一处没改"。这一层传的是完整约定（解释 + 归属），
+        // 合起来与拆分前的 `materialLegend` 逐字相同。
+        let hasSpeakers = segments.hasSpeakerLabels
+        let chapterDirectives = Self.chapterDirectives(
+            glossary: glossary,
+            hasSpeakers: hasSpeakers
+        )
         var batchStart = 0
 
         while batchStart < chapters.count {
@@ -285,8 +301,7 @@ struct MeetingSummaryEngine: Sendable {
                         下面是一场会议的其中一章原文。请只根据原文做保守整理，不补充原文没有的事实。
                         输出简洁的章节摘要，并分别列出明确结论和明确待办。
                         待办必须包含清晰动作和对象；没有把握就留空。
-                        \(terminology ?? "")
-                        \(speakerLegend)
+                        \(chapterDirectives)
                         输出格式：
                         章节摘要：……
                         明确结论：
@@ -409,11 +424,18 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?,
         sourceIsChapterSummary: Bool = false,
+        hasSpeakers: Bool = false,
         glossary: Glossary = .empty
     ) async throws -> MeetingAnalysis {
-        // 术语约束在这一层算一次，两个并发分支共用 —— 两段 prompt 必须说同一件事，
-        // 各算各的早晚会漂移（一处改了另一处没改）。
-        let terminology = glossary.summaryInstruction
+        // 「材料指令块」在这一层算一次，两个并发分支共用 —— 两段 prompt 必须说同一件事，
+        // 各算各的早晚会漂移（一处改了另一处没改）。2026-09-17 之前这里只算了术语，
+        // 说话人约定被落在分章那一步，于是**产出速览与纪要的那一步从来没被要求写归属**。
+        // 该给哪几块由 `analysisDirectives` 决定（那是一条容易搞反的规则，单独抽出来 + 单测）。
+        let directives = Self.analysisDirectives(
+            glossary: glossary,
+            sourceIsChapterSummary: sourceIsChapterSummary,
+            hasSpeakers: hasSpeakers
+        )
         let outcomes = await withTaskGroup(of: StageOutcome.self) { group in
             group.addTask {
                 await self.runFactsStage(
@@ -422,7 +444,7 @@ struct MeetingSummaryEngine: Sendable {
                     settings: settings,
                     apiKey: apiKey,
                     sourceIsChapterSummary: sourceIsChapterSummary,
-                    terminology: terminology
+                    directives: directives
                 )
             }
             group.addTask {
@@ -432,7 +454,7 @@ struct MeetingSummaryEngine: Sendable {
                     settings: settings,
                     apiKey: apiKey,
                     sourceIsChapterSummary: sourceIsChapterSummary,
-                    terminology: terminology
+                    directives: directives
                 )
             }
             var collected: [StageOutcome] = []
@@ -521,7 +543,7 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?,
         sourceIsChapterSummary: Bool,
-        terminology: String?
+        directives: String
     ) async -> StageOutcome {
         do {
             let facts = try await requestStructuredFacts(
@@ -530,7 +552,7 @@ struct MeetingSummaryEngine: Sendable {
                 settings: settings,
                 apiKey: apiKey,
                 sourceIsChapterSummary: sourceIsChapterSummary,
-                terminology: terminology
+                directives: directives
             )
             return .facts(facts)
         } catch is CancellationError {
@@ -548,7 +570,7 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?,
         sourceIsChapterSummary: Bool,
-        terminology: String?
+        directives: String
     ) async -> StageOutcome {
         do {
             let minutes = try await requestMinutesText(
@@ -557,7 +579,7 @@ struct MeetingSummaryEngine: Sendable {
                 settings: settings,
                 apiKey: apiKey,
                 sourceIsChapterSummary: sourceIsChapterSummary,
-                terminology: terminology
+                directives: directives
             )
             return .minutes(minutes)
         } catch is CancellationError {
@@ -579,9 +601,36 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?,
         sourceIsChapterSummary: Bool,
-        terminology: String?
+        directives: String
     ) async throws -> StructuredFacts {
-        let prompt = """
+        let prompt = Self.factsPrompt(
+            source: source,
+            directives: directives,
+            sourceIsChapterSummary: sourceIsChapterSummary
+        )
+
+        let result = try await requestText(
+            prompt: prompt,
+            system: Self.systemPrompt,
+            endpoint: endpoint,
+            settings: settings,
+            apiKey: apiKey,
+            maxTokens: Self.analysisTokenBudget
+        )
+        return try parseStructuredFacts(result, allowPartial: result.truncated)
+    }
+
+    /// 速览 / 结构化那一段的 prompt。
+    ///
+    /// **抽成纯函数是为了能被单测钉住**：它和纪要那一段必须拿到**同一份**材料指令块
+    /// （术语 + 说话人约定）。两段各拼各的，早晚出现"术语加了、归属没加"这种
+    /// 读起来完全正常的静默不一致 —— 2026-09-17 修的就是这一类。
+    static func factsPrompt(
+        source: String,
+        directives: String,
+        sourceIsChapterSummary: Bool
+    ) -> String {
+        """
         你正在整理一场中文工作会议的"速览"。只根据给定材料输出 JSON，不要输出 Markdown、解释或代码围栏。
         读者是没参会、但要立刻知道"结论是什么、我该做什么"的同事。
         不确定、语义不完整或只是提问的内容，一律不要写入决策和待办。
@@ -591,7 +640,7 @@ struct MeetingSummaryEngine: Sendable {
         **必须遵守的两条硬要求**：
         1. 禁止空话动词。以下措辞一律不许出现：会上介绍了、会上讨论了、会上提到、谈到了、提到了、围绕……展开、延伸到、进行了讨论、交换了意见。要写实质内容（谁提了什么、数字是多少、为什么否掉）。
         2. 必须保留原文里的具体数字、版本号、日期、人名、系统名，一个都不能省。
-        \(terminology ?? "")
+        \(directives)
 
         把材料中每一处明确的决定、承诺和待办都列出来，不要只挑最重要的几条。
         只有当一条内容只是提问、只是可能性或没定下来时，才不写进决策和待办。
@@ -633,16 +682,6 @@ struct MeetingSummaryEngine: Sendable {
         给定材料：
         \(source)
         """
-
-        let result = try await requestText(
-            prompt: prompt,
-            system: Self.systemPrompt,
-            endpoint: endpoint,
-            settings: settings,
-            apiKey: apiKey,
-            maxTokens: Self.analysisTokenBudget
-        )
-        return try parseStructuredFacts(result, allowPartial: result.truncated)
     }
 
     /// 第二段：纪要正文（纯散文，不要 JSON）。
@@ -656,29 +695,13 @@ struct MeetingSummaryEngine: Sendable {
         settings: SummaryModelSettings,
         apiKey: String?,
         sourceIsChapterSummary: Bool,
-        terminology: String?
+        directives: String
     ) async throws -> MinutesOutput {
-        let prompt = """
-        你正在整理一场中文工作会议的纪要正文，只输出正文本身。
-        用自然段写清讨论脉络，用必要的小标题分段；小标题用 `一、二、三` 或 `## 标题` 都可以。
-        纪要要说清：讨论了哪些问题、各自的背景与取舍、最后定了什么、接下来要做什么。
-        写的是实质性内容（谁提了什么方案、数字是多少、为什么否掉），不是过程叙述。
-        不要重复罗列决策清单和待办清单——那两块由 App 另外展示，但结论和待办本身要写进正文里说清楚。
-
-        **两条硬要求**：
-        1. 绝对禁止这些空话动词：会上介绍了、会上讨论了、会上提到、会上说、会上确认、谈到了、提到了、围绕……展开、延伸到、中段主要围绕、进行了讨论、交换了意见。直接写事实与结论，不要用"会上提到"这类转述引子。
-        2. 原文里的数字、版本号、日期、人名、系统名必须写进正文，一个都不能省。
-        \(terminology ?? "")
-
-        不要输出开场白（"以下是""好的"之类）、不要输出 JSON、代码围栏或对本次整理的说明。
-        不要在正文里评价材料本身（比如"材料不足""未提及""无法判断"），材料里没有的内容直接不写。
-        不要编造材料里没有的事实。
-
-        \(sourceIsChapterSummary ? "给定材料是按时间整理的章节摘要，请综合所有章节。" : "给定材料是带时间戳的会议逐字稿，请覆盖整场会议。")
-
-        给定材料：
-        \(source)
-        """
+        let prompt = Self.minutesPrompt(
+            source: source,
+            directives: directives,
+            sourceIsChapterSummary: sourceIsChapterSummary
+        )
 
         let result = try await requestText(
             prompt: prompt,
@@ -694,6 +717,38 @@ struct MeetingSummaryEngine: Sendable {
             finishReason: result.finishReason,
             escalations: result.escalations
         )
+    }
+
+    /// 纪要正文那一段的 prompt。
+    ///
+    /// 与 `factsPrompt` **共用同一份材料指令块**（`directives`）—— 这是"速览和纪要
+    /// 说同一件事"的机制保证，而不是靠两处注释互相提醒。
+    static func minutesPrompt(
+        source: String,
+        directives: String,
+        sourceIsChapterSummary: Bool
+    ) -> String {
+        """
+        你正在整理一场中文工作会议的纪要正文，只输出正文本身。
+        用自然段写清讨论脉络，用必要的小标题分段；小标题用 `一、二、三` 或 `## 标题` 都可以。
+        纪要要说清：讨论了哪些问题、各自的背景与取舍、最后定了什么、接下来要做什么。
+        写的是实质性内容（谁提了什么方案、数字是多少、为什么否掉），不是过程叙述。
+        不要重复罗列决策清单和待办清单——那两块由 App 另外展示，但结论和待办本身要写进正文里说清楚。
+
+        **两条硬要求**：
+        1. 绝对禁止这些空话动词：会上介绍了、会上讨论了、会上提到、会上说、会上确认、谈到了、提到了、围绕……展开、延伸到、中段主要围绕、进行了讨论、交换了意见。直接写事实与结论，不要用"会上提到"这类转述引子。
+        2. 原文里的数字、版本号、日期、人名、系统名必须写进正文，一个都不能省。
+        \(directives)
+
+        不要输出开场白（"以下是""好的"之类）、不要输出 JSON、代码围栏或对本次整理的说明。
+        不要在正文里评价材料本身（比如"材料不足""未提及""无法判断"），材料里没有的内容直接不写。
+        不要编造材料里没有的事实。
+
+        \(sourceIsChapterSummary ? "给定材料是按时间整理的章节摘要，请综合所有章节。" : "给定材料是带时间戳的会议逐字稿，请覆盖整场会议。")
+
+        给定材料：
+        \(source)
+        """
     }
 
     /// 纪要正文是纯文本回包，除了 JSON 不该有的转义，还要挡掉两类常见噪音：
@@ -1442,6 +1497,74 @@ struct MeetingSummaryEngine: Sendable {
             chapters.append(current.joined(separator: "\n"))
         }
         return chapters
+    }
+
+    /// 拼给整理模型的「材料指令块」：术语约束 + 说话人约定。
+    ///
+    /// **为什么必须只有这一处实现**：速览那一段和纪要那一段是**并发**跑的两个请求，
+    /// 它们必须说同一件事。各拼各的，早晚出现"术语加进去了、说话人归属没加"这种
+    /// 读起来完全正常的静默不一致 —— 2026-09-17 之前就是：说话人约定只拼进了**分章**
+    /// 那一步，而分章是中间产物，真正产出速览与纪要的那一步从来没收到过它。
+    ///
+    /// 三个入参各自独立，因为它们的**适用条件不同**：
+    /// - `terminology`：用户在设置里填了术语表才给（空表时一个字都不加 ——
+    ///   用户清空术语表就是"什么都别替我改"，不能悄悄回落到出厂词表）。
+    /// - `markerExplanation`：只在源材料**真的带 `[我方]/[对方]` 标记**时给。
+    ///   对一份没有标记的材料解释标记是什么，是往 prompt 里塞假信息。
+    /// - `attribution`：只要这场会议**有说话人信息**就给，与材料形态无关 ——
+    ///   长会综合那一步拿到的是章节摘要（早已没有标记），结论与待办照样要写归属。
+    ///
+    /// 空的那些块直接不出现在结果里，所以"三项全空"时返回空串，
+    /// 两段 prompt 与改动前**逐字相同**（导入的会议走的就是这条路）。
+    static func directives(
+        terminology: String?,
+        markerExplanation: String?,
+        attribution: String?
+    ) -> String {
+        [terminology, markerExplanation, attribution]
+            .compactMap { value -> String? in
+                guard let value else { return nil }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            .joined(separator: "\n")
+    }
+
+    /// 分章那一步拿到的材料指令块。
+    ///
+    /// 分章是**唯一看得见原始逐字稿**的一步，所以标记解释与归属要求一起给。
+    /// 合成结果与拆分前的 `materialLegend` 逐字相同 —— 这条等式由单测钉住，
+    /// 免得将来只改其中一块、这里悄悄留下旧话。
+    static func chapterDirectives(glossary: Glossary, hasSpeakers: Bool) -> String {
+        directives(
+            terminology: glossary.summaryInstruction,
+            markerExplanation: hasSpeakers ? TranscriptSpeaker.materialMarkerExplanation : nil,
+            attribution: hasSpeakers ? TranscriptSpeaker.speakerAttributionDirective : nil
+        )
+    }
+
+    /// 产出**速览 / 纪要**那一步拿到的材料指令块。
+    ///
+    /// 单独抽出来，是因为这里有一条**容易搞反**的规则：
+    /// - 标记解释只在源材料是**原始逐字稿**时给（`sourceIsChapterSummary == false`）。
+    ///   长会综合那一步拿到的是章节摘要，里面已经没有 `[我方]/[对方]` 了；
+    ///   对一份没有标记的材料解释标记是什么，是往 prompt 里塞假信息。
+    /// - 归属要求与材料形态**无关**：长会综合那一步照样要写清"谁提的、谁答应的、谁负责"。
+    ///
+    /// 2026-09-17 之前这两块都没有进这一步 —— 归属要求被落在分章那一层，而分章是中间产物，
+    /// 于是用户真正看到的速览与纪要**从来没被要求写归属**，"能不能写出归属"完全靠模型自觉。
+    static func analysisDirectives(
+        glossary: Glossary,
+        sourceIsChapterSummary: Bool,
+        hasSpeakers: Bool
+    ) -> String {
+        directives(
+            terminology: glossary.summaryInstruction,
+            markerExplanation: (!sourceIsChapterSummary && hasSpeakers)
+                ? TranscriptSpeaker.materialMarkerExplanation
+                : nil,
+            attribution: hasSpeakers ? TranscriptSpeaker.speakerAttributionDirective : nil
+        )
     }
 
     private static let systemPrompt = """

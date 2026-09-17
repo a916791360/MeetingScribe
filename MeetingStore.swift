@@ -1267,7 +1267,12 @@ final class MeetingStore: ObservableObject {
         session.whisperModelPath = modelURL.path
         session.duration = duration
         session.errorMessage = nil
-        session.title = MeetingAnalysisBuilder.title(for: session, segments: segments)
+        // 标题从**清洗后**的段落里取，与正文同一份材料。
+        //
+        // 2026-09-17 之前这里传的是 `segments`（清洗前的原始分块）：清洗会把一屏几十条
+        // 15 字的碎行合成正常句子，于是标题可能是从一句**用户根本没在界面上见过**的碎句
+        // 里截的，而下面正文里找不到那句话。同一屏里两处对不上，用户只会以为软件在乱起名。
+        session.title = MeetingAnalysisBuilder.title(for: session, segments: cleanedSegments)
         session.processingProgress = 1
         session.processingStage = "已完成"
         session.processingStartedAt = startedAt
