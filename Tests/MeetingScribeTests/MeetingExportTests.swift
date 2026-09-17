@@ -51,6 +51,7 @@ final class MeetingExportTests: XCTestCase {
         bullets: [String]? = nil,
         decisions: [InsightItem] = [],
         actions: [ActionItem] = [],
+        risks: [InsightItem]? = nil,
         openQuestions: [String]? = nil,
         overviewText: String = "",
         minutesText: String = "",
@@ -70,7 +71,8 @@ final class MeetingExportTests: XCTestCase {
             summaryError: summaryError,
             headline: headline,
             overviewBullets: bullets,
-            openQuestions: openQuestions
+            openQuestions: openQuestions,
+            risks: risks
         )
     }
 
@@ -486,5 +488,49 @@ final class MeetingExportTests: XCTestCase {
         let markdown = MeetingExporter.markdown(for: session)
         XCTAssertFalse(markdown.contains("## 会议纪要"))
         XCTAssertTrue(markdown.contains("## 会议概述"))
+    }
+
+    // MARK: - 风险与阻塞（页分家那一轮新增）
+
+    /// 风险这一节**必须紧跟在待办之后**。
+    ///
+    /// 这不是排版偏好："要做什么"和"什么会挡着"是同一个决策链条的两端。
+    /// 拆开（比如挪到「待确认」后面）时，读者先看完行动、翻过一段别的内容才看到阻塞，
+    /// 因果就被拆散了 —— 而这种错，除了测试没有任何东西会报警。
+    func testRisksSectionSitsRightAfterActions() throws {
+        let session = makeSession(
+            analysis: analysis(
+                decisions: [
+                    InsightItem(label: "本期只做上半部分", evidence: "先完成上半部分", confidence: 0.9, timestamp: 120)
+                ],
+                actions: [
+                    ActionItem(label: "周三前给出排期", evidence: "周三前给你排期", confidence: 0.9, timestamp: 240)
+                ],
+                risks: [
+                    InsightItem(label: "第三方接口可能延期", evidence: "那边还没给时间", confidence: 0.85, timestamp: 360)
+                ],
+                openQuestions: ["多模态要不要一起上"]
+            )
+        )
+        let markdown = MeetingExporter.markdown(for: session)
+
+        let actionsRange = try XCTUnwrap(markdown.range(of: "## 待办"))
+        let risksRange = try XCTUnwrap(markdown.range(of: "## 风险与阻塞"))
+        let questionsRange = try XCTUnwrap(markdown.range(of: "## 待确认"))
+        XCTAssertLessThan(actionsRange.lowerBound, risksRange.lowerBound, "风险必须排在待办之后")
+        XCTAssertLessThan(risksRange.lowerBound, questionsRange.lowerBound, "风险必须排在待确认之前")
+        XCTAssertTrue(markdown.contains("第三方接口可能延期"))
+    }
+
+    /// 没有风险时**不写空章节**（同「待确认」的既有口径：宁可少一节，不要一节空标题）。
+    func testNoRisksSectionWhenEmpty() {
+        let session = makeSession(
+            analysis: analysis(
+                decisions: [
+                    InsightItem(label: "本期只做上半部分", evidence: "先完成上半部分", confidence: 0.9, timestamp: 120)
+                ]
+            )
+        )
+        XCTAssertFalse(MeetingExporter.markdown(for: session).contains("## 风险与阻塞"))
     }
 }

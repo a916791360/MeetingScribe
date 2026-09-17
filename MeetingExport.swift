@@ -93,6 +93,23 @@ enum MeetingExporter {
             blocks.append(section("待办", body: lines.joined(separator: "\n")))
         }
 
+        // 风险与阻塞：紧跟在待办后面，与速览页的顺序一致 ——
+        // "要做什么"和"什么会挡着"是同一个决策链条的两端，导出件里也不该被拆开。
+        let risks = (session.analysis.risks ?? []).filter { trimmed($0.label) != nil }
+        if !risks.isEmpty {
+            let lines = risks.map { item -> String in
+                var line = "- **\(item.label)**"
+                var tags: [String] = []
+                if let stamp = item.timestamp { tags.append("时间 \(stamp.clockLabel)") }
+                if !tags.isEmpty { line += "（\(tags.joined(separator: " · "))）" }
+                if let evidence = trimmed(item.evidence) {
+                    line += "\n  - 依据：\(evidence)"
+                }
+                return line
+            }
+            blocks.append(section("风险与阻塞", body: lines.joined(separator: "\n")))
+        }
+
         let questions = (session.analysis.openQuestions ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -100,6 +117,9 @@ enum MeetingExporter {
             blocks.append(section("待确认", body: questions.map { "- \($0)" }.joined(separator: "\n")))
         }
 
+        // 这块内容在界面上叫「时间导航」（它的用处是点一下回到那一段去听）。
+        // 导出件里仍叫「经过」：它是一份**静态文档**，"导航"这个交互词在纸面上没有意义 ——
+        // 收件人需要的只是"每一段聊了什么"。
         if !session.analysis.timeline.isEmpty {
             let lines = session.analysis.timeline.map { chunk -> String in
                 var line = "- **[\(chunk.rangeLabel)]** \(chunk.summary)"

@@ -887,6 +887,16 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 列表里时，读者会把悬而未决的条目当成结论。
     var openQuestions: [String]?
 
+    /// **风险与阻塞**：会上点出、可能挡住待办落地的事。
+    ///
+    /// 为什么单开一个维度、而不是并进 `openQuestions`：
+    /// 那个是"**没定下来的问题**"（要人去问），这个是"**已经知道会挡路的事**"
+    /// （要人去处理）—— 两者的下一步动作不同，混在一栏里等于把"去问"和"去解"压成一个。
+    ///
+    /// 类型与 `decisions` 相同（`InsightItem`）：风险同样要能溯源（依据 + 时间锚 + 置信度），
+    /// 复用同一套渲染与导出，也就不会出现"决策能跳回放、风险跳不了"这种同屏内的不一致。
+    var risks: [InsightItem]?
+
     /// 材料不足，**压根没调模型**。见 `MaterialShortfall`。
     ///
     /// 与 `summaryError` / `partialNotice` 三者互斥，语义各不同：
@@ -939,7 +949,8 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         headline: String? = nil,
         overviewBullets: [String]? = nil,
         openQuestions: [String]? = nil,
-        insufficientMaterial: MaterialShortfall? = nil
+        insufficientMaterial: MaterialShortfall? = nil,
+        risks: [InsightItem]? = nil
     ) {
         self.overview = overview
         self.timeline = timeline
@@ -956,6 +967,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         self.overviewBullets = overviewBullets
         self.openQuestions = openQuestions
         self.insufficientMaterial = insufficientMaterial
+        self.risks = risks
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -974,6 +986,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         case overviewBullets
         case openQuestions
         case insufficientMaterial
+        case risks
     }
 
     init(from decoder: Decoder) throws {
@@ -999,6 +1012,8 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
             MaterialShortfall.self,
             forKey: .insufficientMaterial
         )
+        // 页分家那一轮新增（风险与阻塞），同理：老会话没有这个键。
+        risks = try container.decodeIfPresent([InsightItem].self, forKey: .risks)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1018,6 +1033,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
         try container.encodeIfPresent(overviewBullets, forKey: .overviewBullets)
         try container.encodeIfPresent(openQuestions, forKey: .openQuestions)
         try container.encodeIfPresent(insufficientMaterial, forKey: .insufficientMaterial)
+        try container.encodeIfPresent(risks, forKey: .risks)
     }
 
     var hasNarrative: Bool {
@@ -1035,7 +1051,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 「重试」也只给前者（材料还是那么少，点几次都一样）。
     var isMaterialInsufficient: Bool { insufficientMaterial != nil }
 
-    /// 这份结果里有没有**结构化发现**（决策 / 待办 / 一句话结论 / 要点 / 待确认）。
+    /// 这份结果里有没有**结构化发现**（决策 / 待办 / 风险 / 一句话结论 / 要点 / 待确认）。
     ///
     /// 刻意**不**把 `overviewText` / `minutesText` / `timeline` 算进来 ——
     /// 恰好是这三样最多、却又最可能是"模型对着材料介绍自己"的部分。
@@ -1046,6 +1062,7 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
             || headline != nil
             || !(overviewBullets?.isEmpty ?? true)
             || !(openQuestions?.isEmpty ?? true)
+            || !(risks?.isEmpty ?? true)
     }
 
     /// 需要提示用户的那句话（有本地兜底就报兜底，否则报"不完整"）。

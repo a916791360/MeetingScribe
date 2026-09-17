@@ -376,17 +376,20 @@ struct MeetingSummaryEngine: Sendable {
         var headline: String? = nil
         var overviewBullets: [String] = []
         var openQuestions: [String] = []
+        /// 页分家那一轮新增：风险与阻塞。给默认值同理，既有构造点不用改。
+        var risks: [InsightItem] = []
 
         /// 一个字段都没拿到 —— 用来判断"这次等于白跑了"。
         ///
-        /// `headline` / `overviewBullets` / `openQuestions` 也算内容：它们和
-        /// `overviewText` 一样是用户看得见的产出，只拿到要点就退化成"什么都嫌少"，
+        /// `headline` / `overviewBullets` / `openQuestions` / `risks` 也算内容：
+        /// 它们和 `overviewText` 一样是用户看得见的产出，只拿到要点就退化成"什么都嫌少"，
         /// 反而会把一份可用的结果判成白跑。
         var isEmpty: Bool {
             overviewText.isEmpty &&
                 (headline?.isEmpty ?? true) &&
                 overviewBullets.isEmpty &&
                 openQuestions.isEmpty &&
+                risks.isEmpty &&
                 timeline.isEmpty &&
                 decisions.isEmpty &&
                 actions.isEmpty
@@ -533,7 +536,8 @@ struct MeetingSummaryEngine: Sendable {
             ),
             headline: facts.headline,
             overviewBullets: facts.overviewBullets,
-            openQuestions: facts.openQuestions
+            openQuestions: facts.openQuestions,
+            risks: facts.risks
         )
     }
 
@@ -625,6 +629,13 @@ struct MeetingSummaryEngine: Sendable {
     /// **抽成纯函数是为了能被单测钉住**：它和纪要那一段必须拿到**同一份**材料指令块
     /// （术语 + 说话人约定）。两段各拼各的，早晚出现"术语加了、归属没加"这种
     /// 读起来完全正常的静默不一致 —— 2026-09-17 修的就是这一类。
+    ///
+    /// **2026-09-17（页分家）改了两处口径**，都为了消掉页内重复：
+    /// ① `overviewBullets` 改成"**只写 decisions / actions / risks 没覆盖的**"——
+    ///    原来它被要求"覆盖整场的重点"，于是与决策/待办的语义重合实测 73%（86% 的要点重合过半），
+    ///    同一句话在速览页里被读两遍；
+    /// ② `overview` 加"不得重述 headline 原句"——两者在页面上上下相邻，抄一遍最刺眼。
+    /// 同时新增 `risks`（风险与阻塞）：行业标配而此前完全没有的维度。
     static func factsPrompt(
         source: String,
         directives: String,
@@ -635,7 +646,7 @@ struct MeetingSummaryEngine: Sendable {
         读者是没参会、但要立刻知道"结论是什么、我该做什么"的同事。
         不确定、语义不完整或只是提问的内容，一律不要写入决策和待办。
         逐字稿不是让你改写；速览必须是理解后的归纳，不是原文照抄。
-        决策和待办会由 App 单独展示；没有明确内容时输出空数组。
+        决策、待办、风险会由 App 单独展示；没有明确内容时输出空数组。
 
         **必须遵守的两条硬要求**：
         1. 禁止空话动词。以下措辞一律不许出现：会上介绍了、会上讨论了、会上提到、谈到了、提到了、围绕……展开、延伸到、进行了讨论、交换了意见。要写实质内容（谁提了什么、数字是多少、为什么否掉）。
@@ -652,7 +663,7 @@ struct MeetingSummaryEngine: Sendable {
         输出结构：
         {
           "headline": "一句话说清这场会最终是什么结果（30 字以内，直接写结论，不要以'本次会议'开头）",
-          "overview": "一段速览导语，200 到 400 字。第一句直接给结论（例如'确定…''决定…''本期只做…'），禁止用'本次会议围绕……展开''会上讨论了……'这类套话开头；随后说清形成了什么结果、下一步是什么",
+          "overview": "一段速览导语，200 到 400 字。第一句直接给结论（例如'确定…''决定…''本期只做…'），禁止用'本次会议围绕……展开''会上讨论了……'这类套话开头；随后说清形成了什么结果、下一步是什么。**不要重述 headline 的原句** —— 那一句会单独显示在导语上方，再抄一遍就是同一句话说两遍；导语该做的是把它展开说清",
           "overviewBullets": [
             "[12:30] 一条要点。每条必须以 [分:秒] 开头并在材料里找到对应位置，正文里尽量带上具体数字、版本号、日期或人名"
           ],
@@ -668,11 +679,19 @@ struct MeetingSummaryEngine: Sendable {
           "actions": [
             {"label": "具体待办", "owner": "谁来做；材料没点名就填 null", "priority": "p1", "dueText": null, "evidence": "原文依据", "confidence": 0.8, "timestamp": 123.4}
           ],
+          "risks": [
+            {"label": "会挡住待办落地的事", "evidence": "原文依据", "confidence": 0.8, "timestamp": 123.4}
+          ],
           "confidence": 0.8
         }
 
-        overviewBullets 给 4 到 7 条，覆盖整场的重点（决定、关键数字、风险、下一步），不要写成 overview 的分句抄写。
+        overviewBullets 给 4 到 7 条，**只写 decisions / actions / risks 没有覆盖的信息** ——
+        关键数字、前提条件、背景变化、被否掉的方案、口径与边界。
+        **已经在 decisions、actions 或 risks 里出现过的内容，不要再写一遍**：读者会在两块里
+        各读到一次同一句话，只会觉得这个产品在做重复劳动。也不要把 overview 拆成分句抄一遍。
         openQuestions 最多 5 条，只收"明确被提出来但没结论"的，不要把普通提问塞进去。
+        risks 只收"会上点出的、可能挡住待办落地的事"：依赖第三方的等待、资源与人力缺口、
+        时间冲突、已知但没解决的障碍。审批流程、日常疑问这类不算；没有就输出空数组。
         actions 的 owner 只在材料点出负责的人**或角色**时才填 —— "苏总""赵瑞梅""产品经理""业务人员""经销商"这类都算；
         填了 owner 就要把它**从 label 里挪出去**，不要让同一条待办的 label 和 owner 各留一份责任人。
         材料没点名一律 null，不要写"负责人""待定""相关同事"这类占位词。
@@ -1294,6 +1313,10 @@ struct MeetingSummaryEngine: Sendable {
             let headline: String?
             let overviewBullets: [String]?
             let openQuestions: [String]?
+            /// 页分家那一轮新增。风险与决策**同构**（`label` + 依据 + 置信度 + 时间戳），
+            /// 所以复用 `Decision` 这个嵌套类型，而不是再定义一个一模一样的 ——
+            /// 那样将来给条目加字段必然漏掉一处。
+            let risks: [Decision]?
         }
 
         var payload: Payload?
@@ -1355,6 +1378,24 @@ struct MeetingSummaryEngine: Sendable {
                     owner: nonEmpty(item.owner)
                 )
             } ?? []
+            // 风险走**自己的**准入门槛（不是 `admitsDecision`）：风险的措辞天生带不确定性
+            // （"可能延期""如果第三方不配合"），拿"含『可能』就丢"那套判据去筛，
+            // 会把说得最准的风险全部筛掉。
+            let risks = payload.risks?.compactMap { item -> InsightItem? in
+                guard let label = nonEmpty(item.label),
+                      let evidence = nonEmpty(item.evidence),
+                      Self.admitsRisk(
+                          label: label,
+                          evidence: evidence,
+                          confidence: item.confidence ?? 0.5
+                      ) else { return nil }
+                return InsightItem(
+                    label: label,
+                    evidence: evidence,
+                    confidence: clamp(item.confidence ?? 0.5),
+                    timestamp: item.timestamp
+                )
+            } ?? []
             // 要点和待确认问题：逐条清洗，空串丢掉（模型偶尔会用空串占位）。
             let bullets = (payload.overviewBullets ?? []).compactMap { nonEmpty($0) }
             let questions = (payload.openQuestions ?? []).compactMap { nonEmpty($0) }
@@ -1372,7 +1413,8 @@ struct MeetingSummaryEngine: Sendable {
                 escalations: result.escalations,
                 headline: nonEmpty(payload.headline),
                 overviewBullets: bullets,
-                openQuestions: questions
+                openQuestions: questions,
+                risks: risks
             )
         }
 
@@ -1628,5 +1670,17 @@ struct MeetingSummaryEngine: Sendable {
     /// 但写成待办时它就是一件要做的事。
     static func looksUndecidedForAction(_ text: String) -> Bool {
         ["可能", "也许", "大概", "是否", "待定", "不确定"].contains(where: text.contains)
+    }
+
+    /// 风险条目的准入门槛。**门槛比决策低，而且刻意不用 `looksUncertain`** ——
+    /// 风险的措辞天生带不确定性（"可能延期""如果第三方不配合""来不及"），
+    /// 拿"含『可能』就丢"那套判据去筛，恰好会把**说得最准的风险**全部筛掉。
+    ///
+    /// 只留三条：说得具体（≥4 字）、有原文依据（≥6 字）、模型对它有把握（≥0.62）。
+    /// 依据这一条不能松 —— 编造出来的风险比漏掉风险更糟：它会让人去做无谓的准备。
+    static func admitsRisk(label: String, evidence: String, confidence: Double) -> Bool {
+        label.count >= 4
+            && evidence.count >= 6
+            && confidence >= 0.62
     }
 }

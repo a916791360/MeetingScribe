@@ -29,6 +29,7 @@ let package = Package(
                 "MeetingScribeApp.swift",
                 "AppTheme.swift",
                 "WorkbenchView.swift",
+                "WorkbenchContentPlan.swift",
                 "WindowConfiguration.swift",
                 "MeetingModels.swift",
                 "Diagnostics.swift",

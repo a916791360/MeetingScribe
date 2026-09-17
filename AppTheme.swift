@@ -282,7 +282,7 @@ enum AppType {
     static let documentBody = Font.system(size: 15, weight: .regular)
     /// 纪要正文里的小标题（`## 一、…`）。
     ///
-    /// **必须低于 `sectionTitle`(17)**：页面上的「决策与结论 / 待办」是整页最高一档，
+    /// **必须低于 `sectionTitle`(17)**：速览页的「决策与结论 / 待办」是整页最高一档，
     /// 而纪要正文是**面板里的一篇文章**，它的小标题不该跟页面章节标题抢层级 ——
     /// 抢过去之后，读者分不清"这一节是文章的一部分"还是"这是页面上的新一栏"。
     ///
@@ -296,7 +296,7 @@ enum AppType {
     static let documentEvidence = Font.system(size: 12, weight: .regular)
     /// 时间轨、计数这类元信息。
     static let documentMeta = Font.system(size: 11, weight: .semibold)
-    /// 章节标题（决策与结论 / 待办）。**整条阶梯的最高一档**，
+    /// 章节标题（速览页的决策与结论 / 待办 / 风险与阻塞）。**整条阶梯的最高一档**，
     /// 必须压过 `documentItemLabel`，否则标题和条目里的句子糊成一片（见上）。
     static let sectionTitle = Font.system(size: 17, weight: .semibold)
 
