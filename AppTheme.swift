@@ -280,6 +280,16 @@ enum AppType {
     static let documentLead = Font.system(size: 16.5, weight: .regular)
     /// 文档正文：纪要认真叙述、速览时间线的条目正文。
     static let documentBody = Font.system(size: 15, weight: .regular)
+    /// 纪要正文里的小标题（`## 一、…`）。
+    ///
+    /// **必须低于 `sectionTitle`(17)**：页面上的「决策与结论 / 待办」是整页最高一档，
+    /// 而纪要正文是**面板里的一篇文章**，它的小标题不该跟页面章节标题抢层级 ——
+    /// 抢过去之后，读者分不清"这一节是文章的一部分"还是"这是页面上的新一栏"。
+    ///
+    /// **又必须与 `documentBody`(15) 拉开字重**：只差 1pt 时，靠字号根本看不出这是标题，
+    /// 读完标题会不知道正文从哪开始。所以层级由**字重**承担（regular → semibold），
+    /// 字号只提 1pt 配合。
+    static let documentSubheading = Font.system(size: 16, weight: .semibold)
     /// 条目主句：决策 / 待办的那一句话。同字号里唯一的 semibold，靠字重立起来。
     static let documentItemLabel = Font.system(size: 14.5, weight: .semibold)
     /// 条目依据。注脚，不是内容 —— 小两档 + 退到 `muted`。

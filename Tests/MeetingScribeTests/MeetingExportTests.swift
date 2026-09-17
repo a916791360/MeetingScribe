@@ -53,6 +53,7 @@ final class MeetingExportTests: XCTestCase {
         actions: [ActionItem] = [],
         openQuestions: [String]? = nil,
         overviewText: String = "",
+        minutesText: String = "",
         timeline: [TimelineChunk] = [],
         summaryError: String? = nil,
         summaryModel: String? = nil
@@ -64,7 +65,7 @@ final class MeetingExportTests: XCTestCase {
             actions: actions,
             confidence: 0.9,
             overviewText: overviewText,
-            minutesText: "",
+            minutesText: minutesText,
             summaryModel: summaryModel,
             summaryError: summaryError,
             headline: headline,
@@ -157,13 +158,17 @@ final class MeetingExportTests: XCTestCase {
         )
         let markdown = MeetingExporter.markdown(for: session)
 
+        // 「概述 / 纪要」这一格在**要点之后、清单之前**（2026-09-17 起）：
+        // 它是给收件人通读的那一篇，读完再往下看能勾的条目。
+        // 这一场没有纪要正文，所以这一格由概述顶上 —— 两者只出一个，见
+        // `testOverviewIsDroppedWhenMinutesArePresent`。
         let headings = [
             "## 一句话结论",
             "## 要点",
+            "## 会议概述",
             "## 决策与结论",
             "## 待办",
             "## 待确认",
-            "## 会议概述",
             "## 经过",
             "## 原文（逐字稿）"
         ]
@@ -345,5 +350,141 @@ final class MeetingExportTests: XCTestCase {
         let markdown = MeetingExporter.markdown(for: makeSession())
         XCTAssertTrue(markdown.hasSuffix("\n"))
         XCTAssertFalse(markdown.hasSuffix("\n\n"))
+    }
+
+    // MARK: - 会议纪要（成文正文）
+
+    private let minutesFixture = """
+    这一场把价格与交付都定了下来，下一步是周三前给出上线节奏。
+
+    ## 一、价格与账期
+
+    八五折是底线，账期维持三十天。
+
+    ## 二、交付节奏
+
+    - 周三前给出灰度方案
+    - 下周一全量
+    """
+
+    /// **这一条是本次改动的目的**：模型写的成文纪要必须能带出这个 App。
+    ///
+    /// 改动前 `MeetingExporter` 只导出结构化字段，`minutesText` 一个字都没出去 ——
+    /// 用户在界面上读得到它，复制粘贴出去的却只有清单。
+    func testMinutesBodyIsExportedAsADocument() {
+        let session = makeSession(analysis: analysis(minutesText: minutesFixture))
+        let markdown = MeetingExporter.markdown(for: session)
+
+        XCTAssertTrue(markdown.contains("## 会议纪要"), "实际正文：\n\(markdown)")
+        XCTAssertTrue(markdown.contains("这一场把价格与交付都定了下来，下一步是周三前给出上线节奏。"))
+        XCTAssertTrue(markdown.contains("八五折是底线，账期维持三十天。"))
+    }
+
+    /// 正文里的小标题必须**降一级**。
+    ///
+    /// 不降的话，「会议纪要」和「一、价格与账期」在文档工具里是同级的两栏，
+    /// 读者分不出哪一层是导出结构、哪一层是这场会自己的分节。
+    func testMinutesHeadingsAreDemotedBelowTheSectionHeading() {
+        let session = makeSession(analysis: analysis(minutesText: minutesFixture))
+        let markdown = MeetingExporter.markdown(for: session)
+
+        XCTAssertTrue(markdown.contains("### 一、价格与账期"))
+        XCTAssertTrue(markdown.contains("### 二、交付节奏"))
+
+        // **判据必须是行级的**：`### 一、…` 里含有子串 `## 一、…`，
+        // 直接用 `contains("## 一、价格与账期")` 会**永远为真**，那条断言等于没写。
+        let secondLevel = markdown
+            .components(separatedBy: "\n")
+            .filter { $0.hasPrefix("## ") }
+        XCTAssertFalse(
+            secondLevel.contains { $0.contains("一、价格与账期") },
+            "正文小标题没降级，跟章节标题撞级了：\(secondLevel)"
+        )
+    }
+
+    /// 老会话的正文写成 `一、价格`（没有井号）。它在 Markdown 里本来只是一行普通字，
+    /// 导出时要按**界面同一套判定**补成标题 —— 否则界面上看着是标题的行，导出里却不是。
+    func testOldStyleOrdinalHeadingsBecomeRealHeadingsInExport() {
+        let text = """
+        开场先把三件事说清了。
+
+        一、价格
+
+        八五折是底线。
+        """
+        XCTAssertEqual(
+            MeetingExporter.minutesMarkdown(text),
+            """
+            开场先把三件事说清了。
+
+            ### 一、价格
+
+            八五折是底线。
+            """
+        )
+    }
+
+    /// 同一个列表里的项目之间只换行、不空行 —— 空行会把一个列表拆成两个。
+    func testBulletsInMinutesStayInOneList() {
+        let text = """
+        ## 一、待办
+
+        - 甲
+        - 乙
+        """
+        XCTAssertEqual(
+            MeetingExporter.minutesMarkdown(text),
+            "### 一、待办\n\n- 甲\n- 乙"
+        )
+    }
+
+    /// 概述是纪要的详略两版、说的是同一件事。同时出现等于让收件人读两遍同样的开场白。
+    func testOverviewIsDroppedWhenMinutesArePresent() {
+        let session = makeSession(
+            analysis: analysis(overviewText: "这里是两三百字的概述。", minutesText: minutesFixture)
+        )
+        let markdown = MeetingExporter.markdown(for: session)
+        XCTAssertTrue(markdown.contains("## 会议纪要"))
+        XCTAssertFalse(markdown.contains("## 会议概述"))
+        XCTAssertFalse(markdown.contains("这里是两三百字的概述。"))
+    }
+
+    /// 没有纪要正文时（本地保守整理、或正文那一次调用失败）必须**退回概述**，不能两头空。
+    func testOverviewIsStillExportedWhenMinutesAreMissing() {
+        let session = makeSession(analysis: analysis(overviewText: "这里是两三百字的概述。"))
+        let markdown = MeetingExporter.markdown(for: session)
+        XCTAssertTrue(markdown.contains("## 会议概述"))
+        XCTAssertTrue(markdown.contains("这里是两三百字的概述。"))
+        XCTAssertFalse(markdown.contains("## 会议纪要"))
+    }
+
+    /// 成文在**前**、清单在**后**：收件人先把它当一篇文档读一遍，需要执行时再往下看能勾的条目。
+    func testMinutesComeBeforeTheChecklists() throws {
+        let session = makeSession(
+            analysis: analysis(
+                decisions: [
+                    InsightItem(label: "接受八五折", evidence: "客户当场同意", confidence: 0.9, timestamp: 750)
+                ],
+                actions: [
+                    ActionItem(label: "把合同发过去", evidence: "", confidence: 0.9, timestamp: nil, owner: nil)
+                ],
+                minutesText: minutesFixture
+            )
+        )
+        let markdown = MeetingExporter.markdown(for: session)
+
+        let minutesRange = try XCTUnwrap(markdown.range(of: "## 会议纪要"))
+        let decisionsRange = try XCTUnwrap(markdown.range(of: "## 决策与结论"))
+        let actionsRange = try XCTUnwrap(markdown.range(of: "## 待办"))
+        XCTAssertLessThan(minutesRange.lowerBound, decisionsRange.lowerBound)
+        XCTAssertLessThan(decisionsRange.lowerBound, actionsRange.lowerBound)
+    }
+
+    /// 空白正文不算正文 —— 不能导出一个只有标题的空章节。
+    func testBlankMinutesProduceNoSection() {
+        let session = makeSession(analysis: analysis(overviewText: "真正的概述", minutesText: "   \n  "))
+        let markdown = MeetingExporter.markdown(for: session)
+        XCTAssertFalse(markdown.contains("## 会议纪要"))
+        XCTAssertTrue(markdown.contains("## 会议概述"))
     }
 }

@@ -42,6 +42,7 @@ let package = Package(
                 "Glossary.swift",
                 "MeetingExport.swift",
                 "SummaryEngine.swift",
+                "MinutesMarkup.swift",
                 "SummaryModelDiscovery.swift",
                 "KeychainStore.swift",
                 "AudioPlayback.swift"

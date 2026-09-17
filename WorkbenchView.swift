@@ -1453,16 +1453,15 @@ struct WorkbenchMinutesDocument: View {
             // （"还没有生成速览" + 原因 + 重试按钮）。跨 Tab 去看一眼，比在每个 Tab
             // 都贴一遍要干净。
             if !minutesText.isEmpty {
-                // 同速览：只给"这一段话"一个容器，下面的决策 / 待办是条目，靠轨和线立住。
+                // 同速览：只给"这一篇"一个容器，下面的决策 / 待办是条目，靠轨和线立住。
                 // 限宽的理由在下面那条注释里 —— 这一页最容易变成"一屏 60 字的墙"。
                 // 宽度交给容器（= 结构列整宽），调用方不再套 frame。
-                Text(minutesText)
-                    .font(AppType.documentBody)
-                    .foregroundStyle(AppTheme.ink)
-                    .lineSpacing(AppType.bodyLineSpacing)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .workbenchProsePanel()
+                //
+                // **正文要按文档渲染，不能直接 `Text(minutesText)`**：提示词允许模型用
+                // `## 标题` 分段（`MeetingSummaryEngine.minutesPrompt`），直接渲染会把井号
+                // 原样显示出来。解析与渲染都在 `MinutesMarkup` 里，那里也写了
+                // 为什么这件事必须由单测钉住。
+                WorkbenchMinutesProse(text: minutesText)
             } else if let shortfall = session.analysis.insufficientMaterial {
                 // 同速览页：材料不足是一种**结论**，不是一次失败。文案与速览页逐字一致
                 // （同一句在 `MaterialShortfall.message` 里，两处共用），

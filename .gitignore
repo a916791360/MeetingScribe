@@ -33,3 +33,6 @@ docs/verification/quality/synthetic/report.json
 # LLM 裁判的原始打分与素材（含真实会议内容）
 docs/verification/quality/judge/
 docs/verification/quality/synthetic/judge/
+
+# 外部参考截图（竞品界面等）：本机留存即可，没有版本意义还会把仓库撑大
+docs/reference/

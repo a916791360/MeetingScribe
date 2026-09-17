@@ -17,8 +17,12 @@ enum MeetingExporter {
 
     /// 整场导出的正文。
     ///
-    /// 顺序刻意与速览页的漏斗一致（结论 → 要点 → 决策 → 待办 → 待确认 → 概述 → 经过），
+    /// 顺序刻意与速览页的漏斗一致（结论 → 要点 → 纪要 → 决策 → 待办 → 待确认 → 经过），
     /// 逐字稿放最后当**附录** —— 收件人先看结论，需要核对时再往下翻。
+    ///
+    /// **2026-09-17 补上了「会议纪要」**：此前这一层只导出了结构化字段，
+    /// 模型写的那篇一两千字的成文纪要**根本没被导出** —— 用户在界面上能读到它，
+    /// 复制粘贴出去的却只有清单。这是"产出拿不出去"最实在的一处。
     static func markdown(for session: MeetingSession) -> String {
         var blocks: [String] = []
 
@@ -43,6 +47,18 @@ enum MeetingExporter {
                 return "- [\(seconds.clockLabel)] \(bullet.text)"
             }
             blocks.append(section("要点", body: lines.joined(separator: "\n")))
+        }
+
+        // 成文纪要在前，清单在后：收件人先把它当一篇文档读一遍，
+        // 需要执行时再往下看能勾的条目。
+        //
+        // **两者只出一个**：概述是纪要的详略两版、说的是同一件事，
+        // 同时出现等于让收件人读两遍同样的开场白。
+        if let minutes = trimmed(session.analysis.minutesText) {
+            blocks.append(section("会议纪要", body: minutesMarkdown(minutes)))
+        } else if let overview = trimmed(session.analysis.overviewText) {
+            // 没有纪要正文时（本地保守整理、或正文那一次调用失败）退回概述。
+            blocks.append(section("会议概述", body: overview))
         }
 
         if !session.analysis.decisions.isEmpty {
@@ -82,10 +98,6 @@ enum MeetingExporter {
             .filter { !$0.isEmpty }
         if !questions.isEmpty {
             blocks.append(section("待确认", body: questions.map { "- \($0)" }.joined(separator: "\n")))
-        }
-
-        if let overview = trimmed(session.analysis.overviewText) {
-            blocks.append(section("会议概述", body: overview))
         }
 
         if !session.analysis.timeline.isEmpty {
@@ -190,6 +202,49 @@ enum MeetingExporter {
 
     private static func section(_ title: String, body: String) -> String {
         "## \(title)\n\n\(body)"
+    }
+
+    /// 把纪要正文按**界面上同一套规则**重新排版成 Markdown。
+    ///
+    /// 两件事一起做掉了：
+    ///
+    /// 1. **层级降一级**。正文整体是 `## 会议纪要` 的内容，它自己的 `## 一、价格` 若原样带出去，
+    ///    会和外层章节同级 —— 粘进飞书 / Notion 后「会议纪要」和「一、价格」并排成两栏，
+    ///    读者分不出哪一层是文档结构、哪一层是这场会自己的分节。
+    /// 2. **形态统一**。老会话的正文写成 `一、价格`（没有井号），它在 Markdown 里就是一行普通字；
+    ///    这里按界面的判定把它补成 `### 一、价格`，于是**界面上看着是标题的行，导出里也是标题**。
+    ///
+    /// 判定用的是 `MinutesMarkup` —— 界面与导出共用一处实现。各写一套的话，迟早出现
+    /// "界面上是标题、导出里是普通句子"这种谁都不会去比对的错位。
+    static func minutesMarkdown(_ text: String) -> String {
+        var output = ""
+        var previousWasBullet = false
+
+        for block in MinutesMarkup.blocks(from: text) {
+            let rendered: String
+            let isBullet: Bool
+            switch block {
+            case .heading(let value):
+                rendered = "### \(value)"
+                isBullet = false
+            case .paragraph(let value):
+                rendered = value
+                isBullet = false
+            case .bullet(let value):
+                rendered = "- \(value)"
+                isBullet = true
+            }
+
+            if !output.isEmpty {
+                // 项目之间只换行、不空行：空行会把一个列表拆成两个。
+                // 其余情况必须空行，否则 Markdown 会把两段并成一段。
+                output += (previousWasBullet && isBullet) ? "\n" : "\n\n"
+            }
+            output += rendered
+            previousWasBullet = isBullet
+        }
+
+        return output
     }
 
     private static func trimmed(_ value: String?) -> String? {
