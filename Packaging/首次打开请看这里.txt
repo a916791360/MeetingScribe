@@ -1,0 +1,66 @@
+MeetingScribe —— 首次打开请看这里
+================================
+
+双击打不开、弹出一个「Apple 无法验证"MeetingScribe"」的框？
+别慌，这不是文件损坏，也不是中毒。
+
+原因很简单：这个 App 没有花钱买苹果的开发者证书去做「公证」，
+所以 macOS 默认不认识它，会先拦一下。放行一次就行，以后不再问。
+
+按下面走一遍（三步，一次搞定）：
+
+1. 在弹出的框里点「完成」，把它关掉。
+
+2. 打开「系统设置」（就是以前叫「系统偏好设置」的那个）
+   → 左边找到「隐私与安全性」→ 点进去
+   → 右侧往下滚，找到「安全性」那一栏
+   → 那里会出现一行提示，说刚才的 MeetingScribe 被拦下了
+   → 点它旁边的「仍要打开」，再输一次开机密码或指纹。
+
+3. 回到「应用程序」文件夹，再双击一次 MeetingScribe。
+   这次可以正常打开了。
+
+之后 macOS 就记住这个例外了，以后双击直接开，不会再拦。
+
+
+⚠️ 网上有些老教程说「按住 Control 键点图标，然后选『打开』」——
+   这个办法在 macOS 15 之后已经失效了，苹果把它删了。
+   右键菜单和弹框里都不会再有「打开」按钮，只能走上面第 2 步。
+
+
+如果第 2 步里「仍要打开」按钮点不动，或者你想直接用命令解决，
+打开「终端」粘贴这一行回车（需要输一次密码）：
+
+   xattr -d com.apple.quarantine /Applications/MeetingScribe.app
+
+
+还有一条最干净的路子：自己从源码编译。自己电脑上编译出来的
+产物不带隔离标记，打开时完全不会被拦：
+
+   git clone https://github.com/a916791360/MeetingScribe.git
+   cd MeetingScribe && swift build && swift run
+
+
+这个包里有什么
+--------------
+MeetingScribe.app 是自包含的（约 483 MB），里面已经带了：
+  · 主程序
+  · 转写引擎 whisper-cli 及依赖的动态库
+  · 语音模型 ggml-small.bin（约 466 MB）
+
+所以**不需要**另外安装 whisper.cpp，也**不需要**下载模型，解压就能用。
+
+想换更强的模型：把任意 ggml-*.bin 丢进
+   ~/Library/Application Support/MeetingScribe/models/
+然后重启 App 即可生效。
+
+这个包里没有什么
+----------------
+不含任何人的数据。API Key 存在 macOS 钥匙串里，模型配置存在系统
+偏好设置里，会议录音与纪要存在 ~/Library/Application Support/MeetingScribe/。
+这三类都是「按用户」落在你自己电脑上的，物理上不在 App 包里，
+所以别人给你这个包，不会带来别人的会议记录或密钥。
+
+支持 macOS 15+ / Apple Silicon（M 系列芯片）。
+
+MIT 许可。
