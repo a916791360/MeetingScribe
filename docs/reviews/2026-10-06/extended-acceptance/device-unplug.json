@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "test": "external microphone unplugged while idle, then capture started",
+  "fallback_device": "MacBook Air麦克风（内建）",
+  "ui_during_capture": "系统声音与 Mac 麦克风；麦克风一路未检测到声音；系统声音检测到声音",
+  "duration_seconds": 14.0,
+  "status": "ready",
+  "capture_warning_present": false,
+  "stop_and_processing_completed": true,
+  "media_audio_only": true,
+  "original_user_data_unchanged": true,
+  "device_restored": "外置麦克风 selected in macOS Sound input list",
+  "media": {
+    "remote.caf": {
+      "bytes": 896660,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "remote.wav": {
+      "bytes": 450378,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "source.wav": {
+      "bytes": 451958,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "local.caf": {
+      "bytes": 2691264,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "48000"
+      ]
+    },
+    "local.wav": {
+      "bytes": 451958,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    }
+  }
+}
