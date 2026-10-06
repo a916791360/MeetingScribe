@@ -8,9 +8,15 @@ private final class SummaryRedirectPolicy: NSObject, URLSessionTaskDelegate, Sen
               origin.scheme?.lowercased() == target.scheme?.lowercased(),
               origin.host?.lowercased() == target.host?.lowercased(),
               Self.port(origin) == Self.port(target) else { completionHandler(nil); return }
-        completionHandler(request)
+        // URLSession may strip Authorization even on a same-origin relative redirect.
+        // Restore it only after all origin checks above have succeeded.
+        var redirected = request
+        if let authorization = task.originalRequest?.value(forHTTPHeaderField: "Authorization") {
+            redirected.setValue(authorization, forHTTPHeaderField: "Authorization")
+        }
+        completionHandler(redirected)
     }
-    private static func port(_ url: URL) -> Int { url.port ?? (url.scheme == "https" ? 443 : 80) }
+    private static func port(_ url: URL) -> Int { url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80) }
 }
 
 private enum SummaryTransport {

@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import MeetingScribe
 
 final class AuditNetworkTests: XCTestCase {
@@ -22,9 +23,13 @@ final class AuditNetworkTests: XCTestCase {
         let root: URL
         let origin: Int
         let recipient: Int
+        let exited: DispatchSemaphore
         func stop() {
-            process.terminate()
-            process.waitUntilExit()
+            if process.isRunning { process.terminate() }
+            if exited.wait(timeout: .now() + 2) == .timedOut {
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                XCTAssertEqual(exited.wait(timeout: .now() + 2), .success, "Fixture termination must be bounded")
+            }
             try? FileManager.default.removeItem(at: root)
         }
         func requests() throws -> [[String: Any]] {
@@ -38,6 +43,8 @@ final class AuditNetworkTests: XCTestCase {
     private static func startServer() async throws -> Server {
         let root = try rootURL()
         let process = Process()
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         process.arguments = ["python3", repo.appendingPathComponent("Tests/Fixtures/summary-server.py").path, root.path]
@@ -49,12 +56,17 @@ final class AuditNetworkTests: XCTestCase {
             if let data = try? Data(contentsOf: portURL),
                let ports = try? JSONDecoder().decode([String: Int].self, from: data),
                let origin = ports["origin"], let recipient = ports["recipient"] {
-                return Server(process: process, root: root, origin: origin, recipient: recipient)
+                return Server(process: process, root: root, origin: origin, recipient: recipient, exited: exited)
             }
             try await Task.sleep(for: .milliseconds(10))
         }
-        if process.isRunning { process.terminate(); process.waitUntilExit() }
+        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        await Task.detached { Self.waitForFixtureExit(exited) }.value
         throw NSError(domain: "ReviewFixture", code: 1)
+    }
+
+    private static func waitForFixtureExit(_ exited: DispatchSemaphore) {
+        _ = exited.wait(timeout: .now() + 2)
     }
 
     private func settings(_ server: Server, path: String) -> SummaryModelSettings {
@@ -71,8 +83,44 @@ final class AuditNetworkTests: XCTestCase {
 
         let received = try server.requests().filter { $0["port"] as? Int == server.recipient }
         XCTAssertEqual(received.count, 0)
-        XCTAssertTrue(received.allSatisfy { ($0["body"] as? String)?.contains("REVIEW_SYNTHETIC_MEETING_MARKER") == true })
         XCTAssertFalse(received.contains { $0["authorization"] as? String == "Bearer \(fakeKey)" })
+    }
+
+    func testRedirectStatusHostAndSchemeMatrixRejectsBeforeSendingToTarget() async throws {
+        let server = try await Self.startServer()
+        defer { server.stop() }
+        for mode in ["redirect-301", "redirect-302", "redirect-303", "redirect-307", "redirect-308", "redirect-host", "redirect-scheme"] {
+            do {
+                try await MeetingSummaryEngine().test(settings: settings(server, path: mode), apiKey: fakeKey)
+                XCTFail("\(mode) must be rejected")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("跳转已停止"), "\(mode): \(error.localizedDescription)")
+            }
+        }
+        let requests = try server.requests()
+        XCTAssertEqual(requests.count, 7)
+        XCTAssertFalse(requests.contains { ($0["path"] as? String)?.hasPrefix("/receive/") == true })
+        XCTAssertFalse(requests.contains { $0["port"] as? Int == server.recipient })
+    }
+
+    func testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials() async throws {
+        let server = try await Self.startServer()
+        defer { server.stop() }
+        try await MeetingSummaryEngine().test(settings: settings(server, path: "redirect-relative"), apiKey: fakeKey)
+        let requests = try server.requests()
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.last?["path"] as? String, "/buffered/chat/completions")
+        XCTAssertEqual(requests.map { $0["authorization"] as? String == "Bearer \(fakeKey)" }, [true, true])
+        XCTAssertEqual(requests.first?["body"] as? String, requests.last?["body"] as? String)
+    }
+
+    func testMalformedSSEAfterUsefulContentRetainsTextWithPartialNotice() async throws {
+        let server = try await Self.startServer()
+        defer { server.stop() }
+        let analysis = try await MeetingSummaryEngine().analyze(segments: segments(), settings: settings(server, path: "malformed"), apiKey: fakeKey)
+        XCTAssertTrue(analysis.minutesText.contains("后续内容尚未生成"))
+        XCTAssertNotNil(analysis.noticeMessage)
+        XCTAssertEqual(analysis.diagnostics?.partial, true)
     }
 
     func testPrematureSSEEOFIsMarkedPartial() async throws {

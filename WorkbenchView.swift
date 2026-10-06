@@ -54,7 +54,13 @@ struct ContentView: View {
         NavigationSplitView {
             WorkbenchSidebarView()
         } detail: {
-            WorkbenchDetailView()
+            if store.isLoadingSessions {
+                ProgressView("正在读取会议记录…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("正在读取会议记录，请稍候")
+            } else {
+                WorkbenchDetailView()
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1060, minHeight: 660)
@@ -501,7 +507,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
                     .help(primaryTitle(for: session))
                     .accessibilityLabel(primaryTitle(for: session))
-                    .disabled(store.isPreparingRecording)
+                    .disabled(store.isLoadingSessions)
 
                     Button {
                         store.importAudioPresented = true
@@ -513,7 +519,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle())
                     .help("导入一段已有音频")
                     .accessibilityLabel("导入音频")
-                    .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
+                    .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                     Button {
                         store.showSettings = true
@@ -535,14 +541,14 @@ struct WorkbenchDetailView: View {
     /// 失败会议的「重新处理 / 重新整理」是这条记录自己的上下文动作，留在内容区。
     /// 否则当软件里只有一条失败会议时，用户会找不到最重要的全局入口「开始录音」。
     private func primaryTitle(for session: MeetingSession) -> String {
-        if store.isPreparingRecording { return "正在准备录音…" }
+        if store.isPreparingRecording { return "取消录音准备" }
         if store.isProcessing { return "停止处理" }
         if store.isRecording { return "结束并转写" }
         return "开始录音"
     }
 
     private func primaryIcon(for session: MeetingSession) -> String {
-        if store.isProcessing || store.isRecording { return "stop.fill" }
+        if store.isPreparingRecording || store.isProcessing || store.isRecording { return "stop.fill" }
         return "record.circle"
     }
 
@@ -558,7 +564,7 @@ struct WorkbenchDetailView: View {
     private func performPrimaryAction(for session: MeetingSession) {
         if store.isProcessing {
             store.cancelProcessing()
-        } else if store.isRecording {
+        } else if store.isRecording || store.isPreparingRecording {
             store.stopRecording()
         } else {
             store.startRecording()
@@ -2600,7 +2606,7 @@ struct WorkbenchFailureState: View {
                     WorkbenchDarkChip(text: session.status.title, systemImage: session.status.icon)
 
                     // 会议名不在这里重复——窗口标题栏已经有它（第四轮已确立的规矩）。
-                    Text(session.errorMessage ?? "录音未能启动。")
+                    Text(SafeDiagnostics.processing(session.errorMessage) ?? "录音未能启动。")
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.86))
                         .fixedSize(horizontal: false, vertical: true)
@@ -3261,7 +3267,7 @@ struct WorkbenchEmptyState: View {
                     Label("开始录音", systemImage: "record.circle")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-                .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
+                .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                 Button {
                     store.importAudioPresented = true
@@ -3272,7 +3278,7 @@ struct WorkbenchEmptyState: View {
                     Label("导入音频", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
-                .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
+                .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
             }
 
             // 点了「开始录音」却被权限拦下时的那条说明。

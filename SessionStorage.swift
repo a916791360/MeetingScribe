@@ -2,6 +2,8 @@ import Foundation
 
 final class SessionStorage: @unchecked Sendable {
     private let indexLock = NSLock()
+    // Serializes complete file operations, including nested save/read calls.
+    private let ioLock = NSRecursiveLock()
     private var foldersByID: [UUID: URL] = [:]
     var dataDirectoryURL: URL { rootURL }
     private let rootURL: URL
@@ -15,6 +17,8 @@ final class SessionStorage: @unchecked Sendable {
     func loadSessions() -> [MeetingSession] { loadSessionsReport().sessions }
 
     func loadSessionsReport() -> (sessions: [MeetingSession], issues: [String]) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
         do {
             let items = try FileManager.default.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
             var sessions: [MeetingSession] = []
@@ -23,7 +27,9 @@ final class SessionStorage: @unchecked Sendable {
             for folder in items {
                 guard (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
                 do {
-                    let session = try readSession(from: folder)
+                    let session = try readSession(from: folder, migrate: true) { _ in
+                        issues.append(folder.lastPathComponent + "（历史诊断清理未能写入，当前展示已隐藏原内容）")
+                    }
                     guard loadedIDs.insert(session.id).inserted else { throw StorageError.invalidManifest }
                     sessions.append(session)
                     indexLock.withLock { foldersByID[session.id] = folder }
@@ -62,6 +68,8 @@ final class SessionStorage: @unchecked Sendable {
     }
 
     func session(with id: UUID) throws -> MeetingSession {
+        ioLock.lock()
+        defer { ioLock.unlock() }
         if let folder = indexLock.withLock({ foldersByID[id] }) {
             let session = try readSession(from: folder)
             guard session.id == id else { throw StorageError.invalidManifest }
@@ -74,6 +82,9 @@ final class SessionStorage: @unchecked Sendable {
     }
 
     func save(_ session: MeetingSession) throws {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        let session = session.sanitizingDiagnostics
         let folder = try checkedFolder(for: session)
         for name in [session.sourceFileName, session.inputAudioFileName, session.localAudioFileName, session.remoteAudioFileName].compactMap({ $0 }) {
             _ = try checkedFile(in: folder, name: name)
@@ -88,6 +99,8 @@ final class SessionStorage: @unchecked Sendable {
     }
 
     func delete(_ session: MeetingSession) throws {
+        ioLock.lock()
+        defer { ioLock.unlock() }
         let folderURL = try checkedFolder(for: session)
         if FileManager.default.fileExists(atPath: folderURL.path) {
             try FileManager.default.removeItem(at: folderURL)
@@ -130,16 +143,22 @@ final class SessionStorage: @unchecked Sendable {
     }
 
     func copyImportedAudio(url: URL, into session: MeetingSession) throws -> URL {
+        ioLock.lock()
+        defer { ioLock.unlock() }
         // Never reuse the normalized output or overwrite the session manifest.
         let name = url.lastPathComponent
         guard name.lowercased() != "session.json" else { throw StorageError.invalidPath }
         let storedName = name.lowercased() == "input.wav" ? "imported-original.wav" : name
         let destination = try checkedFile(in: checkedFolder(for: session), name: storedName)
         if url.resolvingSymlinksInPath().standardizedFileURL != destination.resolvingSymlinksInPath().standardizedFileURL {
+            let staging = destination.deletingLastPathComponent().appendingPathComponent(".import-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: staging) }
+            try FileManager.default.copyItem(at: url, to: staging)
             if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+                _ = try FileManager.default.replaceItemAt(destination, withItemAt: staging)
+            } else {
+                try FileManager.default.moveItem(at: staging, to: destination)
             }
-            try FileManager.default.copyItem(at: url, to: destination)
         }
         var updated = session
         updated.sourceFileName = destination.lastPathComponent
@@ -171,7 +190,8 @@ final class SessionStorage: @unchecked Sendable {
         return url
     }
 
-    private func readSession(from originalFolder: URL) throws -> MeetingSession {
+    private func readSession(from originalFolder: URL, migrate: Bool = false,
+                             onMigrationFailure: ((Error) -> Void)? = nil) throws -> MeetingSession {
         guard (try originalFolder.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true else { throw StorageError.invalidPath }
         let folder = originalFolder.resolvingSymlinksInPath().standardizedFileURL
         let file = try checkedFile(in: folder, name: "session.json")
@@ -185,7 +205,12 @@ final class SessionStorage: @unchecked Sendable {
         for name in [session.sourceFileName, session.inputAudioFileName, session.localAudioFileName, session.remoteAudioFileName].compactMap({ $0 }) {
             _ = try checkedFile(in: folder, name: name)
         }
-        return session
+        let sanitized = session.sanitizingDiagnostics
+        if migrate && sanitized != session {
+            do { try save(sanitized) }
+            catch { onMigrationFailure?(error) }
+        }
+        return sanitized
     }
 
     /// 数据根。默认是 `~/Library/Application Support/MeetingScribe`。

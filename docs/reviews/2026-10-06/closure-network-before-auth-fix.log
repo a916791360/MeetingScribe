@@ -1,0 +1,43 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Compiling MeetingScribeTests AuditNetworkTests.swift
+[4/5] Emitting module MeetingScribeTests
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.44s)
+Test Suite 'Selected tests' started at 2026-10-06 12:59:34.427.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 12:59:34.428.
+Test Suite 'AuditNetworkTests' started at 2026-10-06 12:59:34.428.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' passed (0.055 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' passed (3.718 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' passed (0.079 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testMalformedSSEAfterUsefulContentRetainsTextWithPartialNotice]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testMalformedSSEAfterUsefulContentRetainsTextWithPartialNotice]' passed (0.049 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' passed (4.235 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' passed (0.044 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testRedirectStatusHostAndSchemeMatrixRejectsBeforeSendingToTarget]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testRedirectStatusHostAndSchemeMatrixRejectsBeforeSendingToTarget]' passed (0.049 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditNetworkTests.swift:113: error: -[MeetingScribeTests.AuditNetworkTests testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials] : XCTAssertTrue failed
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials]' failed (0.115 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' passed (0.001 seconds).
+Test Suite 'AuditNetworkTests' failed at 2026-10-06 12:59:42.776.
+	 Executed 10 tests, with 1 failure (0 unexpected) in 8.348 (8.348) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 12:59:42.776.
+	 Executed 10 tests, with 1 failure (0 unexpected) in 8.348 (8.348) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 12:59:42.777.
+	 Executed 10 tests, with 1 failure (0 unexpected) in 8.348 (8.349) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

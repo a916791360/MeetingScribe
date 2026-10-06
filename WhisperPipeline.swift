@@ -232,7 +232,15 @@ private final class TrackStreamOutput: NSObject, SCStreamOutput {
 }
 
 @MainActor
-final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate {
+protocol RecordingSession: AnyObject {
+    var levels: (local: Double, remote: Double) { get }
+    var onFailure: ((String) -> Void)? { get set }
+    func start() async throws
+    func stop() async throws -> MixedRecordingResult
+}
+
+@MainActor
+final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate, RecordingSession {
     private let movieURL: URL
     private let localTrackURL: URL
     private let remoteTrackURL: URL
@@ -251,6 +259,8 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     var onFailure: ((String) -> Void)?
     private var timelineOrigin: CMTime?
     private var stopTimeoutTask: Task<Void, Never>?
+    private var startContinuation: CheckedContinuation<Void, Error>?
+    private var startTimeoutTask: Task<Void, Never>?
 
     /// 两路音频**共用一个串行队列**：写文件的顺序就是采样顺序，两路之间也不会互相打架。
     private static let sampleQueue = DispatchQueue(
@@ -272,6 +282,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
 
     func start() async throws {
         let granted = await Self.requestScreenAccess()
+        try Task.checkCancellation()
         guard granted else {
             throw PipelineError.transcriptionFailed(
                 "未获得屏幕与系统音频录制权限。如果刚刚允许，请完全退出并重新打开 MeetingScribe 后再试。"
@@ -285,6 +296,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         // 授权失败**不抛**：拿不到麦克风只是没有说话人标注，录音本身照旧。
         let microphoneStatusBefore = MicrophoneAccess.statusLabel
         let microphoneGranted = await MicrophoneAccess.request()
+        try Task.checkCancellation()
         if microphoneGranted {
             Diagnostics.audio.notice(
                 "麦克风授权：已授权（请求前：\(microphoneStatusBefore, privacy: .public)）"
@@ -300,6 +312,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         }
 
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        try Task.checkCancellation()
         guard let display = content.displays.first else {
             throw PipelineError.missingDisplay
         }
@@ -349,22 +362,41 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
             label: "对方（系统声）"
         )
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            stream.startCapture { [weak self] error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    Task { @MainActor in
-                        self?.didStartRecording = true
-                        continuation.resume(returning: ())
-                    }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                self.startContinuation = continuation
+                self.startTimeoutTask = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(20)) } catch { return }
+                    self?.finishStart(error: PipelineError.failedToStartCapture)
                 }
+                stream.startCapture { [weak self] error in
+                    Task { @MainActor in self?.finishStart(error: error) }
+                }
+                if Task.isCancelled { finishStart(error: CancellationError()) }
             }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.finishStart(error: CancellationError()) }
+        }
+        if let stopError { throw stopError }
+        try Task.checkCancellation()
+    }
+
+    private func finishStart(error: Error?) {
+        guard let continuation = startContinuation else { return }
+        startContinuation = nil
+        startTimeoutTask?.cancel()
+        startTimeoutTask = nil
+        if let error {
+            continuation.resume(throwing: error)
+        } else {
+            didStartRecording = true
+            continuation.resume()
         }
     }
 
     func stop() async throws -> MixedRecordingResult {
         guard let stream else { throw PipelineError.failedToStopCapture }
+        guard !stopRequested else { throw PipelineError.failedToStopCapture }
 
         return try await withCheckedThrowingContinuation { continuation in
             self.stopContinuation = continuation
@@ -470,6 +502,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     }
 
     private func reportCaptureFailure(_ error: Error) {
+        guard stopError == nil else { return }
         stopError = error
         if !stopRequested { onFailure?(error.localizedDescription) }
         finishStopIfPossible()

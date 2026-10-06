@@ -1,4 +1,4 @@
-# MeetingScribe 完整审查与0.11.2升级报告
+# MeetingScribe 完整审查与0.11.3升级报告
 
 日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录与 `/Applications/MeetingScribe.app` 未替换；真实会议、凭据和云端接口均未用于验证。
 
@@ -6,9 +6,9 @@
 
 项目是Swift 6/SwiftUI的macOS 15+、Apple Silicon原生会议工具：ScreenCaptureKit录系统/麦克风，AVFoundation落盘与播放，afconvert归一化，whisper.cpp本机转写，可选本地规则/Ollama/OpenAI兼容接口整理，JSON会话与Markdown导出。单SwiftPM应用模块，无Web后端或数据库服务。
 
-完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批共记录42项：**P0 1 / P1 27 / P2 14**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
+完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项加本轮2项，共44项：**P0 1 / P1 29 / P2 14**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
 
-最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.2/build22**；仍有架构渐进改进、历史错误数据清洗与真实设备验收，不能把本地全绿当作公开发行完成。
+最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.3/build23**；本轮完成历史诊断清理与后台首次加载/导入，仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
 
 ## Top 10 高优先级问题
 
@@ -19,7 +19,7 @@
 | 1 | BUG-001 / P0 | 重试销毁已有结果 | 已修复 / 故障回归；testFailedRetryPreservesSavedManualEditsAndMinutes |
 | 2 | SEC-002 / P1 | 云端正文跟随跨来源重定向 | 已修复 / 真实loopback；testCrossOrigin307DoesNotForwardMeetingOrCredentials：目标零请求；HTTPS/跨主机矩阵待补 |
 | 3 | SEC-003 / P1 | 会话清单能改变数据根之外的操作目标 | 已修复 / 故障回归；manifest ../不能删根外；symlink不能写根外。未宣称抵御同机恶意进程的TOCTOU竞态 |
-| 4 | SEC-004 / P1 | 原始服务端错误污染会议文件与导出 | 新路径已修复 / 旧数据待处理；假Key不会进入新JSON/Markdown；历史已存summaryError未迁移清洗，旧文件/旧导出需单独检查 |
+| 4 | SEC-004 / P1 | 原始服务端错误污染会议文件与导出 | 新写入与历史诊断已修复 / 合成迁移回归；旧导出和其他备份不自动清除，真实库在运行新版时清理 |
 | 5 | BUG-006 / P1 | 写盘丢失音频时间位置 | 合成验证 / 需实机；testSampleTimestampGapIsPreserved、testSharedEpochPreservesFirstPacketOffsetsAndActualLevels；MOV首包/设备偏移需实测 |
 | 6 | BUG-008 / P1 | 后处理无视说话人边界 | 已修复 / 回归；testCleaningPreservesDifferentSpeakers、testIndependentRepeatsBySameSpeakerArePreserved |
 | 7 | BUG-009 / P1 | 相反意见被误判为串音 | 已修复 / 回归；testCrosstalkPreservesOppositeDecisions及合并测试；近似串音可能多保留一句，是避免误删的取舍 |
@@ -29,52 +29,52 @@
 
 ## 完整问题列表与修复状态
 
-“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善，SEC-004只保护新写入，不代表历史敏感信息已经被移除。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
+“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新验证见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
 
 | ID | 原严重级别 | 类型 | 问题 | 当前状态 | 当前修复位置 |
 |---|---|---|---|---|---|
-| BUG-001 | P0 | Bug | 重试销毁已有结果 | 已修复 / 故障回归 | [MeetingStore.swift:1060](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1060) |
-| BUG-002 | P1 | Bug | 重试漏掉输入归一化 | 已修复 / 故障回归 | [MeetingStore.swift:1099](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1099) |
-| BUG-003 | P1 | Bug / AI生成代码 | 保存失败却返回成功草稿 | 已修复 / 故障回归 | [SessionStorage.swift:36](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:36) |
-| BUG-004 | P1 | Bug / UX | 读取错误与空列表混为一谈 | 已修复 / 故障回归 | [SessionStorage.swift:17](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:17) |
-| BUG-005 | P1 | Bug / 架构 | 准备开录没有占用任务状态 | 代码已修复 / 需实机 | [MeetingStore.swift:276](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:276) |
-| BUG-006 | P1 | Bug | 写盘丢失音频时间位置 | 合成验证 / 需实机 | [AudioTrackRecorder.swift:126](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:126) |
-| BUG-007 | P1 | Bug / UX | 失败的半条音轨仍参与完整转写 | 合成验证 / 需实机 | [AudioTrackRecorder.swift:82](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:82) |
-| BUG-008 | P1 | Bug | 后处理无视说话人边界 | 已修复 / 回归 | [TranscriptCleaner.swift:133](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptCleaner.swift:133) |
-| BUG-009 | P1 | Bug / AI生成代码 | 相反意见被误判为串音 | 已修复 / 回归 | [TranscriptMerger.swift:138](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptMerger.swift:138) |
-| BUG-010 | P1 | Bug | 双路检查点覆盖完整的一路 | 已修复 / 故障回归 | [MeetingStore.swift:1741](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1741) |
-| BUG-011 | P1 | Bug / 架构 | 旧任务收尾破坏新任务状态 | 已修复 / 竞态回归 | [MeetingStore.swift:1454](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1454) |
-| BUG-012 | P1 | Bug | 超时和取消没有进程退出上限 | 已修复 / 故障回归 | [WhisperPipeline.swift:785](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:785) |
-| BUG-013 | P1 | Bug / 安全（录音生命周期） | 删除活动录音未停止采集 | 代码已修复 / 需实机 | [MeetingStore.swift:1123](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1123) |
-| BUG-014 | P1 | Bug / UX | 系统采集故障不即时上报 | 代码已修复 / 需实机 | [WhisperPipeline.swift:474](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:474) |
-| BUG-015 | P1 | Bug | 分块归属丢弃边界句子的后半段 | 已修复 / 回归 | [MeetingStore.swift:1890](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1890) |
-| BUG-016 | P1 | Bug / UX | 人工校正后旧整理结果没有过期状态 | 已修复 / UI与回归 | [MeetingModels.swift:1214](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:1214) |
-| BUG-017 | P1 | Bug / UX | 全文型历史记录在原文页被隐藏 | 已修复 / UI与回归 | [WorkbenchView.swift:1594](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1594) |
-| BUG-020 | P1 | Bug / AI生成代码 | 流式响应没有结束证据也宣称完成 | 已修复 / 协议回归 | [SummaryEngine.swift:1175](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:1175) |
-| BUG-022 | P1 | Bug | 时间锚解析与显示可能整数溢出崩溃 | 已修复 / 边界回归 | [MeetingModels.swift:1154](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:1154) |
-| BUG-023 | P1 | Bug / 数据完整性 | 导入input.wav会与标准化输出重名并替换本机副本 | 已修复 / 文件回归 | [SessionStorage.swift:132](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:132) |
-| BUG-024 | P1 | Bug / 数据安全 | 安装前强制结束App，且未完成复制就移走旧版 | 已修复 / 隔离故障回归 | [Scripts/install_app.sh:10](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh:10) |
-| BUG-025 | P1 | Bug / AI生成代码 | 静音门禁覆盖不一致与轻声信号误过滤 | 已修复 / 回归；真实噪声待验 | [MeetingStore.swift:1231](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1231) |
-| SEC-002 | P1 | 安全 | 云端正文跟随跨来源重定向 | 已修复 / 真实loopback | [SummaryEngine.swift:4](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:4) |
-| SEC-003 | P1 | 安全 / Bug | 会话清单能改变数据根之外的操作目标 | 已修复 / 故障回归 | [SessionStorage.swift:159](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:159) |
-| SEC-004 | P1 | 安全 | 原始服务端错误污染会议文件与导出 | 新路径已修复 / 旧数据待处理 | [SummaryEngine.swift:55](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:55) |
+| BUG-001 | P0 | Bug | 重试销毁已有结果 | 已修复 / 故障回归 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-002 | P1 | Bug | 重试漏掉输入归一化 | 已修复 / 故障回归 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-003 | P1 | Bug / AI生成代码 | 保存失败却返回成功草稿 | 已修复 / 故障回归 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| BUG-004 | P1 | Bug / UX | 读取错误与空列表混为一谈 | 已修复 / 故障回归 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| BUG-005 | P1 | Bug / 架构 | 准备开录没有占用任务状态 | 代码已修复 / 需实机 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-006 | P1 | Bug | 写盘丢失音频时间位置 | 合成验证 / 需实机 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
+| BUG-007 | P1 | Bug / UX | 失败的半条音轨仍参与完整转写 | 合成验证 / 需实机 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
+| BUG-008 | P1 | Bug | 后处理无视说话人边界 | 已修复 / 回归 | [TranscriptCleaner.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptCleaner.swift) |
+| BUG-009 | P1 | Bug / AI生成代码 | 相反意见被误判为串音 | 已修复 / 回归 | [TranscriptMerger.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptMerger.swift) |
+| BUG-010 | P1 | Bug | 双路检查点覆盖完整的一路 | 已修复 / 故障回归 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-011 | P1 | Bug / 架构 | 旧任务收尾破坏新任务状态 | 已修复 / 竞态回归 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-012 | P1 | Bug | 超时和取消没有进程退出上限 | 已修复 / 故障回归 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
+| BUG-013 | P1 | Bug / 安全（录音生命周期） | 删除活动录音未停止采集 | 代码已修复 / 需实机 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-014 | P1 | Bug / UX | 系统采集故障不即时上报 | 代码已修复 / 需实机 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
+| BUG-015 | P1 | Bug | 分块归属丢弃边界句子的后半段 | 已修复 / 回归 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| BUG-016 | P1 | Bug / UX | 人工校正后旧整理结果没有过期状态 | 已修复 / UI与回归 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
+| BUG-017 | P1 | Bug / UX | 全文型历史记录在原文页被隐藏 | 已修复 / UI与回归 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
+| BUG-020 | P1 | Bug / AI生成代码 | 流式响应没有结束证据也宣称完成 | 已修复 / 协议回归 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
+| BUG-022 | P1 | Bug | 时间锚解析与显示可能整数溢出崩溃 | 已修复 / 边界回归 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
+| BUG-023 | P1 | Bug / 数据完整性 | 导入input.wav会与标准化输出重名并替换本机副本 | 已修复 / 文件回归 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| BUG-024 | P1 | Bug / 数据安全 | 安装前强制结束App，且未完成复制就移走旧版 | 已修复 / 隔离故障回归 | [Scripts/install_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh) |
+| BUG-025 | P1 | Bug / AI生成代码 | 静音门禁覆盖不一致与轻声信号误过滤 | 已修复 / 回归；真实噪声待验 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| SEC-002 | P1 | 安全 | 云端正文跟随跨来源重定向 | 已修复 / 真实loopback | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
+| SEC-003 | P1 | 安全 / Bug | 会话清单能改变数据根之外的操作目标 | 已修复 / 故障回归 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| SEC-004 | P1 | 安全 | 原始服务端错误污染会议文件与导出 | 已修复 / 历史迁移故障回归 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | SEC-005 | P1 | 安全 / AI生成代码 | 评测配置把地址和凭据分别补齐 | 已修复 / mock回归 | [Scripts/llm_judge.py:148](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/llm_judge.py:148) |
-| UX-002 | P1 | UX / Bug | 待办负责人保存了却没显示 | 已修复 / UI | [WorkbenchView.swift:1953](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1953) |
-| UX-004 | P1 | UX | 缺麦克风权限的后果说明不完整 | 代码已修复 / 需实机 | [MeetingModels.swift:401](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:401) |
-| ARCH-001 | P2 | 架构 / 可维护性（附性能风险） | 编排与副作用集中，隔离不足 | 部分改善 | [SessionStorage.swift:3](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:3) |
-| BUG-018 | P2 | Bug | 字符长度限制不保证合法文件名字节数 | 已修复 / 写盘回归 | [MeetingExport.swift:194](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift:194) |
-| BUG-019 | P2 | Bug / 性能 | 播放器计时器没有覆盖离开与失败生命周期 | 已修复 / 生命周期回归 | [AudioPlayback.swift:102](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift:102) |
-| BUG-021 | P2 | Bug / 性能 | 网关正常返回普通 JSON 却被重复调用 | 已修复 / 请求计数 | [SummaryEngine.swift:1105](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:1105) |
-| DOC-001 | P2 | UX / 可维护性 | README宣称不联云，与可选云端整理不一致 | 已修复 / 文档核对 | [README.md:18](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md:18) |
-| PERF-001 | P2 | 性能 | 每次读取单条会议都会枚举解码整个数据根 | 已修复 / 合成性能 | [SessionStorage.swift:64](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:64) |
-| PERF-002 | P2 | 性能 / 可访问性 | 长逐字稿一次创建全部行 | 代码与AX改善 / 需测性能 | [WorkbenchView.swift:1563](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1563) |
-| PERF-003 | P2 | 性能 / 可维护性 | 子进程日志无界写入、结束后整文件读入 | 已修复 / 故障回归 | [WhisperPipeline.swift:864](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:864) |
-| SEC-001 | P2 | 安全 / 可维护性 | 审计通过与实际 Mach-O 路径不一致 | 已修复 / 产物验证 | [Scripts/package_app.sh:126](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh:126) |
-| SEC-006 | P2 | 可维护性 / 许可证风险 | 发行包没有保留内置运行时和模型的第三方许可 | 声明已补 / 来源仍需锁定 | [Scripts/package_app.sh:91](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh:91) |
-| UX-001 | P2 | UX / AI生成代码 | 装饰动画被放在真实音源状态位置 | 合成验证 / 需实机 | [AudioTrackRecorder.swift:78](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:78) |
-| UX-003 | P2 | UX / Bug | 切页静默丢弃未保存草稿 | 已修复 / UI | [MeetingStore.swift:113](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:113) |
-| UX-005 | P2 | UX / 可访问性 | 编辑输入框没有可访问性名称 | 已修复 / AX | [WorkbenchView.swift:2144](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:2144) |
-| UX-006 | P2 | UX / 可访问性 | 工具栏导入和设置被读成开始录音 | 已修复 / AX | [WorkbenchView.swift:527](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:527) |
+| UX-002 | P1 | UX / Bug | 待办负责人保存了却没显示 | 已修复 / UI | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
+| UX-004 | P1 | UX | 缺麦克风权限的后果说明不完整 | 代码已修复 / 需实机 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
+| ARCH-001 | P2 | 架构 / 可维护性（附性能风险） | 编排与副作用集中，隔离不足 | 部分改善 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| BUG-018 | P2 | Bug | 字符长度限制不保证合法文件名字节数 | 已修复 / 写盘回归 | [MeetingExport.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift) |
+| BUG-019 | P2 | Bug / 性能 | 播放器计时器没有覆盖离开与失败生命周期 | 已修复 / 生命周期回归 | [AudioPlayback.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift) |
+| BUG-021 | P2 | Bug / 性能 | 网关正常返回普通 JSON 却被重复调用 | 已修复 / 请求计数 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
+| DOC-001 | P2 | UX / 可维护性 | README宣称不联云，与可选云端整理不一致 | 已修复 / 文档核对 | [README.md](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md) |
+| PERF-001 | P2 | 性能 | 每次读取单条会议都会枚举解码整个数据根 | 已修复 / 合成性能 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| PERF-002 | P2 | 性能 / 可访问性 | 长逐字稿一次创建全部行 | 代码与AX改善 / 需测性能 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
+| PERF-003 | P2 | 性能 / 可维护性 | 子进程日志无界写入、结束后整文件读入 | 已修复 / 故障回归 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
+| SEC-001 | P2 | 安全 / 可维护性 | 审计通过与实际 Mach-O 路径不一致 | 已修复 / 产物验证 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
+| SEC-006 | P2 | 可维护性 / 许可证风险 | 发行包没有保留内置运行时和模型的第三方许可 | 声明已补 / 来源仍需锁定 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
+| UX-001 | P2 | UX / AI生成代码 | 装饰动画被放在真实音源状态位置 | 合成验证 / 需实机 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
+| UX-003 | P2 | UX / Bug | 切页静默丢弃未保存草稿 | 已修复 / UI | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| UX-005 | P2 | UX / 可访问性 | 编辑输入框没有可访问性名称 | 已修复 / AX | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
+| UX-006 | P2 | UX / 可访问性 | 工具栏导入和设置被读成开始录音 | 已修复 / AX | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 
 ## 项目结构、风险与适用范围
 
@@ -93,7 +93,16 @@ OWASP检查按原生桌面边界应用：认证/会话是第三方模型凭据�
 
 性能以原生I/O、列表构建、进程资源与请求次数衡量，Web LCP/CLS不适用于该界面。100会议×300段、查询最后一条20次：**1.197790秒→0.013592秒（约88.1倍）**，不是整App或首屏快88倍。Lazy列表已用1000段AX和首尾滚动验证，未测FPS/峰值内存。
 
-AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和319项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。
+AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和332项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。
+
+## 本轮新增确认缺陷
+
+| ID | 级别 | 类型 | 问题 | 状态 |
+|---|---|---|---|---|
+| BUG-026 | P1 | Bug / 录音生命周期 | 磁盘读取失败绕过停止采集 | 已修复 / 注入故障回归；真实设备待验 |
+| BUG-027 | P1 | Bug / 网络兼容 | 合法同来源跳转丢失认证头 | 已修复 / loopback允许与拒绝矩阵 |
+
+新增问题的12字段详情附在文末；历史诊断清理、后台I/O与录音故障补验见[追加报告](closure-review-and-upgrade.md)。
 
 ## 验证结果与证据
 
@@ -101,12 +110,12 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 | 验证 | 结果 | 证据 |
 |---|---|---|
-| Swift全量 | 319项，1项云端E2E跳过，0失败；warnings-as-errors | upgrade-tests.log |
+| Swift全量 | 332项，1项云端E2E跳过，0失败；warnings-as-errors | closure-full-tests.log |
 | Python指标 | 28项通过 | upgrade-python-quality.log |
 | Python凭据 | 5项mock通过 | upgrade-python-credentials.log |
 | Python安装 | 5项临时假App故障测试通过 | upgrade-python-install.log |
 | 合成质量门禁 | 7个case与预期一致，含已知退化反例 | upgrade-synthetic-quality.log |
-| 合成原生界面 | 草稿、owner、双页过期提示、旧全文、1000段首尾AX、工具栏、浅深色 | upgrade-ui-observations.md与PNG/AX文件 |
+| 合成原生界面 | 0.11.2：草稿、owner、双页过期提示、旧全文、1000段首尾AX、工具栏、浅深色；0.11.3新增界面因锁屏未实测 | upgrade-ui-observations.md与PNG/AX文件 |
 | 内置真实引擎 | 动态库/模型可加载，退出0，JSON可解析 | upgrade-runtime-smoke.log |
 | 发行产物 | 构建、逐个Mach-O签名检查、RPATH/依赖/许可审计、注入绝对RPATH反例拒绝、复制后验签、zip通过 | upgrade-package.log / upgrade-signature.log / upgrade-zip.log |
 | 基线对照 | 原290测试与前四批故障取证 | baseline-swift-test.log / batch-01至04-repro.log |
@@ -131,8 +140,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 |---|---|---|---|
 | 1 | 实机录音矩阵：首次授权、拒麦克风、系统声+耳机、设备拔插、超时停止、快速开始/停止、处理取消重开 | BUG-005/006/007/013/014、UX-001/004 | QA+全栈；合成双声源标记对齐MOV/双轨，故障即时提示且原件保留 |
 | 2 | VoiceOver与键盘全流程，长文时间锚、编辑保存/取消、最小1060×660窗口，动态字体/高对比 | UX-005/006、VERIFY-UX-001、PERF-002 | QA+UX；实际朗读/焦点可达，不能只看AX树 |
-| 3 | 历史错误字段清洗设计和受控迁移；先备份、预览、仅改诊断字段 | SEC-004 | 安全+全栈；合成旧回显字段在UI/导出/存储均无假Key，业务正文不改 |
-| 4 | 加载/保存从MainActor迁出，区分必要检查点与可丢的进度metadata，加入磁盘满/中断写入测试 | ARCH-001 | 架构+全栈；UI可取消、事务顺序可证、旧结果不可被并发写覆盖 |
+| 3 | 历史诊断清理已实施；验收失败提示与旧导出/外部备份边界 | SEC-004 | 安全+全栈；合成旧回显字段在UI/导出/存储均无假Key，业务正文不改 |
+| 4 | 首次加载/修补和导入已后台执行；后续按测量迁移小文件保存，扩展磁盘满回归 | ARCH-001 | 架构+全栈；UI可取消、事务顺序可证、旧结果不可被并发写覆盖 |
 | 5 | macOS15、Apple Silicon第二台机器、真实云端兼容矩阵与弱网 | 网络/版本验收 | QA；使用专门合成资料与测试凭据，验证redirect/超时/partial/请求次数 |
 | 6 | 发布版本锁定引擎/模型来源和哈希，补依赖漏洞评估与Developer ID/公证门禁 | SEC-001/006 | 发布+安全；重复构建来源一致，每个二进制签名有效，REQUIRE_NOTARIZATION=1通过 |
 
@@ -140,11 +149,11 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 ## 长期改进与修复路线
 
-先完成上表1–3的数据/采集/交付验收，再逐步拆RecordingService、TranscriptionCoordinator和SummaryClient；注入存储/进程/网络故障能力，避免把所有副作用继续集中在Store。保持已有文件格式，分阶段迁移，不建议整体重写。
+先完成上表1–3的数据/采集/交付验收，RecordingSession与SessionLoader已抽出；继续逐步拆TranscriptionCoordinator和SummaryClient；注入存储/进程/网络故障能力，避免把所有副作用继续集中在Store。保持已有文件格式，分阶段迁移，不建议整体重写。
 
 建立可回放的合成端到端录音、恢复和导出场景，与macOS15/最新版本CI一起运行。用Instruments测100/1000/10000段及历史库增长，按测量决定增量载入/分页，避免凭感觉引入数据库。真实语音质量先采专用非敏感样本评测VAD，再决定降噪/分段/模型升级；不得把“更多文字”自动等同于更准确。
 
-正式发行需锁定运行时源码revision、构建参数和模型哈希并保留许可、产物审计与公证记录。本轮未升级whisper引擎来源，复用了现有安装包的引擎/模型副本，只修正打包路径和签名；源码App版本升为0.11.2。
+正式发行需锁定运行时源码revision、构建参数和模型哈希并保留许可、产物审计与公证记录。本轮未升级whisper引擎来源，复用了现有安装包的引擎/模型副本，只修正打包路径和签名；源码App版本升为0.11.3。
 
 ## 回归验收清单
 
@@ -159,15 +168,16 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 - [x] 原生1000段首尾AX、工具栏名称、浅深色截图；最终包签名/路径/许可审计。
 - [ ] 真实音源与权限/设备故障、MOV与双轨绝对偏移、长录音GPU与精度。
 - [ ] VoiceOver完整朗读/焦点路径、macOS15、真实云端弱网与HTTPS来源矩阵。
-- [ ] 历史诊断数据迁移、依赖源码锁定/CVE评估、公开发行Apple公证。
+- [x] 历史诊断迁移、幂等、清理写入失败安全展示；业务正文不改。
+- [ ] 依赖源码锁定/CVE评估、公开发行Apple公证。
 
 ## 交付与安装状态
 
-源码位于当前独立工作树，分支codex/audit-hardening；本地提交与源码快照可回滚，GitHub未推送、未发布。升级包是本机ad-hoc签名的审查候选构建，不是Developer ID公证发行包。
+源码位于当前独立工作树，分支codex/audit-hardening；本地提交与源码快照可回滚，GitHub未推送、未发布。升级包是本机PM Studio Signing证书签名的审查候选构建，不是Developer ID公证发行包。
 
 已安装的0.11.1/build21保留；本轮未退出、替换或安装真实App，会议数据目录未迁移。原安装引擎/库与打包前临时副本字节对比相同。安装脚本的回滚只在假应用环境测试，不应写成“本机已安装升级完成”。
 
-升级包、源码快照和SHA在同目录delivery-manifest.json记录。若后续实际安装，请先结束录音/处理并正常退出；新版install_app已拒绝运行中替换并保留旧版可恢复备份。
+0.11.3升级包、源码快照和SHA在交付目录delivery-manifest.json记录，目录路径见.review-dist/closure-delivery-location.txt。若后续实际安装，请先结束录音/处理并正常退出；新版install_app已拒绝运行中替换并保留旧版可恢复备份。
 
 ## 逐项证据、修复与验收详情
 
@@ -190,7 +200,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 对失败记录分别注入 CLI 退出、模型丢失、转换失败、取消和写盘失败；旧逐字稿、人工标记、纪要逐字保持。成功后新版本一次提交，旧版本可恢复；界面不能误显示旧结果为本次新结果。 |
 | 是否 AI 生成典型问题 | 是：先清状态再执行，没有失败回滚；不能仅凭代码模式证明作者使用了 AI。 |
 | 本轮实施 | 重试保留旧正文、人工校正和纪要；成功后才替换，保留标记跨崩溃生效 |
-| 当前修复位置 | [MeetingStore.swift:1060](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1060) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testFailedRetryPreservesSavedManualEditsAndMinutes |
 
 ### BUG-002：重试漏掉输入归一化
@@ -210,7 +220,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | M4A/MOV/MP3/WAV 四类逐项覆盖“只有原始文件”“损坏中间文件”“转换被取消”“转换成功后重试”。转写前应取得有效 WAV，原始文件不改写；错误归因应明确到转换或转写。 |
 | 是否 AI 生成典型问题 | 是：首次流程补齐，重试分支复制后遗漏关键步骤；AI 来源不确定。 |
 | 本轮实施 | 非WAV重试先归一化 |
-| 当前修复位置 | [MeetingStore.swift:1099](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1099) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testRetryNormalizesM4ABeforeWhisper（使用非零音频） |
 
 ### BUG-003：保存失败却返回成功草稿
@@ -230,7 +240,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 文件占位、目录只读、权限错误、磁盘空间不足分别注入。都应得到准确错误，录音器未启动、未产生幽灵会议，后续合法操作仍可继续。 |
 | 是否 AI 生成典型问题 | 是：注释描述了异常处理，但实现没有实现该契约。 |
 | 本轮实施 | 草稿落盘失败抛出并阻止开始录音/导入 |
-| 当前修复位置 | [SessionStorage.swift:36](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:36) |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testDraftCreationReportsDiskFailure |
 
 ### BUG-004：读取错误与空列表混为一谈
@@ -250,7 +260,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 混合正常、截断 JSON、字段类型错误、旧版本字段、不可读文件及 models 目录。正常记录照常显示；损坏会议可见且可定位；models 不误报警；扫描根失败不能展示“开始第一场会议”的正常空态。 |
 | 是否 AI 生成典型问题 | 是：用 try? 与 compactMap 把错误伪装成无数据；AI 来源不确定。 |
 | 本轮实施 | 读取返回损坏目录列表；UI提示并提供数据目录入口，原文件保留 |
-| 当前修复位置 | [SessionStorage.swift:17](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:17) |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testCorruptedSessionIsReportedAndFilePreserved |
 
 ### BUG-005：准备开录没有占用任务状态
@@ -270,8 +280,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 连点、准备期间导入/删除、启动失败、晚到成功、晚到失败等确定性顺序测试。只能建立一条有效采集会话；过期操作不能清除新状态；录音器 stop 恰好一次。 |
 | 是否 AI 生成典型问题 | 是：把异步开始视为同步完成，仅覆盖正常路径；AI 来源不确定。 |
 | 本轮实施 | 异步开始前占用准备状态，阻止重入 |
-| 当前修复位置 | [MeetingStore.swift:276](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:276) |
-| 当前状态与验收 | 代码已修复 / 需实机；编译与互斥路径核对；首次权限/快速连点尚未真实录音测试 |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| 当前状态与验收 | 已修复 / 注入回归；准备期独占、取消后晚返回、启动期故障通过；首次权限/快速连点仍需实机 |
 
 ### BUG-006：写盘丢失音频时间位置
 
@@ -290,7 +300,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 双路不同首包时间、2 秒缺口、乱序/重复包、长期连续样本及不同采样率均验证。对应同一真实时刻的段在合并后位置一致；与混合原件回放一致；不支持的缺口处理应显式降级。 |
 | 是否 AI 生成典型问题 | 是：采样 API 接通，但时间契约遗漏；AI 作者身份不确定。 |
 | 本轮实施 | 保存PTS间隔，使用共同host-clock起点；异常时退混合原件 |
-| 当前修复位置 | [AudioTrackRecorder.swift:126](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:126) |
+| 当前修复位置 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
 | 当前状态与验收 | 合成验证 / 需实机；testSampleTimestampGapIsPreserved、testSharedEpochPreservesFirstPacketOffsetsAndActualLevels；MOV首包/设备偏移需实测 |
 
 ### BUG-007：失败的半条音轨仍参与完整转写
@@ -310,7 +320,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 格式切换、写满磁盘、单路丢包、正常静音与 0 帧分别注入。截断轨道不能冒充完整；完整混合原件可用时保住全文；降级提示与实际缺失范围一致。 |
 | 是否 AI 生成典型问题 | 是：把“曾经成功”误用作“完整成功”；AI 来源不确定。 |
 | 本轮实施 | 失败半轨不作为完整双路输入，保留失败原件及回退提示 |
-| 当前修复位置 | [AudioTrackRecorder.swift:82](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:82) |
+| 当前修复位置 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
 | 当前状态与验收 | 合成验证 / 需实机；testFailedTrackIsRejectedForDualTranscription；真实设备切换需验证 |
 
 ### BUG-008：后处理无视说话人边界
@@ -330,7 +340,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 我方提问/对方承诺、两人重复确认、同人远隔重复、短相邻碎段、重叠双人发言都覆盖。清洗前后的真实归属不变，独立发言不消失，时间锚保持可核对。 |
 | 是否 AI 生成典型问题 | 是：新增 speaker 后旧清洗代码未同步语义；AI 来源不确定。 |
 | 本轮实施 | 并句和去重受说话人与相邻时间约束 |
-| 当前修复位置 | [TranscriptCleaner.swift:133](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptCleaner.swift:133) |
+| 当前修复位置 | [TranscriptCleaner.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptCleaner.swift) |
 | 当前状态与验收 | 已修复 / 回归；testCleaningPreservesDifferentSpeakers、testIndependentRepeatsBySameSpeakerArePreserved |
 
 ### BUG-009：相反意见被误判为串音
@@ -350,7 +360,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 可以/不可以、同意/不同意、15万/50万、今天/明天、我方/对方承担等成对反例必须保留；真实同句串音仍可正确处理且不伪造归属。 |
 | 是否 AI 生成典型问题 | 是：用表面字符串相似替代语义一致，happy path 测试掩盖错误。 |
 | 本轮实施 | 仅规范化文本精确相同可作为串音候选，保留否定/数字差异 |
-| 当前修复位置 | [TranscriptMerger.swift:138](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptMerger.swift:138) |
+| 当前修复位置 | [TranscriptMerger.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/TranscriptMerger.swift) |
 | 当前状态与验收 | 已修复 / 回归；testCrosstalkPreservesOppositeDecisions及合并测试；近似串音可能多保留一句，是避免误删的取舍 |
 
 ### BUG-010：双路检查点覆盖完整的一路
@@ -370,7 +380,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 在两路每个块之前/之后注入失败与退出，重启后可见所有已完成块及正确 speaker。续跑只处理未完成块，结果与一次成功处理一致；盘满时明确失败而非显示未保存结果。 |
 | 是否 AI 生成典型问题 | 是：单路检查点实现被复用到双路，存储语义未同步改变。 |
 | 本轮实施 | 第二路检查点合入第一路已完成结果 |
-| 当前修复位置 | [MeetingStore.swift:1741](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1741) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testSecondTrackFailurePreservesFirstTrackCheckpoint |
 
 ### BUG-011：旧任务收尾破坏新任务状态
@@ -390,7 +400,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | A 正常/失败/取消晚到，B 已开始；A/B 交错删除；取消后立即重试与重新整理，都用可控屏障测试。B 状态不被 A 改写，取消只终止指定进程，旧任务清理不删新句柄。 |
 | 是否 AI 生成典型问题 | 是：共享状态的异步回调没有任务归属校验；AI 来源不确定。 |
 | 本轮实施 | 终态回调校验任务所属；旧任务退出后释放并删除；取消归属当前进程 |
-| 当前修复位置 | [MeetingStore.swift:1454](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1454) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 竞态回归；testDeletionWaitsForOldTaskBeforeStartingAnother |
 
 ### BUG-012：超时和取消没有进程退出上限
@@ -410,7 +420,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | CLI 正常退出、立即退出、忽略 TERM、TERM 时延迟退出、启动前取消、结束与取消竞态都验证。超过取消时限应结束对应进程并清状态；无遗留子进程，无 continuation 双重恢复。 |
 | 是否 AI 生成典型问题 | 是：计时器与 cancel 调用表面齐全，却未保证底层工作可取消。 |
 | 本轮实施 | 启动/取消过锁，TERM后1秒KILL |
-| 当前修复位置 | [WhisperPipeline.swift:785](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:785) |
+| 当前修复位置 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；testCancellationFinishesEvenIfCLIRejectsSIGTERM；真实长超时未等待 |
 
 ### BUG-013：删除活动录音未停止采集
@@ -430,8 +440,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 开录准备期、稳定录音、正在停止及停止报错分别尝试删除。确认采集终止、句柄关闭、取消上限计时不留下孤立录音器，新录音不会与旧采集并存。 |
 | 是否 AI 生成典型问题 | 是：删除与转写取消共用分支，遗漏真实录音对象的资源生命周期。 |
 | 本轮实施 | 活动录音/准备中的删除被拒绝，必须先停止保存 |
-| 当前修复位置 | [MeetingStore.swift:1123](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1123) |
-| 当前状态与验收 | 代码已修复 / 需实机；源码入口验证；本轮未删除真实活动会议 |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
+| 当前状态与验收 | 已修复 / 注入回归；准备期活动会议删除被拒绝、任务状态保留；真实采集中删除未实测 |
 
 ### BUG-014：系统采集故障不即时上报
 
@@ -450,8 +460,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 正常采集中断、输出失败、启动期间失败、stop 与失败同时发生四类顺序均测。界面即时停止计时/错误信号，错误只报告一次，部分录音可恢复，后续操作不被旧回调污染。 |
 | 是否 AI 生成典型问题 | 是：实现了 delegate 方法，却只覆盖“用户主动停止”的错误出口。 |
 | 本轮实施 | 采集异常即时通知Store，收尾有10秒超时 |
-| 当前修复位置 | [WhisperPipeline.swift:474](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:474) |
-| 当前状态与验收 | 代码已修复 / 需实机；编译/代码审查；ScreenCaptureKit真实掉设备故障需实测 |
+| 当前修复位置 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
+| 当前状态与验收 | 已修复 / 注入回归；准备期/采集期中断、重复回调与旧任务回调通过；真实掉设备故障需实测 |
 
 ### BUG-015：分块归属丢弃边界句子的后半段
 
@@ -470,7 +480,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 在切点前 1–2 秒开始、切点后 3–10 秒结束的句子，分别模拟相同/不同分段与文本截断。全部独有内容保留且不重复，时间顺序正确；再用真实中文音频验证该类边界。 |
 | 是否 AI 生成典型问题 | 是：测试钉住现有公式，却未验证“完整内容不丢”的真实契约。 |
 | 本轮实施 | 保留跨core边界完整句，不再仅按start丢弃 |
-| 当前修复位置 | [MeetingStore.swift:1890](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1890) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 回归；testChunkOwnershipPreservesTheCompleteBoundarySentence；相邻解码略异的句子可能重复保留 |
 
 ### BUG-016：人工校正后旧整理结果没有过期状态
@@ -490,7 +500,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 校正日期、数字、否定意见后各结果页与导出均有过期状态；拒绝/无变化编辑不标过期；重整理失败/取消保留旧结果与过期提示；成功后 inputRevision 匹配才清标记。 |
 | 是否 AI 生成典型问题 | 是：输入编辑实现完整，派生产物失效契约遗漏；作者来源不确定。 |
 | 本轮实施 | 校正置analysisStale；原文变更后双页/复制/导出统一标过期 |
-| 当前修复位置 | [MeetingModels.swift:1214](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:1214) |
+| 当前修复位置 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
 | 当前状态与验收 | 已修复 / UI与回归；AuditDeliveryTests与upgrade-ui-overview.png / minutes-ax.txt |
 
 ### BUG-017：全文型历史记录在原文页被隐藏
@@ -510,7 +520,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 分段版、仅全文版、全文空白、完全空、旧 schema 各一场。全文版可以阅读/复制/导出，不伪造时间戳、不被修补清空，重试失败不损失原文。 |
 | 是否 AI 生成典型问题 | 是：新分段界面完成，但兼容回退只在导出实现；作者来源不确定。 |
 | 本轮实施 | 历史全文仍可阅读/选择/导出，整理用保守materialSegments回退 |
-| 当前修复位置 | [WorkbenchView.swift:1594](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1594) |
+| 当前修复位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 当前状态与验收 | 已修复 / UI与回归；upgrade-ui-legacy.png及历史全文测试 |
 
 ### BUG-020：流式响应没有结束证据也宣称完成
@@ -530,7 +540,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 测完整 stop+DONE、仅协议允许的 stop、仅协议允许的 DONE、无终止 EOF、有/无正文、畸形 event、length、content_filter、真实连接异常与取消。未确认 EOF 必须有部分结果状态，UI/复制/导出可见；合法结束不误报。重试失败保留旧可用结果。 |
 | 是否 AI 生成典型问题 | 是：针对 length 的局部修复遗漏整体流状态机；已有注释声称检查截断，实际覆盖范围更窄。作者来源不确定。 |
 | 本轮实施 | SSE结束需DONE/finish证据，EOF/坏事件标partial且不额外重新生成 |
-| 当前修复位置 | [SummaryEngine.swift:1175](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:1175) |
+| 当前修复位置 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | 当前状态与验收 | 已修复 / 协议回归；testPrematureSSEEOFIsMarkedPartial：partial=true、unconfirmed_eof |
 
 ### BUG-022：时间锚解析与显示可能整数溢出崩溃
@@ -541,7 +551,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | Bug |
 | 严重级别 | P1 严重（极端时间输入） |
 | 置信度 | 高：整数溢出代码路径确定 |
-| 位置 | [MeetingModels.swift:1154](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:1154) |
+| 位置 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
 | 问题描述 | 时间锚解析与显示可能整数溢出崩溃 |
 | 证据 | 基线OverviewBullet对Int值乘60/3600后转TimeInterval，Int.max分钟会先溢出；clockLabel直接Int(self.rounded())不能处理非有限/超大Double。 |
 | 影响 | 损坏记录、极端模型时间字段可使解析或显示trap，阻断打开相应会议。没有认定真实云端已返回这种字段。 |
@@ -550,7 +560,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | AuditDeliveryTests中极端timestamp回归通过；普通秒、分钟、小时旧测试仍通过。 |
 | 是否 AI 生成典型问题 | 是：happy path掩盖数值边界，作者来源不确定 |
 | 本轮实施 | 时间计算Double先行，显示保护非有限/超大值 |
-| 当前修复位置 | [MeetingModels.swift:1154](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:1154) |
+| 当前修复位置 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
 | 当前状态与验收 | 已修复 / 边界回归；极端timestamp测试；原trap是确定数值路径，不代表真实线上触发 |
 
 ### BUG-023：导入input.wav会与标准化输出重名并替换本机副本
@@ -561,7 +571,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | Bug / 数据完整性 |
 | 严重级别 | P1 严重（保留原件受损） |
 | 置信度 | 高：合成afconvert实测 |
-| 位置 | [SessionStorage.swift:132](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:132) |
+| 位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 问题描述 | 导入input.wav会与标准化输出重名并替换本机副本 |
 | 证据 | 基线按用户文件名保存原件，再转换到同目录input.wav。import-filename-collision.log：48kHz双声道合成原件同路径afconvert退出0，文件变成16kHz单声道，SHA256改变。用户选择目录外的原文件未改动。 |
 | 影响 | 应用内原音频副本丢失原采样率/声道，回放和后续修订只剩降采样音频；不能宣称所有input.wav导入必失败。 |
@@ -570,7 +580,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | testImportedInputWAVPreservesOriginalAndManifest验证分离目标、原件字节和清单仍可读。 |
 | 是否 AI 生成典型问题 | 是：两个看似合理路径未验证组合，作者来源不确定 |
 | 本轮实施 | input.wav保留名改存，避免原件与归一化同名；清单名禁止覆盖 |
-| 当前修复位置 | [SessionStorage.swift:132](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:132) |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 当前状态与验收 | 已修复 / 文件回归；原始48k双声道同名转换确实改写副本；修复后原件字节保留 |
 
 ### BUG-024：安装前强制结束App，且未完成复制就移走旧版
@@ -581,7 +591,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | Bug / 数据安全 |
 | 严重级别 | P1 严重（安装脚本） |
 | 置信度 | 高：脚本与隔离故障测试 |
-| 位置 | [Scripts/install_app.sh:10](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh:10) |
+| 位置 | [Scripts/install_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh) |
 | 问题描述 | 安装前强制结束App，且未完成复制就移走旧版 |
 | 证据 | 基线install_app使用killall，然后移旧App到Trash，再ditto新App。新测试仅临时假应用：运行中、复制失败、签名失败、最终替换失败、成功备份五场景均通过。未对真实录音进程发送终止。 |
 | 影响 | 录音/处理可能被安装强制打断；复制失败时原安装路径丢失有效App。真实录音损坏是需验证后果。 |
@@ -590,7 +600,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | python3 Scripts/tests/test_safe_install.py：5测试通过，原件保存、失败恢复、暂存清理。未运行真实安装。 |
 | 是否 AI 生成典型问题 | 是：只实现成功路径，作者来源不确定 |
 | 本轮实施 | 不终止运行App；先复制验签、保留旧版、失败回滚 |
-| 当前修复位置 | [Scripts/install_app.sh:10](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh:10) |
+| 当前修复位置 | [Scripts/install_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/install_app.sh) |
 | 当前状态与验收 | 已修复 / 隔离故障回归；5个临时假应用安装场景；未运行真实安装 |
 
 ### BUG-025：静音门禁覆盖不一致与轻声信号误过滤
@@ -610,7 +620,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | testSingleTrackDigitalSilenceSkipsCLIAndQuietSignalStillReachesCLI：静音配必失败CLI仍ready且原文为空，0.005信号必须到达CLI并报告失败；testProbeTreatsQuietButRealSpeechAsAudible改用0.005，仍可转写。真实引擎直接调用仍可能幻觉，此修复是App入口门禁，不是声称修复模型本身。 |
 | 是否 AI 生成典型问题 | 是：单路/双路行为分叉不一致、振幅被用作语音判定；作者来源不确定 |
 | 本轮实施 | 单路加入数字静音门禁，双路不再用-40dB阈值丢弃弱信号 |
-| 当前修复位置 | [MeetingStore.swift:1231](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:1231) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / 回归；真实噪声待验；testSingleTrackDigitalSilenceSkipsCLIAndQuietSignalStillReachesCLI及0.005探针测试；模型本身仍可能幻觉 |
 
 ### SEC-002：云端正文跟随跨来源重定向
@@ -630,7 +640,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 测试 301/302/303/307/308、不同 host/port、HTTPS→HTTP、循环跳转以及取消。被拒绝的目标不得收到任何合成正文或 Authorization；同来源的允许情形正常完成；生成和 /models 共用策略。跨协议、跨主机应在受控环境另测。 |
 | 是否 AI 生成典型问题 | 是：请求实现完整，但把敏感请求的信任范围交给系统默认行为；作者来源不确定。 |
 | 本轮实施 | scheme/host/有效port不同即拒绝；生成和模型发现统一专用ephemeral session |
-| 当前修复位置 | [SummaryEngine.swift:4](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:4) |
+| 当前修复位置 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | 当前状态与验收 | 已修复 / 真实loopback；testCrossOrigin307DoesNotForwardMeetingOrCredentials：目标零请求；HTTPS/跨主机矩阵待补 |
 
 ### SEC-003：会话清单能改变数据根之外的操作目标
@@ -650,7 +660,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 在临时目录验收正常会话、清单目录名不一致、`../`、绝对路径、同前缀兄弟目录、目录/文件符号链接、缺失目标。任何非法操作应抛可识别错误，根外 sentinel 不变；正常删除只删除一个会话。异常文件保留给恢复，不能为测试而触碰真实会议根。 |
 | 是否 AI 生成典型问题 | 是：happy path 文件拼接正确，持久化输入和删除范围校验遗漏；作者来源不确定。 |
 | 本轮实施 | 限制路径单组件，拒绝symlink，核对实际目录/清单ID；写/删校验根 |
-| 当前修复位置 | [SessionStorage.swift:159](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:159) |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；manifest ../不能删根外；symlink不能写根外。未宣称抵御同机恶意进程的TOCTOU竞态 |
 
 ### SEC-004：原始服务端错误污染会议文件与导出
@@ -670,8 +680,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 用假 key 注入 400/401/403/429/500、HTML 错误、200 错误信封、异常 JSON 及不同 key 格式。检查持久化 JSON、UI 提示、Markdown、公开日志均不含秘密；错误仍给出状态/原因分类和可执行恢复步骤。不要仅按 `sk-` 前缀脱敏。 |
 | 是否 AI 生成典型问题 | 是：为可诊断性扩散原始回包，缺少保密与分享边界；作者来源不确定。 |
 | 本轮实施 | 网络错误体改安全分类，空响应只展示本地产生的诊断，不再持久化原回显；整理失败保留旧纪要 |
-| 当前修复位置 | [SummaryEngine.swift:55](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:55) |
-| 当前状态与验收 | 新路径已修复 / 旧数据待处理；假Key不会进入新JSON/Markdown；历史已存summaryError未迁移清洗，旧文件/旧导出需单独检查 |
+| 当前修复位置 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
+| 当前状态与验收 | 新写入与历史诊断已修复 / 合成迁移回归；旧导出和其他备份不自动清除，真实库在运行新版时清理 |
 
 ### SEC-005：评测配置把地址和凭据分别补齐
 
@@ -710,7 +720,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 有负责人、nil、空白、多人和超长姓名分别检查；视觉/AX/导出一致，姓名不能仅存在 help 悬停文案中，不能被优先级徽标挤出。 |
 | 是否 AI 生成典型问题 | 是：模型与导出字段已接通，展示层漏接，注释与实现不符；作者来源不确定。 |
 | 本轮实施 | 负责人可见且可换行 |
-| 当前修复位置 | [WorkbenchView.swift:1953](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1953) |
+| 当前修复位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 当前状态与验收 | 已修复 / UI；upgrade-ui-overview.png和AX明确审查甲 |
 
 ### UX-004：缺麦克风权限的后果说明不完整
@@ -730,7 +740,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 未询问、拒绝、受限制、正常授权分别验证；不应把麦克风权限不足描述为纯显示问题。拒绝状态继续录音时输出和导出标明录制来源，用户能恢复授权再开新录音。 |
 | 是否 AI 生成典型问题 | 是：技术日志知道缺音源，用户提示却缩减成缺标签；作者来源不确定。 |
 | 本轮实施 | 缺麦克风说明本机发言可能缺失；未授权不启用麦克风采集 |
-| 当前修复位置 | [MeetingModels.swift:401](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift:401) |
+| 当前修复位置 | [MeetingModels.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingModels.swift) |
 | 当前状态与验收 | 代码已修复 / 需实机；CaptureReadinessTests；真实权限弹窗/音源组合需验证 |
 
 ### ARCH-001：编排与副作用集中，隔离不足
@@ -750,8 +760,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 能用假录音器精准控制 start/stop 回调，用失败 repository 验证保存/回滚，测试不依赖系统权限/真实 Keychain。现有测试保持通过；新增批量夹具下主线程不执行长时间文件复制/全量解码，状态切换可追踪。 |
 | 是否 AI 生成典型问题 | 不确定；集中式实现也可能来自正常迭代。 |
 | 本轮实施 | 拆存储模块、索引查询、更新会议不反复排序；新增数据/编排/网络故障测试 |
-| 当前修复位置 | [SessionStorage.swift:3](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:3) |
-| 当前状态与验收 | 部分改善；Store仍集中；首次全量加载/若干写盘在MainActor，未完成全面异步存储与服务注入 |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
+| 当前状态与验收 | 部分改善；首次加载/修补与大音频复制后台执行，录音器可注入；短小写盘/手动reload仍在MainActor，未完成全面服务分层 |
 
 ### BUG-018：字符长度限制不保证合法文件名字节数
 
@@ -770,7 +780,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 中文、单 emoji、ZWJ 家庭 emoji、组合音标、仅非法字符与单个超长 grapheme 均覆盖；最终 utf8.count<=255 且可以真实写入。 |
 | 是否 AI 生成典型问题 | 是：注释声称处理字节上限，实现却只处理字符数量；作者来源不确定。 |
 | 本轮实施 | 按UTF8预算截文件名且不拆Character |
-| 当前修复位置 | [MeetingExport.swift:194](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift:194) |
+| 当前修复位置 | [MeetingExport.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift) |
 | 当前状态与验收 | 已修复 / 写盘回归；emoji名称完整导出写盘测试 |
 
 ### BUG-019：播放器计时器没有覆盖离开与失败生命周期
@@ -790,7 +800,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 播放/暂停/自然结束/失败启动/解码错误、工作区移除与窗口关闭分别检查；不再播放时无重复 timer，明确停止后弱引用释放。切 Tab 仍允许预期的连续回放，切会议不同时播放两个源。 |
 | 是否 AI 生成典型问题 | 是：常用 Timer 写法接通正常播放，资源归属与异常收尾遗漏；作者来源不确定。 |
 | 本轮实施 | Timer弱引用，离开工作区stop |
-| 当前修复位置 | [AudioPlayback.swift:102](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift:102) |
+| 当前修复位置 | [AudioPlayback.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift) |
 | 当前状态与验收 | 已修复 / 生命周期回归；Timer释放测试；实际有音频回放跨窗口再确认 |
 
 ### BUG-021：网关正常返回普通 JSON 却被重复调用
@@ -810,7 +820,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 相同夹具应只产生 1 次生成请求；明确 SSE 不支持且无法消费原响应的情形最多一次 fallback。正常 SSE 不多发请求；429、临时 5xx、401、解析错误走各自受控策略。用 mock 请求计数验收，不以真实付费 API 做回归。 |
 | 是否 AI 生成典型问题 | 是：兼容 fallback 存在，但此前成功响应未被利用，重试策略与失败种类不匹配；作者来源不确定。 |
 | 本轮实施 | stream请求普通JSON成功回包直接解码，复用同一生成结果 |
-| 当前修复位置 | [SummaryEngine.swift:1105](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:1105) |
+| 当前修复位置 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | 当前状态与验收 | 已修复 / 请求计数；testJSONReplyToStreamRequestUsesOneGeneration：1次请求 |
 
 ### DOC-001：README宣称不联云，与可选云端整理不一致
@@ -821,7 +831,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | UX / 可维护性 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高：文档与代码相互矛盾 |
-| 位置 | [README.md:18](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md:18) |
+| 位置 | [README.md](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md) |
 | 问题描述 | README宣称不联云，与可选云端整理不一致 |
 | 证据 | 基线README目标条目声称不联云、不自动上传，但后续模型章节及SummaryEngine支持云端POST逐字稿。 |
 | 影响 | 用户对会议正文离开本机的理解可能错误；此处指出声明矛盾，不认定用户已泄漏数据。 |
@@ -830,7 +840,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 文档人工核对；本机loopback合成网络测试验证数据请求边界。 |
 | 是否 AI 生成典型问题 | 是：局部文档更新未同步承诺，作者来源不确定 |
 | 本轮实施 | 明确选择云端后会向配置服务商发送逐字稿 |
-| 当前修复位置 | [README.md:18](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md:18) |
+| 当前修复位置 | [README.md](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md) |
 | 当前状态与验收 | 已修复 / 文档核对；README与Info.plist已对齐 |
 
 ### PERF-001：每次读取单条会议都会枚举解码整个数据根
@@ -841,7 +851,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | 性能 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高：合成查询实测 |
-| 位置 | [SessionStorage.swift:64](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:64) |
+| 位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 问题描述 | 每次读取单条会议都会枚举解码整个数据根 |
 | 证据 | 基线 SessionStorage.session(with:) 调用 loadSessions().first；本次用不可变目录根与 NSLock 保护的 UUID→目录索引。performance-comparison.log：100 个会议×300 段、查目录末尾会议20次，1.197790秒→0.013592秒，88.12倍。 |
 | 影响 | 历史记录增多时，检查点、失败收尾等重复读取放大 I/O。实际整 App 的速度提升未测。 |
@@ -850,7 +860,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 正式数据测试通过；ReviewPerformanceProbe.swift和performance-comparison.log可复查。启动时全量加载仍在，性能比值只针对该合成查询。 |
 | 是否 AI 生成典型问题 | 不确定 |
 | 本轮实施 | 单条读取使用UUID目录索引 |
-| 当前修复位置 | [SessionStorage.swift:64](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift:64) |
+| 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | 当前状态与验收 | 已修复 / 合成性能；20次查询1.197790→0.013592秒，只代表指定查询 |
 
 ### PERF-002：长逐字稿一次创建全部行
@@ -861,7 +871,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | 性能 / 可访问性 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高： eager构造事实；中：真实卡顿后果 |
-| 位置 | [WorkbenchView.swift:1563](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1563) |
+| 位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 问题描述 | 长逐字稿一次创建全部行 |
 | 证据 | 基线原文用VStack + ForEach；原1000段AX观察只有滚动区（见VERIFY-UX-001，不能归因于VoiceOver）。升级后LazyVStack，upgrade-ui-long-top-ax.txt可读首屏1–19句，底部证据可读981–1000句。 |
 | 影响 | 长文创建和布局成本随内容增长；原读屏观察有工具因素。没有FPS、峰值内存或VoiceOver测量。 |
@@ -870,7 +880,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 合成UI已到首尾，AX内容可读取。需另外用Instruments/VoiceOver验收真实长会。 |
 | 是否 AI 生成典型问题 | 不确定 |
 | 本轮实施 | 原文/侧栏惰性列表 |
-| 当前修复位置 | [WorkbenchView.swift:1563](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:1563) |
+| 当前修复位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 当前状态与验收 | 代码与AX改善 / 需测性能；1000段首尾AX可读；未测FPS、峰值内存、VoiceOver |
 
 ### PERF-003：子进程日志无界写入、结束后整文件读入
@@ -881,7 +891,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | 性能 / 可维护性 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高 |
-| 位置 | [WhisperPipeline.swift:863](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:863) |
+| 位置 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
 | 问题描述 | 子进程日志无界写入、结束后整文件读入 |
 | 证据 | 基线LocalProcessRunner将stdout/stderr写临时文件，随后整文件String读取。新增34MiB故障夹具。第一次修复用了URL.resourceValues缓存大小，测试失败；已改为FileManager实时属性，最终testRunawayCLILogIsTerminatedAndDiagnosticIsBounded通过。 |
 | 影响 | 异常CLI可长期占磁盘，诊断加载会放大内存与收尾时间。 |
@@ -890,7 +900,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 异常CLI在4秒内结束且诊断小于4000字符。采样阈值可短暂超量，不是严格磁盘配额；持续20分钟真实定时触发未等待验证。 |
 | 是否 AI 生成典型问题 | 是：资源边界被遗漏，作者来源不确定 |
 | 本轮实施 | 采样日志总量/时间约束，单次诊断读取上限 |
-| 当前修复位置 | [WhisperPipeline.swift:864](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift:864) |
+| 当前修复位置 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
 | 当前状态与验收 | 已修复 / 故障回归；34MiB异常日志任务4秒内结束；采样阈值可短暂超量 |
 
 ### SEC-001：审计通过与实际 Mach-O 路径不一致
@@ -910,7 +920,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 用测试 Mach-O 分别植入私人 LC_RPATH、绝对依赖、相对路径、系统路径；前两项必须失败，合法项通过。最终包移到另一目录且不依赖开发机目录，验证 CLI 启动及一段合成音频转写。 |
 | 是否 AI 生成典型问题 | 是：检查项看似完整，却没有覆盖声明的二进制元数据；AI 来源不确定。 |
 | 本轮实施 | 拷入引擎/库与主程序后清开发机RPATH/依赖，逐个签名并审计；系统/usr/lib/swift保留；保护源运行时 |
-| 当前修复位置 | [Scripts/package_app.sh:126](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh:126) |
+| 当前修复位置 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
 | 当前状态与验收 | 已修复 / 产物验证；otool、每个Mach-O codesign、真实引擎JSON烟测 |
 
 ### SEC-006：发行包没有保留内置运行时和模型的第三方许可
@@ -921,7 +931,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | 可维护性 / 许可证风险 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高：打包文件清单事实 |
-| 位置 | [Scripts/package_app.sh:91](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh:91) |
+| 位置 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
 | 问题描述 | 发行包没有保留内置运行时和模型的第三方许可 |
 | 证据 | 基线package_app只复制主程序、Info、引擎/库/模型与图标，make_release_zip仅附首次打开说明。现从whisper.cpp、ggml、openai/whisper官方固定提交获取MIT许可，来源见Packaging/ThirdPartyLicenses/SOURCES.md。 |
 | 影响 | 缺少再分发声明；本轮不作法律意见或确切二进制源码来源的认证。 |
@@ -930,7 +940,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 新包审核检查四份非空许可。运行时版本/模型来源仍需正式发行建立可复现锁定。 |
 | 是否 AI 生成典型问题 | 不确定 |
 | 本轮实施 | 打包4份许可并设缺失门禁 |
-| 当前修复位置 | [Scripts/package_app.sh:91](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh:91) |
+| 当前修复位置 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
 | 当前状态与验收 | 声明已补 / 来源仍需锁定；官方固定提交的许可；不证明现有二进制精确源码revision |
 
 ### UX-001：装饰动画被放在真实音源状态位置
@@ -950,7 +960,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 静音、缺权限、设备拔出、只来一路样本、两路正常逐项验证；信号未确认时不能宣称有输入。状态不能只靠动画/颜色表达，读屏应能区分正常、静音、不可用。 |
 | 是否 AI 生成典型问题 | 是：视觉完成但没有真实数据连接；不能仅此证明 AI 作者。 |
 | 本轮实施 | 展示真实RMS且超时归零，移除sin动画 |
-| 当前修复位置 | [AudioTrackRecorder.swift:78](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift:78) |
+| 当前修复位置 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
 | 当前状态与验收 | 合成验证 / 需实机；testSharedEpochPreservesFirstPacketOffsetsAndActualLevels；实时设备电平需验证 |
 
 ### UX-003：切页静默丢弃未保存草稿
@@ -970,7 +980,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 有变化、无变化、空白无效输入、保存失败分别导航；有变化草稿不静默丢失。确认保存失败后仍留原页和草稿；明确放弃后才清理。 |
 | 是否 AI 生成典型问题 | 是：保存 happy path 完整，离开路径的输入保护缺失；作者来源不确定。 |
 | 本轮实施 | 编辑段与草稿保存在Store，Tab重建仍可恢复；保存/取消清理 |
-| 当前修复位置 | [MeetingStore.swift:113](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:113) |
+| 当前修复位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | 当前状态与验收 | 已修复 / UI；合成草稿周一改周二，切页再返回仍为周二；退出App草稿不保证持久化 |
 
 ### UX-005：编辑输入框没有可访问性名称
@@ -990,7 +1000,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 空/非空值、两段相同正文、不同 speaker 及时间均有唯一可理解的名称；VoiceOver 和语音控制可定位字段，快捷键与焦点顺序保持正常。 |
 | 是否 AI 生成典型问题 | 是：视觉编辑器与图标标签完成，输入的语义标签遗漏；作者来源不确定。 |
 | 本轮实施 | 编辑框名称含说话人/时间 |
-| 当前修复位置 | [WorkbenchView.swift:2144](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:2144) |
+| 当前修复位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 当前状态与验收 | 已修复 / AX；升级夹具Description含校正逐字稿、我方、00:00；VoiceOver未实测 |
 
 ### UX-006：工具栏导入和设置被读成开始录音
@@ -1001,7 +1011,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 类型 | UX / 可访问性 |
 | 严重级别 | P2 一般 |
 | 置信度 | 高：原生AX实测 |
-| 位置 | [WorkbenchView.swift:475](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:475) |
+| 位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 问题描述 | 工具栏导入和设置被读成开始录音 |
 | 证据 | 升级夹具初次AX：导入和齿轮Description均为开始录音，即使设置有单独label。最终明确三个button标签并给HStack children:.contain，upgrade-ui-toolbar-ax.txt分别为开始录音/导入音频/设置。 |
 | 影响 | 依靠控件名称导航的用户难以区分三个入口；实际VoiceOver语音尚未验证。 |
@@ -1010,9 +1020,47 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 验证方式 | 最终AX中三个名称正确；仍需VoiceOver键盘朗读验收。 |
 | 是否 AI 生成典型问题 | 不确定 |
 | 本轮实施 | 工具栏独立名称与子控件 |
-| 当前修复位置 | [WorkbenchView.swift:527](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift:527) |
+| 当前修复位置 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | 当前状态与验收 | 已修复 / AX；upgrade-ui-toolbar-ax.txt：开始录音/导入音频/设置 |
 
 ## 未计入确认缺陷的观察
 
 VERIFY-UX-001：基线1000段原文AX没有正文子节点，工具遍历/时间因素未排除，未用VoiceOver。升级后惰性列表的首尾AX已有内容，但仍不宣称完成屏幕阅读器验收。见batch-03-review.md与upgrade-ui-observations.md。该项不计入42项问题或P1数量。
+
+## 追加问题详情（0.11.3）
+
+### BUG-026：磁盘读取失败使停止采集被跳过
+
+| 字段 | 内容 |
+|---|---|
+| ID | BUG-026 |
+| 类型 | Bug / 录音生命周期 |
+| 严重级别 | P1 严重 |
+| 置信度 | 高：代码路径与故障回归 |
+| 位置 | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift:356)，stopRecording |
+| 问题描述 | 停止任务先读取session.json，随后才调用录音器stop；读取失败会直接进入失败收尾，将录音器引用置空，未执行显式停止采集。 |
+| 证据 | 上轮793032f代码顺序为 `let session = try storage.session(with: sessionID)` → `mixedSession?.stop()`；新故障测试把session.json变为目录，并断言stopCount=1。 |
+| 影响 | UI显示停止/失败，但清理设备的必要动作被跳过；实际ScreenCaptureKit是否继续采样需实机验证，不能把模拟器断言当作真实采集结果。 |
+| 复现步骤 | 1. 用注入录音器启动隔离会议。2. 将该夹具session.json变为不可读取的目录。3. 点击停止。4. 核对录音器stop计数及保存失败提示。 |
+| 建议修复 | 已将停止混合/麦克风采集移到会议文件读取之前；终态失败仍释放任务状态，落盘失败单独提示，保留原始文件。 |
+| 验证方式 | AuditClosureTests.testStopReleasesRecordingEvenWhenTerminalStateCannotBeSaved通过；启动期取消和旧回调测试也通过。真实设备掉线/停止超时仍需验证。 |
+| 是否 AI 生成典型问题 | 是：成功路径完整，文件异常绕过设备清理；作者来源不确定 |
+| 当前状态与验收 | 已修复 / 注入故障回归；实机行为待验 |
+
+### BUG-027：合法同来源跳转丢失模型认证头
+
+| 字段 | 内容 |
+|---|---|
+| ID | BUG-027 |
+| 类型 | Bug / 网络兼容 |
+| 严重级别 | P1 严重：要求鉴权且使用合法跳转的服务 |
+| 置信度 | 高：真实loopback请求断言 |
+| 位置 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift:4)，SummaryRedirectPolicy |
+| 问题描述 | 允许同来源跳转后直接使用URLSession构造的新请求，该请求可能已经去掉Authorization，导致第二个请求失去认证。 |
+| 证据 | closure-network-before-auth-fix.log：testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials失败；同来源相对307的请求数、目标路径和正文一致断言通过，认证头断言失败。修复后认证布尔矩阵为[true,true]。 |
+| 影响 | 需要认证的模型接口在合法跳转后可能返回401；真实服务的返回行为需验证。本轮不使用真实凭据。 |
+| 复现步骤 | 1. 本地合成服务返回307和相对Location。2. 使用假Key调用连接测试。3. 比较初始与目标请求认证头。4. 同时测试跨端口/主机/协议跳转。 |
+| 建议修复 | 已在scheme、host、有效port全部相等后，从originalRequest恢复Authorization；跨来源仍直接拒绝，不能无条件补认证头。 |
+| 验证方式 | 同来源相对307保持正文与假凭据；301/302/303/307/308跨端口、跨主机和跨协议矩阵拒绝，目标无请求。332项Swift最终全量回归通过。 |
+| 是否 AI 生成典型问题 | 是：只验证危险跳转阻断，遗漏允许路径的系统行为；作者来源不确定 |
+| 当前状态与验收 | 已修复 / loopback矩阵；真实HTTPS服务矩阵待验 |

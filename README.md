@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前开发版本：`0.11.2`（本轮审查升级，本地构建；尚未发布到 GitHub）
+当前开发版本：`0.11.3`（本轮审查升级，本地构建；尚未发布到 GitHub）
 
 ## 目标
 
@@ -43,7 +43,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-0.11.2-macOS.zip
+shasum -a 256 MeetingScribe-0.11.3-macOS.zip
 ```
 
 ## 运行
@@ -187,6 +187,16 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
+
+### 0.11.3 审查收尾
+
+历史错误、录音警告与部分结果提示只展示可信诊断；加载旧记录时原子清理这些字段，会议正文不做脱敏替换。
+清理写入失败会提示，旧文件仍保留；已有导出文件、系统备份与其他副本不会被自动清除。
+录音启动期可以取消，中断及重复回调有任务归属保护；停止采集先于读取会议文件，磁盘故障不会跳过录音器清理。
+转写检查点写入失败会停止任务并报告；无法保存终态时明确提示先检查磁盘或导出可见内容。
+启动读取与历史修补、大音频副本移到后台；导入先完成临时副本，再替换目标文件。
+
+追加验收见 `docs/reviews/2026-10-06/closure-review-and-upgrade.md`。
 
 ### 0.11.2 审查修复
 

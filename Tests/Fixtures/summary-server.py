@@ -27,9 +27,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             log.write(json.dumps({"port": self.server.server_port, "path": self.path,
                                   "authorization": self.headers.get("Authorization"),
                                   "body": body.decode("utf-8", errors="replace")}) + "\n")
-        if self.path.startswith("/redirect/"):
-            self.send_response(307)
-            self.send_header("Location", f"http://127.0.0.1:{recipient.server_port}/receive/chat/completions")
+        mode = self.path.split("/")[1]
+        if mode == "redirect" or mode.startswith("redirect-"):
+            code = int(mode.split("-")[-1]) if mode.split("-")[-1].isdigit() else 307
+            target = f"http://127.0.0.1:{recipient.server_port}/receive/chat/completions"
+            if mode == "redirect-host":
+                target = f"http://localhost:{origin.server_port}/receive/chat/completions"
+            elif mode == "redirect-scheme":
+                target = f"https://127.0.0.1:{origin.server_port}/receive/chat/completions"
+            elif mode == "redirect-relative":
+                target = "/buffered/chat/completions"
+            self.send_response(code)
+            self.send_header("Location", target)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -55,7 +64,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         chunk = {"choices": [{"delta": {"content": content}, "finish_reason": None}]}
         payload = "data: " + json.dumps(chunk, ensure_ascii=False) + "\n\n"
-        if not self.path.startswith("/eof/"):
+        if self.path.startswith("/malformed/"):
+            payload += "data: {malformed-event}\n\n"
+        elif not self.path.startswith("/eof/"):
             payload += 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
         self.reply(200, "text/event-stream", payload.encode())
 

@@ -1070,10 +1070,10 @@ struct MeetingAnalysis: Codable, Hashable, Sendable {
     /// 两件事互斥优先级明确：本地兜底更严重，它意味着界面上**没有一句是模型写的**。
     var noticeMessage: String? {
         if let summaryError, !summaryError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return summaryError
+            return SafeDiagnostics.summary(summaryError)
         }
         if let partialNotice, !partialNotice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return partialNotice
+            return SafeDiagnostics.partial(partialNotice)
         }
         return nil
     }
@@ -1214,8 +1214,8 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var analysisNotice: String? {
         var notices: [String] = []
         if analysisStale == true { notices.append("原文已更新，速览与纪要基于修改前的内容，请重新整理。") }
-        if let lastRegenerationError { notices.append("本次重新整理未成功，已保留上次结果。" + lastRegenerationError) }
-        notices.append(contentsOf: [captureWarning, analysis.noticeMessage].compactMap { $0 })
+        if let message = SafeDiagnostics.summary(lastRegenerationError) { notices.append("本次重新整理未成功，已保留上次结果。" + message) }
+        notices.append(contentsOf: [SafeDiagnostics.capture(captureWarning), analysis.noticeMessage].compactMap { $0 })
         return notices.isEmpty ? nil : notices.joined(separator: "；")
     }
 

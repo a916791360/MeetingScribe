@@ -1,0 +1,24 @@
+Extracted from final closure-full-tests.log.
+Test Suite 'AuditClosureTests' started at 2026-10-06 13:04:35.069.
+Test Case '-[MeetingScribeTests.AuditClosureTests testBackgroundStartupGatesNewTasksUntilExistingMeetingsAreLoaded]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testBackgroundStartupGatesNewTasksUntilExistingMeetingsAreLoaded]' passed (0.053 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testDirectUntrustedNoticeNeverLeaksIntoExport]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testDirectUntrustedNoticeNeverLeaksIntoExport]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedImportCopyPreservesExistingDestinationAndManifest]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedImportCopyPreservesExistingDestinationAndManifest]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedLegacyMigrationStillLoadsSafeMeetingAndReportsFailure]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedLegacyMigrationStillLoadsSafeMeetingAndReportsFailure]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailureDuringPreparationAndOldCallbackCannotCorruptNextRecording]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailureDuringPreparationAndOldCallbackCannotCorruptNextRecording]' passed (0.066 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testLegacyDiagnosticMigrationRemovesArbitrarySecretsButPreservesMeetingContent]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testLegacyDiagnosticMigrationRemovesArbitrarySecretsButPreservesMeetingContent]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testManifestFailureDuringTranscriptionCannotReportSuccess]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testManifestFailureDuringTranscriptionCannotReportSuccess]' passed (0.379 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationIsExclusiveAndCancellationCannotBecomeLateRecording]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationIsExclusiveAndCancellationCannotBecomeLateRecording]' passed (0.028 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testStopReleasesRecordingEvenWhenTerminalStateCannotBeSaved]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testStopReleasesRecordingEvenWhenTerminalStateCannotBeSaved]' passed (0.041 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testSuccessfulImportReplacementIsCompleteAndLeavesNoStagingFile]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testSuccessfulImportReplacementIsCompleteAndLeavesNoStagingFile]' passed (0.006 seconds).
+Test Suite 'AuditClosureTests' passed at 2026-10-06 13:04:35.648.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.578 (0.579) seconds

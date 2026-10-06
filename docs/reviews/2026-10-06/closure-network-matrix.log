@@ -1,0 +1,24 @@
+Extracted from final closure-full-tests.log.
+Test Suite 'AuditNetworkTests' started at 2026-10-06 13:04:36.382.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' passed (0.076 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' passed (3.683 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' passed (0.092 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testMalformedSSEAfterUsefulContentRetainsTextWithPartialNotice]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testMalformedSSEAfterUsefulContentRetainsTextWithPartialNotice]' passed (0.053 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' passed (4.310 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' passed (0.039 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testRedirectStatusHostAndSchemeMatrixRejectsBeforeSendingToTarget]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testRedirectStatusHostAndSchemeMatrixRejectsBeforeSendingToTarget]' passed (0.042 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSameOriginRelativeRedirectKeepsSingleGenerationAndCredentials]' passed (0.041 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' passed (0.001 seconds).
+Test Suite 'AuditNetworkTests' passed at 2026-10-06 13:04:44.722.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 8.339 (8.339) seconds
