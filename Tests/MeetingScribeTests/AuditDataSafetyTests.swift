@@ -50,6 +50,24 @@ final class AuditDataSafetyTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: metadata.path))
     }
 
+    func testImportWithOldDraftSnapshotPreservesConcurrentRename() throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = SessionStorage(rootURL: root.appendingPathComponent("data"))
+        let draft = try storage.createDraftSession(captureMode: .imported)
+        try storage.update(draft.id) {
+            $0.title = "导入期间的人工名称"
+            $0.titleManuallyEdited = true
+        }
+        let source = root.appendingPathComponent("fixture.wav")
+        try Data("synthetic audio bytes".utf8).write(to: source)
+        _ = try storage.copyImportedAudio(url: source, into: draft)
+        let saved = try storage.session(with: draft.id)
+        XCTAssertEqual(saved.title, "导入期间的人工名称")
+        XCTAssertTrue(saved.titleManuallyEdited == true)
+        XCTAssertEqual(saved.sourceFileName, source.lastPathComponent)
+    }
+
     @MainActor
     func testSingleTrackDigitalSilenceSkipsCLIAndQuietSignalStillReachesCLI() async throws {
         let keys = ["appearance", "captureMode", "whisperCLIPath", "whisperModelPath", "glossaryText", "summaryProvider", "summaryModel", "summaryEndpoint"].map { "meetingScribe.\($0)" }

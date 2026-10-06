@@ -16,4 +16,9 @@ actor SessionRepository {
         try Task.checkCancellation()
         return try storage.update(id, mutation)
     }
+
+    func delete(_ session: MeetingSession) throws {
+        try Task.checkCancellation()
+        try storage.delete(session)
+    }
 }

@@ -464,7 +464,7 @@ struct WorkbenchDetailView: View {
             // 一整条宽度换不来任何信息（§六 记录项 ⑤）。改成交代"这一屏现在能做什么"。
             return Text("还没有会议 · 可以直接开始录音，或者导入一段已有音频")
         }
-        if store.isPreparingRecording || store.isRecording || store.isProcessing {
+        if store.isDeletingSessions || store.isPreparingRecording || store.isRecording || store.isProcessing {
             // 进行中：`statusText` 本身已经说明了状态（「正在录音」/「正在转写第 1/2 段 · 0%」），
             // 所以元信息里不再重复那个状态词，否则副标题末尾会再挂一个「转写中」。
             return Text("\(store.statusText)  ·  \(session.metaLine(includingStatus: false))")
@@ -513,7 +513,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
                     .help(primaryTitle(for: session))
                     .accessibilityLabel(primaryTitle(for: session))
-                    .disabled(store.isLoadingSessions)
+                    .disabled(store.isLoadingSessions || store.isDeletingSessions)
 
                     Button {
                         store.importAudioPresented = true
@@ -525,7 +525,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle())
                     .help("导入一段已有音频")
                     .accessibilityLabel("导入音频")
-                    .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
+                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                     Button {
                         store.showSettings = true
@@ -1691,7 +1691,7 @@ struct WorkbenchOriginalDocument: View {
     /// 转写没完成时改不了（还没写完的逐字稿没有稳定内容）；正在整理纪要时也改不了 ——
     /// 那一句正是模型这次要读的材料，放它进来会得到"模型整理旧文本、用户看着新文本"。
     private var canEdit: Bool {
-        session.status == .ready && !store.isProcessing && !store.isRecording
+        session.status == .ready && !store.isLoadingSessions && !store.isDeletingSessions && !store.isPreparingRecording && !store.isProcessing && !store.isRecording
     }
 
     private var editedCount: Int {

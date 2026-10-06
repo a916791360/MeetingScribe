@@ -1,0 +1,51 @@
+test_complete_environment_is_kept_together (test_judge_credentials.JudgeCredentialTests) ... ok
+test_complete_workbuddy_config_is_kept_together (test_judge_credentials.JudgeCredentialTests) ... ok
+test_exact_endpoint_can_select_its_config (test_judge_credentials.JudgeCredentialTests) ... ok
+test_key_without_endpoint_is_rejected (test_judge_credentials.JudgeCredentialTests) ... ok
+test_other_endpoint_cannot_borrow_key (test_judge_credentials.JudgeCredentialTests) ... ok
+test_long_case_judged (test_quality_report.AbsoluteCountsOnlyJudgedOnLongEnoughCases) ... ok
+test_short_case_reports_none (test_quality_report.AbsoluteCountsOnlyJudgedOnLongEnoughCases) ... ok
+test_meta_comment_is_detected (test_quality_report.EmptyPhraseRuleUsesSentencePatternNotBareWords) ... ok
+test_opening_cliche_is_empty_talk (test_quality_report.EmptyPhraseRuleUsesSentencePatternNotBareWords) ... ok
+test_plain_cliche_verbs_are_empty_talk (test_quality_report.EmptyPhraseRuleUsesSentencePatternNotBareWords) ... ok
+test_real_content_containing_weirao_zhankai_is_not_empty_talk (test_quality_report.EmptyPhraseRuleUsesSentencePatternNotBareWords) ... ok
+test_clean_empty_state (test_quality_report.EmptyStateVerdictIsSingleFunction) ... ok
+test_content_without_meta_keywords_is_flagged_for_human (test_quality_report.EmptyStateVerdictIsSingleFunction) ... ok
+test_meta_comment_fails (test_quality_report.EmptyStateVerdictIsSingleFunction) ... ok
+test_bare_word_list_going_silent_is_caught (test_quality_report.GateItselfBites) ... ok
+test_bare_word_matching_of_weirao_is_caught (test_quality_report.GateItselfBites) ... ok
+test_baseline_is_green (test_quality_report.GateItselfBites) ... ok
+test_hardcoded_empty_state_verdict_is_caught (test_quality_report.GateItselfBites) ... ok
+test_missing_field_faked_as_zero_is_caught (test_quality_report.GateItselfBites) ... ok
+test_relaxed_threshold_is_caught (test_quality_report.GateItselfBites) ... ok
+test_segment_regression_going_unseen_is_caught (test_quality_report.GateItselfBites) ... ok
+test_sentence_pattern_going_silent_is_caught (test_quality_report.GateItselfBites) ... ok
+test_sentence_pattern_losing_anchors_is_caught (test_quality_report.GateItselfBites) ... ok
+test_actions_with_owner_key_present_but_empty_string_is_zero (test_quality_report.MissingFieldNeverBecomesZero)
+键在、值全是空串 → 这才是真的 0%，要如实报 0 而不是不可算。 ... ok
+test_actions_without_owner_key_report_none (test_quality_report.MissingFieldNeverBecomesZero) ... ok
+test_failed_run_reports_none_not_zero (test_quality_report.MissingFieldNeverBecomesZero) ... ok
+test_missing_overview_bullets_reports_none (test_quality_report.MissingFieldNeverBecomesZero) ... ok
+test_none_is_always_incalculable (test_quality_report.OneVerdictSourceForUiAndReport) ... ok
+test_unknown_key_raises (test_quality_report.OneVerdictSourceForUiAndReport) ... ok
+test_verdict_of_agrees_with_thresholds (test_quality_report.OneVerdictSourceForUiAndReport) ... ok
+test_normal_density_not_judged (test_quality_report.SegmentRatioOnlyJudgedOnPathologicalDensity) ... ok
+test_pathological_density_judged (test_quality_report.SegmentRatioOnlyJudgedOnPathologicalDensity) ... ok
+test_check_exits_zero (test_quality_report.SyntheticCorpusCheckPasses) ... ok
+test_missing_required_hash_rejected (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_model_with_self_consistent_but_unofficial_hash_rejected (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_packaged_hashes_are_distinct_from_input_hashes (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_source_and_build_options_must_match_lock (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_unrecorded_runtime_library_rejected (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_unsafe_file_path_rejected (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_valid_input_and_modified_binary_rejection (test_runtime_provenance.RuntimeProvenanceTests) ... ok
+test_copy_failure_preserves_previous_app (test_safe_install.SafeInstallTests) ... ok
+test_failed_swap_restores_previous_app (test_safe_install.SafeInstallTests) ... ok
+test_invalid_signature_preserves_previous_app (test_safe_install.SafeInstallTests) ... ok
+test_running_app_is_not_terminated_or_replaced (test_safe_install.SafeInstallTests) ... ok
+test_success_retains_backup (test_safe_install.SafeInstallTests) ... ok
+
+----------------------------------------------------------------------
+Ran 45 tests in 6.215s
+
+OK

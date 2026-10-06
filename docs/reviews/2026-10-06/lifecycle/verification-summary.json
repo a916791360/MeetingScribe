@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "source_diff_check": "passed",
+  "public_profiler_environment_removed": true,
+  "public_profiler_device_identifiers_removed": true,
+  "raw_profiler_not_in_public_evidence": true,
+  "issue_table_unique_count": 48,
+  "priority_counts": {
+    "P0": 1,
+    "P1": 30,
+    "P2": 17
+  },
+  "swift_total": 350,
+  "swift_skipped": 1,
+  "swift_failures": 0,
+  "python_passed": 45,
+  "synthetic_quality_cases": 7,
+  "native_startup_verification": "pending_mac_locked",
+  "note": "Raw tool logs retained verbatim; source/document whitespace checks passed. Prior deliveries are immutable."
+}

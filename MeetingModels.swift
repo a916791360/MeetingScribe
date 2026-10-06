@@ -1162,6 +1162,8 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var folderName: String
     var title: String
     var titleManuallyEdited: Bool?
+    /// Orders atomic transaction results delivered to the UI. Absent in older files.
+    var storageRevision: Int?
     var createdAt: Date
     var updatedAt: Date
     var captureMode: CaptureMode

@@ -1,0 +1,8 @@
+=== 分发前审计 ===
+产物：/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-lifecycle-extract-p8ifduza/MeetingScribe.app
+Locked runtime provenance and input hashes verified
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
+{"version": "0.11.6", "runtime_bytes_equal_to_smoke_tested_0_11_5": false, "signature_and_provenance_verified": true}
+Traceback (most recent call last):
+  File "<stdin>", line 11, in <module>
+AssertionError

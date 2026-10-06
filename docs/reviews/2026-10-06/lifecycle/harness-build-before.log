@@ -1,0 +1,8 @@
+/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-lifecycle-harnesses-r1ajw6nl/MSLifecycleReview.app: replacing existing signature
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/docs/reviews/2026-10-06/lifecycle/ReviewPersistenceBenchmark.swift:59:38: error: result of call to 'update' is unused [#no-usage]
+57 |             }
+58 |             let background = try await probe.run {
+59 |                 try await repository.update(session.id) { $0.processingCompletedChunks = ($0.processingCompletedChunks ?? 0) + 1 }
+   |                                      `- error: result of call to 'update' is unused [#no-usage]
+60 |             }
+61 |             let manifest = storage.folderURL(for: session).appendingPathComponent("session.json")

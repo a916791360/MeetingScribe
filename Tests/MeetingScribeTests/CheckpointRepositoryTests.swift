@@ -59,4 +59,50 @@ final class CheckpointRepositoryTests: XCTestCase {
         XCTAssertThrowsError(try storage.update(session.id) { $0.folderName = "elsewhere" })
         XCTAssertEqual(try storage.session(with: session.id), baseline)
     }
+
+    @MainActor
+    func testLateBackgroundPublicationCannotOverwriteNewerRenameInUI() async throws {
+        let keys = ["appearance", "captureMode", "whisperCLIPath", "whisperModelPath", "glossaryText", "summaryProvider", "summaryModel", "summaryEndpoint"].map { "meetingScribe.\($0)" }
+        let snapshot = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+        defer {
+            for (key, value) in snapshot {
+                if let value { UserDefaults.standard.set(value, forKey: key) }
+                else { UserDefaults.standard.removeObject(forKey: key) }
+            }
+        }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ms-publication-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = SessionStorage(rootURL: root)
+        let draft = try storage.createDraftSession(captureMode: .imported)
+        let store = MeetingStore(storage: storage)
+        let repository = SessionRepository(storage: storage)
+        // Commit a background result, then delay its UI callback until after rename.
+        let oldPublication = try await repository.update(draft.id) {
+            $0.status = .ready
+            $0.processingCompletedChunks = 2
+            $0.analysis.minutesText = "合成完整纪要"
+        }
+        store.renameSession(draft, to: "晚到结果不可覆盖的人工名称")
+        store.replaceSession(oldPublication)
+        let disk = try storage.session(with: draft.id)
+        XCTAssertEqual(store.sessions.first?.title, disk.title)
+        XCTAssertEqual(store.sessions.first?.title, "晚到结果不可覆盖的人工名称")
+        XCTAssertEqual(store.sessions.first?.processingCompletedChunks, 2)
+        XCTAssertEqual(store.sessions.first?.status, .ready)
+        XCTAssertEqual(store.sessions.first?.analysis.minutesText, "合成完整纪要")
+    }
+
+    func testTransactionRevisionCannotOverflowOrBeChangedByMutation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ms-revision-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = SessionStorage(rootURL: root)
+        let session = try storage.createDraftSession(captureMode: .imported)
+        XCTAssertThrowsError(try storage.update(session.id) { $0.storageRevision = Int.max })
+        XCTAssertNil(try storage.session(with: session.id).storageRevision)
+        var limit = session
+        limit.storageRevision = Int.max
+        try storage.save(limit)
+        XCTAssertThrowsError(try storage.update(session.id) { $0.title = "Must not save" })
+        XCTAssertEqual(try storage.session(with: session.id).storageRevision, Int.max)
+    }
 }

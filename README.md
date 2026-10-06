@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前开发版本：`0.11.3`（本轮审查升级，本地构建；尚未发布到 GitHub）
+当前开发版本：`0.11.6`（本轮审查升级，本地构建；尚未发布到 GitHub）
 
 ## 目标
 
@@ -43,7 +43,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-0.11.3-macOS.zip
+shasum -a 256 MeetingScribe-<版本>-macOS.zip
 ```
 
 ## 运行
@@ -187,7 +187,7 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
-本地审查版 0.11.5 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
+本地审查版 0.11.6 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
 whisper.cpp v1.9.4 提交和官方 small 模型 SHA-256。使用已有模型构建，不修改已安装 App：
 
 ```bash
@@ -201,6 +201,16 @@ App 内 `Contents/Resources/RuntimeProvenance.plist` 记录源码、模型、构
 发行审计校验锁定来源、模型和实际文件。自签证书及来源记录不等同于 Apple 公证。
 
 
+
+### 0.11.6 后续修复
+
+取消重新整理会等待当前任务实际退出，再恢复开始/导入入口；删除同样等待收尾。
+后台事务及导入保留人工命名，晚到的结果不会覆盖界面新名称。整理和删除在后台执行；
+整理配置及术语以点击时为准，模型失败才计算本地兜底。单路/双路各自保存可校验的恢复检查点。
+
+完整审查、回归结果与验收边界见 [总报告](docs/reviews/2026-10-06/final-review-and-upgrade.md)
+及 [0.11.6追加报告](docs/reviews/2026-10-06/lifecycle/review-and-upgrade.md)。
+本轮未公开发版，正式分发仍需Developer ID和Apple公证。
 
 ### 0.11.3 审查收尾
 

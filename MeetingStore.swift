@@ -20,10 +20,12 @@ struct ChunkWindow: Equatable {
 
 @MainActor
 final class MeetingStore: ObservableObject {
+    typealias SummaryAnalyzer = @Sendable ([TranscriptSegment], SummaryModelSettings, String?, Glossary) async throws -> MeetingAnalysis
     @Published var sessions: [MeetingSession] = []
     @Published var selectedSessionID: UUID?
     @Published private(set) var storageIssueCount = 0
     @Published private(set) var isLoadingSessions = false
+    @Published private(set) var isDeletingSessions = false
     @Published var appearance: AppAppearance {
         didSet {
             guard oldValue != appearance else { return }
@@ -102,8 +104,10 @@ final class MeetingStore: ObservableObject {
     private let repository: SessionRepository
     private let transcoder = AudioTranscoder()
     private let audioWorker = AudioTranscriptionWorker()
+    private let analysisWorker = MeetingAnalysisWorker()
     private let transcriber = WhisperCLIRunner()
     private let summaryEngine = MeetingSummaryEngine()
+    private let summaryAnalyzer: SummaryAnalyzer
     private let keychain = KeychainStore.shared
     private var microphoneSession: MicrophoneRecordingSession?
     private var mixedSession: (any RecordingSession)?
@@ -158,12 +162,16 @@ final class MeetingStore: ObservableObject {
          },
          capturePermissions: @escaping @MainActor () -> (ScreenCapturePermission, MicrophonePermission) = {
              (MixedRecordingSession.screenCapturePreflight, MicrophoneAccess.permission)
+         },
+         summaryAnalyzer: @escaping SummaryAnalyzer = { segments, settings, apiKey, glossary in
+             try await MeetingSummaryEngine().analyze(segments: segments, settings: settings, apiKey: apiKey, glossary: glossary)
          }) {
         let actualStorage = storage ?? SessionStorage()
         self.storage = actualStorage
         self.repository = SessionRepository(storage: actualStorage)
         self.recordingFactory = recordingFactory
         self.capturePermissions = capturePermissions
+        self.summaryAnalyzer = summaryAnalyzer
         let defaults = Self.defaultRuntimePaths()
         let storedCLIPath = UserDefaults.standard.string(forKey: Preferences.whisperCLIPath)
         let storedModelPath = UserDefaults.standard.string(forKey: Preferences.whisperModelPath)
@@ -239,7 +247,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func reloadSessions() {
-        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         isLoadingSessions = true
         statusText = "正在读取会议记录..."
         Task { [weak self, storage] in
@@ -272,7 +280,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func startRecording() {
-        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         // 录音前先当场看一眼两道权限门（纯 preflight，不弹窗）。
         //
@@ -434,7 +442,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func importAudio(url: URL) {
-        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         var draftID: UUID?
         do {
@@ -799,7 +807,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func renameSession(_ session: MeetingSession, to title: String) {
-        guard !isLoadingSessions else { return }
+        guard !isLoadingSessions, !isDeletingSessions else { return }
         let cleanTitle = title
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -842,7 +850,7 @@ final class MeetingStore: ObservableObject {
         segmentID: UUID,
         text: String
     ) -> TranscriptEditor.Outcome {
-        if isLoadingSessions || isProcessing || isRecording || isPreparingRecording {
+        if isLoadingSessions || isDeletingSessions || isProcessing || isRecording || isPreparingRecording {
             return .rejected("正在整理纪要，等它结束再改这一句。")
         }
 
@@ -946,6 +954,7 @@ final class MeetingStore: ObservableObject {
     /// 界面照样给出「重新整理」，点下去必然失败——典型的假入口。
     /// （阶段 1-1 补的单测 `testReadinessNeedsModelWhenKeyPresentButModelEmpty` 钉住了这一格。）
     var canRegenerateSummaryNow: Bool {
+        guard !isLoadingSessions, !isDeletingSessions else { return false }
         if summarySettings.provider == .localRules { return true }
         let model = summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !model.isEmpty else { return false }
@@ -968,7 +977,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func regenerateSummary(for session: MeetingSession) {
-        guard !isLoadingSessions, session.status == .ready, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, session.status == .ready, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard !session.materialSegments.isEmpty else {
             statusText = "这场会议还没有逐字稿，暂时无法整理纪要。"
             return
@@ -988,6 +997,7 @@ final class MeetingStore: ObservableObject {
         errorMessage = nil
         let regenerationID = UUID()
         summaryRegenerationID = regenerationID
+        let requestContext = summaryRequestContext()
 
         processingTask = Task { [weak self] in
             guard let self else { return }
@@ -1001,36 +1011,36 @@ final class MeetingStore: ObservableObject {
                 // 改过一句（`updateTranscriptSegment` 已落盘、也刷新了列表），但视图层
                 // 手里那份 `session` 是它自己构造时抓的 —— 拿它当输入，就是把用户刚改的
                 // 那句丢掉，而且丢得毫无声响（覆盖它的正是"看起来很正常"的旧文本）。
-                let current = try storage.session(with: session.id)
+                let current = try await repository.session(with: session.id)
                 // 表替换会**跳过人工改过的段**（见 `applyingTerminology`）：用户改过的
                 // 那句是他确认过的事实，不能被"猜出来的纠错"再动一次。
-                let corrected = TranscriptCleaner.applyingTerminology(
+                let corrected = try await analysisWorker.applyingTerminology(
                     current.materialSegments,
-                    table: glossary.replacementTable
+                    table: requestContext.glossary.replacementTable
                 )
                 let correctedText = corrected.map(\.text).joined(separator: "\n")
                 let didCorrect = corrected.map(\.text) != current.transcriptSegments.map(\.text)
 
-                let analysis = try await buildAnalysis(from: corrected)
+                let analysis = try await buildAnalysis(from: corrected, context: requestContext)
                 try Task.checkCancellation()
                 guard summaryRegenerationID == regenerationID else { return }
 
-                var updated = try storage.session(with: session.id)
-                if didCorrect {
-                    updated.transcriptSegments = corrected
-                    updated.transcriptText = correctedText
-                }
                 let preservedPrevious = analysis.isLocalFallback && (!current.analysis.minutesText.isEmpty || current.analysis.hasStructuredFindings)
-                if preservedPrevious {
-                    updated.lastRegenerationError = analysis.summaryError
-                    if didCorrect { updated.analysisStale = true }
-                } else {
-                    updated.analysis = analysis
-                    updated.analysisStale = nil
-                    updated.lastRegenerationError = nil
+                let updated = try await repository.update(session.id) { updated in
+                    if didCorrect {
+                        updated.transcriptSegments = corrected
+                        updated.transcriptText = correctedText
+                    }
+                    if preservedPrevious {
+                        updated.lastRegenerationError = analysis.summaryError
+                        if didCorrect { updated.analysisStale = true }
+                    } else {
+                        updated.analysis = analysis
+                        updated.analysisStale = nil
+                        updated.lastRegenerationError = nil
+                    }
+                    updated.updatedAt = Date()
                 }
-                updated.updatedAt = Date()
-                try storage.save(updated)
                 replaceSession(updated)
                 if preservedPrevious {
                     statusText = "重新整理未成功，保留上次结果"
@@ -1065,16 +1075,12 @@ final class MeetingStore: ObservableObject {
         statusText = "正在停止处理..."
         processingStage = "正在停止处理..."
         processingTask?.cancel()
-        if let regenerationID = summaryRegenerationID,
-           let sessionID = activeSessionID {
-            cancelFinishedSummary(sessionID: sessionID, regenerationID: regenerationID)
-            return
-        }
-        // Cancellation is delivered to this task's process, never a future task's runner.
+        // Keep the operation slot until this task actually exits, including summary
+        // cleanup. New work must never overlap a request still being cancelled.
     }
 
     func retryProcessing(_ session: MeetingSession) {
-        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let inputURL = processingInputURL(for: session) else {
             errorMessage = "找不到这场会议的音频文件。"
             statusText = errorMessage ?? ""
@@ -1139,32 +1145,30 @@ final class MeetingStore: ObservableObject {
     }
 
     func deleteSession(_ session: MeetingSession) {
-        guard !isLoadingSessions else { return }
+        guard !isLoadingSessions, !isDeletingSessions else { return }
         if activeSessionID == session.id && (isRecording || isPreparingRecording) {
             errorMessage = "请先结束录音，确认文件已保存后再删除这场会议。"
             return
         }
-        if activeSessionID == session.id && isProcessing {
-            let pending = processingTask
-            pending?.cancel()
-            statusText = "正在停止处理，完成后删除…"
-            Task { [weak self] in
-                await pending?.value
-                self?.removeSessionFiles(session)
-            }
-            return
+        // Hold a separate gate through the task-exit -> file-deletion transition.
+        // The cancelled task may release isProcessing before deletion resumes.
+        isDeletingSessions = true
+        let pending = activeSessionID == session.id && isProcessing ? processingTask : nil
+        pending?.cancel()
+        statusText = pending == nil ? "正在删除会议…" : "正在停止处理，完成后删除…"
+        Task { [weak self] in
+            await pending?.value
+            guard let self else { return }
+            defer { isDeletingSessions = false }
+            do {
+                try await repository.delete(session)
+                sessions.removeAll { $0.id == session.id }
+                editingSegments.removeValue(forKey: session.id)
+                for segment in session.transcriptSegments { transcriptDrafts.removeValue(forKey: segment.id) }
+                normalizeSelection()
+                if !isRecording && !isPreparingRecording && !isProcessing { statusText = "已删除会议" }
+            } catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription }
         }
-        removeSessionFiles(session)
-    }
-
-    private func removeSessionFiles(_ session: MeetingSession) {
-        do {
-            try storage.delete(session)
-            sessions.removeAll { $0.id == session.id }
-            editingSegments.removeValue(forKey: session.id)
-            for segment in session.transcriptSegments { transcriptDrafts.removeValue(forKey: segment.id) }
-            normalizeSelection()
-        } catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription }
     }
 
     /// 处理一场会议：转写 → 清洗 → 整理。
@@ -1432,8 +1436,12 @@ final class MeetingStore: ObservableObject {
         processingTask = nil
     }
 
-    private func replaceSession(_ session: MeetingSession) {
+    func replaceSession(_ session: MeetingSession) {
         let session = session.sanitizingDiagnostics
+        if let existing = sessions.first(where: { $0.id == session.id }),
+           (existing.storageRevision ?? 0) > (session.storageRevision ?? 0) {
+            return // A rename or newer checkpoint committed while this callback awaited MainActor.
+        }
         if let index = sessions.firstIndex(where: { $0.id == session.id }),
            sessions[index].createdAt == session.createdAt {
             sessions[index] = session
@@ -1453,33 +1461,29 @@ final class MeetingStore: ObservableObject {
         }
     }
 
-    private func buildAnalysis(from segments: [TranscriptSegment]) async throws -> MeetingAnalysis {
-        try Task.checkCancellation()
-        let fallback = await Task.detached(priority: .utility) {
-            MeetingAnalysisBuilder.build(from: segments)
-        }.value
-        try Task.checkCancellation()
-        let settings = summarySettings
+    private func summaryRequestContext() -> SummaryRequestContext {
         let enteredKey = summaryAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         // 后台整理绝不能读取钥匙串密文：旧 ACL / 签名漂移时，macOS 会弹系统密码框，
         // `LAContext.interactionNotAllowed` 对这种钥匙串访问确认框也挡不住。
         // 自动流程只使用内存里已有的输入框值；没有就让云端整理失败并降级到本地规则。
-        let apiKey = enteredKey.isEmpty ? nil : enteredKey
+        return SummaryRequestContext(settings: summarySettings, apiKey: enteredKey.isEmpty ? nil : enteredKey, glossary: glossary)
+    }
+
+    private func buildAnalysis(from segments: [TranscriptSegment], context: SummaryRequestContext? = nil) async throws -> MeetingAnalysis {
+        try Task.checkCancellation()
+        let request = context ?? summaryRequestContext()
 
         do {
-            let analysis = try await summaryEngine.analyze(
-                segments: segments,
-                settings: settings,
-                apiKey: apiKey,
-                glossary: glossary
-            )
+            let analysis = try await summaryAnalyzer(segments, request.settings, request.apiKey, request.glossary)
             try Task.checkCancellation()
             return analysis
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            var fallback = fallback
-            fallback.summaryModel = settings.displayName
+            // Prepare a fallback only after failure; successful local/remote requests
+            // previously paid for a second complete local analysis up front.
+            var fallback = try await analysisWorker.fallback(from: segments)
+            fallback.summaryModel = request.settings.displayName
             fallback.summaryError = SafeDiagnostics.summary(error.localizedDescription)
             return fallback
         }
@@ -1569,7 +1573,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func resumePendingProcessing() {
-        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let session = sessions.first(where: { $0.status == .processing }) else { return }
         activeSessionID = session.id
         guard let inputURL = processingInputURL(for: session) else {

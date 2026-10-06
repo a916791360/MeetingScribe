@@ -1,0 +1,31 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Emitting module MeetingScribe
+[4/7] Compiling MeetingScribe MeetingStore.swift
+[4/8] Write Objects.LinkFileList
+[5/8] Linking MeetingScribe
+[6/8] Applying MeetingScribe
+[8/9] Emitting module MeetingScribeTests
+[8/10] Write Objects.LinkFileList
+[9/10] Linking MeetingScribePackageTests
+Build complete! (2.17s)
+Test Suite 'Selected tests' started at 2026-10-06 14:04:54.628.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 14:04:54.629.
+Test Suite 'SummaryLifecycleTests' started at 2026-10-06 14:04:54.629.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' passed (0.059 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:75: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion] : XCTAssertEqual failed: ("") is not equal to ("合成旧纪要")
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' failed (0.106 seconds).
+Test Suite 'SummaryLifecycleTests' failed at 2026-10-06 14:04:54.794.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 0.165 (0.165) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 14:04:54.794.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 0.165 (0.166) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 14:04:54.794.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 0.165 (0.166) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,30 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Compiling MeetingScribe MeetingStore.swift
+[4/7] Emitting module MeetingScribe
+[4/9] Write Objects.LinkFileList
+[5/9] Linking MeetingScribe
+[6/9] Applying MeetingScribe
+[8/10] Emitting module MeetingScribeTests
+[8/10] Write Objects.LinkFileList
+[9/10] Linking MeetingScribePackageTests
+Build complete! (2.20s)
+Test Suite 'Selected tests' started at 2026-10-06 14:14:10.381.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 14:14:10.382.
+Test Suite 'CheckpointRepositoryTests' started at 2026-10-06 14:14:10.382.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/CheckpointRepositoryTests.swift:88: error: -[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI] : XCTAssertEqual failed: ("Optional("会议 10-06 14:14")") is not equal to ("Optional("晚到结果不可覆盖的人工名称")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/CheckpointRepositoryTests.swift:89: error: -[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI] : XCTAssertEqual failed: ("Optional("会议 10-06 14:14")") is not equal to ("Optional("晚到结果不可覆盖的人工名称")")
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI]' failed (0.096 seconds).
+Test Suite 'CheckpointRepositoryTests' failed at 2026-10-06 14:14:10.478.
+	 Executed 1 test, with 2 failures (0 unexpected) in 0.096 (0.096) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 14:14:10.478.
+	 Executed 1 test, with 2 failures (0 unexpected) in 0.096 (0.096) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 14:14:10.478.
+	 Executed 1 test, with 2 failures (0 unexpected) in 0.096 (0.097) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

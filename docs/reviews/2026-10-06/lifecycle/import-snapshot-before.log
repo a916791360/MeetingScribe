@@ -1,0 +1,40 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/6] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[4/6] Emitting module MeetingScribeTests
+[5/6] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking MeetingScribePackageTests
+Build complete! (2.15s)
+Test Suite 'Selected tests' started at 2026-10-06 14:09:11.692.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 14:09:11.692.
+Test Suite 'AuditDataSafetyTests' started at 2026-10-06 14:09:11.692.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditDataSafetyTests.swift:66: error: -[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename] : XCTAssertEqual failed: ("会议 10-06 14:09") is not equal to ("导入期间的人工名称")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditDataSafetyTests.swift:67: error: -[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename] : XCTAssertTrue failed
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename]' failed (0.065 seconds).
+Test Suite 'AuditDataSafetyTests' failed at 2026-10-06 14:09:11.758.
+	 Executed 1 test, with 2 failures (0 unexpected) in 0.065 (0.065) seconds
+Test Suite 'SummaryLifecycleTests' started at 2026-10-06 14:09:11.758.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' passed (0.063 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' passed (0.018 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' passed (0.044 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:148: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot] : XCTAssertTrue failed
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:153: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot] : XCTAssertTrue failed
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' failed (0.033 seconds).
+Test Suite 'SummaryLifecycleTests' failed at 2026-10-06 14:09:11.916.
+	 Executed 4 tests, with 2 failures (0 unexpected) in 0.158 (0.158) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 14:09:11.916.
+	 Executed 5 tests, with 4 failures (0 unexpected) in 0.224 (0.224) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 14:09:11.916.
+	 Executed 5 tests, with 4 failures (0 unexpected) in 0.224 (0.225) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

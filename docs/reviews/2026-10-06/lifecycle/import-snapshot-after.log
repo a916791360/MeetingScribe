@@ -1,0 +1,52 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Compiling MeetingScribe SessionStorage.swift
+[5/8] Emitting module MeetingScribe
+[5/10] Write Objects.LinkFileList
+[6/10] Linking MeetingScribe
+[7/10] Applying MeetingScribe
+[9/12] Emitting module MeetingScribeTests
+[10/12] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[10/12] Write Objects.LinkFileList
+[11/12] Linking MeetingScribePackageTests
+Build complete! (2.72s)
+Test Suite 'Selected tests' started at 2026-10-06 14:09:47.268.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 14:09:47.268.
+Test Suite 'AuditDataSafetyTests' started at 2026-10-06 14:09:47.269.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' passed (0.056 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportedInputWAVPreservesOriginalAndManifest]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportedInputWAVPreservesOriginalAndManifest]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportWithOldDraftSnapshotPreservesConcurrentRename]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' passed (0.883 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testSingleTrackDigitalSilenceSkipsCLIAndQuietSignalStillReachesCLI]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testSingleTrackDigitalSilenceSkipsCLIAndQuietSignalStillReachesCLI]' passed (0.040 seconds).
+Test Suite 'AuditDataSafetyTests' passed at 2026-10-06 14:09:48.255.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.986 (0.986) seconds
+Test Suite 'SummaryLifecycleTests' started at 2026-10-06 14:09:48.255.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' passed (0.033 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' passed (0.018 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' passed (0.049 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' passed (0.038 seconds).
+Test Suite 'SummaryLifecycleTests' passed at 2026-10-06 14:09:48.394.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.138 (0.139) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 14:09:48.394.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 1.124 (1.125) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 14:09:48.394.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 1.124 (1.126) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

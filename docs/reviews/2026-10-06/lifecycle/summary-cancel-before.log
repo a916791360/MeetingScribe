@@ -1,0 +1,47 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[2/7] Write swift-version--58304C5D6DBC2206.txt
+[4/9] Compiling MeetingScribe MeetingStore.swift
+[5/9] Emitting module MeetingScribe
+[6/11] Compiling MeetingScribe MeetingScribeApp.swift
+[7/11] Compiling MeetingScribe WorkbenchView.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking MeetingScribe
+[9/12] Applying MeetingScribe
+[11/22] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[12/23] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[13/23] Compiling MeetingScribeTests ExportWiringTests.swift
+[14/23] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[15/23] Compiling MeetingScribeTests AuditClosureTests.swift
+[16/23] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[17/23] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[18/23] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[19/23] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[20/23] Compiling MeetingScribeTests AuditNetworkTests.swift
+[21/23] Emitting module MeetingScribeTests
+[21/23] Write Objects.LinkFileList
+[22/23] Linking MeetingScribePackageTests
+Build complete! (5.81s)
+Test Suite 'Selected tests' started at 2026-10-06 14:03:52.970.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 14:03:52.972.
+Test Suite 'SummaryLifecycleTests' started at 2026-10-06 14:03:52.972.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:59: error: -[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion] : XCTAssertTrue failed - Cancellation must keep the task slot until the old task exits
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:61: error: -[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion] : XCTAssertTrue failed - Deletion must wait for the active task
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' failed (0.127 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:59: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion] : XCTAssertTrue failed - Cancellation must keep the task slot until the old task exits
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:75: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion] : XCTAssertEqual failed: ("合成新纪要") is not equal to ("合成旧纪要")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/SummaryLifecycleTests.swift:80: error: -[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion] : XCTAssertEqual failed: ("3") is not equal to ("2")
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' failed (0.042 seconds).
+Test Suite 'SummaryLifecycleTests' failed at 2026-10-06 14:03:53.141.
+	 Executed 2 tests, with 5 failures (0 unexpected) in 0.169 (0.169) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 14:03:53.141.
+	 Executed 2 tests, with 5 failures (0 unexpected) in 0.169 (0.169) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 14:03:53.141.
+	 Executed 2 tests, with 5 failures (0 unexpected) in 0.169 (0.171) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

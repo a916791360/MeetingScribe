@@ -37,6 +37,7 @@ let package = Package(
                 "MeetingStore.swift",
                 "SessionStorage.swift",
                 "SessionRepository.swift",
+                "MeetingAnalysisWorker.swift",
                 "MeetingSessionLoader.swift",
                 "TranscriptionCheckpoint.swift",
                 "WhisperPipeline.swift",

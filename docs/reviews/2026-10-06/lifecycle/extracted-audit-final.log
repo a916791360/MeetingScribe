@@ -1,0 +1,5 @@
+=== 分发前审计 ===
+产物：/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-lifecycle-extract-p8ifduza/MeetingScribe.app
+Locked runtime provenance and input hashes verified
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
+{"version": "0.11.6", "runtime_input_hashes_equal_to_0_11_5": true, "signature_and_provenance_verified": true, "new_signed_runtime_gpu_cpu_smoke_passed": true}

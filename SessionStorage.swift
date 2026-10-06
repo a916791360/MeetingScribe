@@ -104,8 +104,12 @@ final class SessionStorage: @unchecked Sendable {
         defer { ioLock.unlock() }
         var session = try self.session(with: id)
         let folderName = session.folderName
+        let storedRevision = session.storageRevision
+        let revision = storedRevision ?? 0
+        guard revision >= 0, revision < Int.max else { throw StorageError.invalidManifest }
         try mutation(&session)
-        guard session.id == id, session.folderName == folderName else { throw StorageError.invalidManifest }
+        guard session.id == id, session.folderName == folderName, session.storageRevision == storedRevision else { throw StorageError.invalidManifest }
+        session.storageRevision = revision + 1
         session = session.sanitizingDiagnostics
         try save(session)
         return session
@@ -173,9 +177,9 @@ final class SessionStorage: @unchecked Sendable {
                 try FileManager.default.moveItem(at: staging, to: destination)
             }
         }
-        var updated = session
-        updated.sourceFileName = destination.lastPathComponent
-        try save(updated)
+        // The caller's draft predates asynchronous copying and may have been renamed.
+        // Only commit the copied source field on the latest manifest.
+        try update(session.id) { $0.sourceFileName = destination.lastPathComponent }
         return destination
     }
 
