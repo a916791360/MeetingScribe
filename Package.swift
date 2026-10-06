@@ -43,6 +43,7 @@ let package = Package(
                 "TranscriptionCheckpoint.swift",
                 "WhisperPipeline.swift",
                 "AudioTrackRecorder.swift",
+                "AudioOnlyRecordingAssembler.swift",
                 "TranscriptCleaner.swift",
                 "TranscriptMerger.swift",
                 "TranscriptMaterial.swift",

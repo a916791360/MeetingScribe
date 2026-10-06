@@ -1,0 +1,12 @@
+=== 分发前审计 ===
+产物：/private/tmp/ms-release-stage.HZsILL/MeetingScribe.app
+Locked runtime provenance and input hashes verified
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
+已生成：.review-dist/MeetingScribe-0.11.9-macOS.zip
+版本：0.11.9 (build 29)
+大小：455802321 字节（434.7 MB）
+SHA-256：9dfde5c6d8c4d223ae3a7b437db3b041627170e4170086795a857b4275f01045
+
+把这两行填进 Release 说明：
+| 文件 | `MeetingScribe-0.11.9-macOS.zip`（434.7 MB / 455802321 字节） |
+| SHA-256 | `9dfde5c6d8c4d223ae3a7b437db3b041627170e4170086795a857b4275f01045` |

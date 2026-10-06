@@ -185,12 +185,13 @@ final class MicrophoneRecordingSession: NSObject, AVAudioRecorderDelegate {
 
 /// 一次「混合录音」的产物（P2-2a 双声道）。
 ///
-/// 保留原来的单路 `.mov`（播放与兜底转写都靠它），另外给出分开的两路：
+/// 保存纯音频混合WAV用于播放与回退转写，另外保留分开的原始两路：
 /// `local` 是麦克风（我方），`remote` 是系统声音（对方）。
 ///
 /// **两路都可能缺**：系统版本不给 `.microphone` output、权限没给、ScreenCaptureKit
 /// 干脆没投递 —— 任何一种情况都必须能退回单路。缺一路不算错，只是没有说话人标注。
 struct MixedRecordingResult {
+    // Legacy property name retained for existing callers; new capture writes source.wav.
     let movieURL: URL
     let localTrackURL: URL?
     let remoteTrackURL: URL?
@@ -213,10 +214,13 @@ struct DualTrackInput {
 private final class TrackStreamOutput: NSObject, SCStreamOutput {
     private let recorder: AudioTrackRecorder
     private let outputType: SCStreamOutputType
+    private let onFailure: @Sendable (String) -> Void
+    private var reportedFailure = false
 
-    init(recorder: AudioTrackRecorder, outputType: SCStreamOutputType) {
+    init(recorder: AudioTrackRecorder, outputType: SCStreamOutputType, onFailure: @escaping @Sendable (String) -> Void) {
         self.recorder = recorder
         self.outputType = outputType
+        self.onFailure = onFailure
     }
 
     func stream(
@@ -228,6 +232,10 @@ private final class TrackStreamOutput: NSObject, SCStreamOutput {
         // 类型对不上就是别人的样本，扔掉。
         guard type == outputType else { return }
         recorder.append(sampleBuffer)
+        if !reportedFailure, let reason = recorder.failureReason {
+            reportedFailure = true
+            onFailure(reason)
+        }
     }
 }
 
@@ -240,18 +248,17 @@ protocol RecordingSession: AnyObject {
 }
 
 @MainActor
-final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStreamDelegate, RecordingSession {
+final class MixedRecordingSession: NSObject, SCStreamDelegate, RecordingSession {
     private let movieURL: URL
     private let localTrackURL: URL
     private let remoteTrackURL: URL
     private var stream: SCStream?
-    private var recordingOutput: SCRecordingOutput?
     private var localRecorder: AudioTrackRecorder?
     private var remoteRecorder: AudioTrackRecorder?
     /// `SCStream` 不持有 output，得自己留着，否则挂上去就没了。
     private var trackOutputs: [TrackStreamOutput] = []
-    private var didStartRecording = false
     private var didFinishRecording = false
+    private var capturedAudioURLs: [URL] = []
     private var stopRequested = false
     private var stopContinuation: CheckedContinuation<MixedRecordingResult, Error>?
     private var stopError: Error?
@@ -330,16 +337,10 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         configuration.sampleRate = 16_000
         configuration.channelCount = 1
 
-        let recordingConfiguration = SCRecordingOutputConfiguration()
-        recordingConfiguration.outputURL = movieURL
-        recordingConfiguration.outputFileType = .mov
-
-        let recordingOutput = SCRecordingOutput(configuration: recordingConfiguration, delegate: self)
+        // Only audio stream outputs are attached. SCRecordingOutput always
+        // includes display video and must not be used by this audio-only tool.
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-        try stream.addRecordingOutput(recordingOutput)
-
         self.stream = stream
-        self.recordingOutput = recordingOutput
 
         // 双声道（P2-2a）：在**同一个** `SCStream` 上再挂两个 output。
         //
@@ -389,7 +390,6 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         if let error {
             continuation.resume(throwing: error)
         } else {
-            didStartRecording = true
             continuation.resume()
         }
     }
@@ -398,29 +398,49 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         guard let stream else { throw PipelineError.failedToStopCapture }
         guard !stopRequested else { throw PipelineError.failedToStopCapture }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            self.stopContinuation = continuation
-            self.stopRequested = true
-            self.stopTimeoutTask = Task { [weak self] in
-                do { try await Task.sleep(for: .seconds(10)) } catch { return }
-                guard let self, self.stopRequested else { return }
-                self.stopError = PipelineError.failedToStopCapture
-                self.finishStopIfPossible()
-            }
+        let result: MixedRecordingResult
+        do {
+            result = try await withCheckedThrowingContinuation { continuation in
+                self.stopContinuation = continuation
+                self.stopRequested = true
+                self.stopTimeoutTask = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                    guard let self, self.stopRequested else { return }
+                    self.stopError = PipelineError.failedToStopCapture
+                    self.finishStopIfPossible()
+                }
 
-            stream.stopCapture { [weak self] error in
-                if let error {
-                    Task { @MainActor in
-                        self?.stopError = error
-                        self?.finishStopIfPossible()
-                    }
-                } else {
-                    Task { @MainActor in
-                        self?.finishStopIfPossible()
+                stream.stopCapture { [weak self] error in
+                    if let error {
+                        Task { @MainActor in
+                            self?.stopError = error
+                            self?.finishStopIfPossible()
+                        }
+                    } else {
+                        Task { @MainActor in
+                            self?.didFinishRecording = true
+                            self?.finishStopIfPossible()
+                        }
                     }
                 }
             }
+        } catch {
+            // Even a failed/cancelled stop preserves any valid audio already written.
+            if !capturedAudioURLs.isEmpty {
+                let tracks = capturedAudioURLs
+                let output = movieURL
+                let salvage = Task { try await AudioOnlyRecordingAssembler().assemble(tracks: tracks, output: output) }
+                _ = try? await salvage.value
+            }
+            throw error
         }
+        let tracks = capturedAudioURLs
+        let output = movieURL
+        // Device cleanup has completed. A caller cancellation must not discard its
+        // fallback source; await this independent finalization before releasing busy.
+        let finalization = Task { try await AudioOnlyRecordingAssembler().assemble(tracks: tracks, output: output) }
+        try await finalization.value
+        return result
     }
 
     /// 把一路音频接到 stream 上。失败返回 nil（这一路就没有）。
@@ -431,7 +451,9 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         label: String
     ) -> AudioTrackRecorder? {
         let recorder = AudioTrackRecorder(url: url, timelineOrigin: timelineOrigin)
-        let output = TrackStreamOutput(recorder: recorder, outputType: type)
+        let output = TrackStreamOutput(recorder: recorder, outputType: type, onFailure: { [weak self] message in
+            self?.receiveCaptureFailure(PipelineError.transcriptionFailed(message))
+        })
         do {
             try stream.addStreamOutput(output, type: type, sampleHandlerQueue: Self.sampleQueue)
             Diagnostics.audio.notice(
@@ -456,6 +478,10 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         Self.sampleQueue.sync {}
         localRecorder?.finish()
         remoteRecorder?.finish()
+        capturedAudioURLs = [localRecorder, remoteRecorder].compactMap { recorder in
+            guard let recorder, recorder.didWriteAudio else { return nil }
+            return recorder.outputURL
+        }
     }
 
     private func makeResult() -> MixedRecordingResult {
@@ -476,29 +502,12 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         )
     }
 
-    nonisolated func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
-        Task { @MainActor [weak self] in
-            self?.didStartRecording = true
-        }
-    }
-
-    nonisolated func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
-        Task { @MainActor [weak self] in
-            self?.didFinishRecording = true
-            self?.finishStopIfPossible()
-        }
-    }
-
-    nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
-        Task { @MainActor [weak self] in
-            self?.reportCaptureFailure(error)
-        }
-    }
-
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Task { @MainActor [weak self] in
-            self?.reportCaptureFailure(error)
-        }
+        receiveCaptureFailure(error)
+    }
+
+    nonisolated func receiveCaptureFailure(_ error: Error) {
+        Task { @MainActor [weak self] in self?.reportCaptureFailure(error) }
     }
 
     private func reportCaptureFailure(_ error: Error) {
@@ -532,12 +541,10 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         onFailure = nil
         timelineOrigin = nil
         stream = nil
-        recordingOutput = nil
         trackOutputs.removeAll()
         localRecorder = nil
         remoteRecorder = nil
         stopRequested = false
-        didStartRecording = false
         didFinishRecording = false
         stopError = nil
     }

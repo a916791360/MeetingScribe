@@ -1,14 +1,14 @@
-# MeetingScribe 完整审查与0.11.7升级报告
+# MeetingScribe 完整审查与0.11.9升级报告
 
-日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已更新到0.11.7，原生启动及全部会议文件核对通过；上轮0.11.6锁屏阻塞的启动验收也已补齐，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
+日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已更新到0.11.9，原生启动及全部会议文件核对通过；上轮0.11.6锁屏阻塞的启动验收也已补齐，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
 
 ## 执行摘要
 
 项目是Swift 6/SwiftUI的macOS 15+、Apple Silicon原生会议工具：ScreenCaptureKit录系统/麦克风，AVFoundation落盘与播放，afconvert归一化，whisper.cpp本机转写，可选本地规则/Ollama/OpenAI兼容接口整理，JSON会话与Markdown导出。单SwiftPM应用模块，无Web后端或数据库服务。
 
-完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项与后续6项，共48项：**P0 1 / P1 30 / P2 17**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
+完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项与后续10项，共52项：**P0 1 / P1 32 / P2 19**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
 
-最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.7/build27**；后续完成独立单路/双路恢复检查点、后台原子保存、自定义名称保留和官方运行时来源锁定，前轮已完成历史诊断清理与后台首次加载/导入，0.11.6补齐取消收尾门禁、导入重命名保护与后台旧结果发布版本控制，并完成合成保存调度和1000段原生Instruments测量。0.11.7继续把人工校正/重命名迁入后台事务，补保存状态、失败保草稿及正常退出保护；故障收尾保留最新名称。仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
+最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.9/build29**；后续完成独立单路/双路恢复检查点、后台原子保存、自定义名称保留和官方运行时来源锁定，前轮已完成历史诊断清理与后台首次加载/导入，0.11.6补齐取消收尾门禁、导入重命名保护与后台旧结果发布版本控制，并完成合成保存调度和1000段原生Instruments测量。0.11.7继续把人工校正/重命名迁入后台事务，补保存状态、失败保草稿及正常退出保护；故障收尾保留最新名称。0.11.9进一步迁移所有manifest副作用至后台事务、修复正常退出及录音备用MOV含视频的隐私问题，完成本机实际双轨、TTS导入/转写/整理/导出、1501句跨页编辑和5万句Instruments验收。仍有架构渐进改进与设备/外部矩阵缺项，不能把本地全绿当作公开发行完成。
 
 ## Top 10 高优先级问题
 
@@ -20,16 +20,16 @@
 | 2 | SEC-002 / P1 | 云端正文跟随跨来源重定向 | 已修复 / 真实loopback；testCrossOrigin307DoesNotForwardMeetingOrCredentials：目标零请求；HTTPS/跨主机矩阵待补 |
 | 3 | SEC-003 / P1 | 会话清单能改变数据根之外的操作目标 | 已修复 / 故障回归；manifest ../不能删根外；symlink不能写根外。未宣称抵御同机恶意进程的TOCTOU竞态 |
 | 4 | SEC-004 / P1 | 原始服务端错误污染会议文件与导出 | 新写入与历史诊断已修复 / 合成迁移回归；旧导出和其他备份不自动清除，真实库在运行新版时清理 |
-| 5 | BUG-006 / P1 | 写盘丢失音频时间位置 | 合成验证 / 需实机；testSampleTimestampGapIsPreserved、testSharedEpochPreservesFirstPacketOffsetsAndActualLevels；MOV首包/设备偏移需实测 |
+| 5 | SEC-007 / P1 | 备用MOV录入非预期屏幕视频 | 已修复 / 生产App实际27秒双轨source与CAF/WAV全部只有audio，原CAF保留；历史MOV未删除 |
 | 6 | BUG-008 / P1 | 后处理无视说话人边界 | 已修复 / 回归；testCleaningPreservesDifferentSpeakers、testIndependentRepeatsBySameSpeakerArePreserved |
 | 7 | BUG-009 / P1 | 相反意见被误判为串音 | 已修复 / 回归；testCrosstalkPreservesOppositeDecisions及合并测试；近似串音可能多保留一句，是避免误删的取舍 |
 | 8 | BUG-010 / P1 | 双路检查点覆盖完整的一路 | 已修复 / 故障回归；testSecondTrackFailurePreservesFirstTrackCheckpoint；0.11.5再验证双路/单路中断只重跑未完成分块、源/模型变化失效 |
 | 9 | BUG-011 / P1 | 旧任务收尾破坏新任务状态 | 已修复 / 竞态回归；testDeletionWaitsForOldTaskBeforeStartingAnother；0.11.6再验取消整理保持占用、删除等待实际收尾 |
-| 10 | BUG-012 / P1 | 超时和取消没有进程退出上限 | 已修复 / 故障回归；testCancellationFinishesEvenIfCLIRejectsSIGTERM；真实长超时未等待 |
+| 10 | BUG-030 / P1 | 正常退出不保护录音/处理 | 已修复 / 原生⌘Q与生命周期回归；后台终态完成后释放占用，正常空闲可退出 |
 
 ## 完整问题列表与修复状态
 
-“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新修复和验收见[0.11.7报告](editing/review-and-upgrade.md)，此前见[0.11.6报告](lifecycle/review-and-upgrade.md)，上轮见[0.11.5报告](continuation/review-and-upgrade.md)，前轮原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
+“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新修复和验收见[0.11.9报告](acceptance/review-and-upgrade.md)，此前见[0.11.7报告](editing/review-and-upgrade.md)，此前见[0.11.6报告](lifecycle/review-and-upgrade.md)，上轮见[0.11.5报告](continuation/review-and-upgrade.md)，前轮原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
 
 | ID | 原严重级别 | 类型 | 问题 | 当前状态 | 当前修复位置 |
 |---|---|---|---|---|---|
@@ -72,7 +72,7 @@
 | BUG-021 | P2 | Bug / 性能 | 网关正常返回普通 JSON 却被重复调用 | 已修复 / 请求计数 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | DOC-001 | P2 | UX / 可维护性 | README宣称不联云，与可选云端整理不一致 | 已修复 / 文档核对 | [README.md](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md) |
 | PERF-001 | P2 | 性能 | 每次读取单条会议都会枚举解码整个数据根 | 已修复 / 合成性能 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
-| PERF-002 | P2 | 性能 / 可访问性 | 长逐字稿一次创建全部行 | 代码、AX与本机合成采样改善 / VoiceOver和其他规模待验 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
+| PERF-002 | P2 | 性能 / 可访问性 | 长逐字稿一次创建全部行 | 500句分段、1501跨页编辑及5万句本机采样通过 / VoiceOver待验 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | PERF-003 | P2 | 性能 / 可维护性 | 子进程日志无界写入、结束后整文件读入 | 已修复 / 故障回归 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
 | SEC-001 | P2 | 安全 / 可维护性 | 审计通过与实际 Mach-O 路径不一致 | 已修复 / 产物验证 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
 | SEC-006 | P2 | 可维护性 / 许可证风险 | 发行包没有保留内置运行时和模型的第三方许可 | 许可与官方来源锁定 / 产物验证 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
@@ -81,6 +81,10 @@
 | UX-005 | P2 | UX / 可访问性 | 编辑输入框没有可访问性名称 | 已修复 / AX | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | UX-006 | P2 | UX / 可访问性 | 工具栏导入和设置被读成开始录音 | 已修复 / AX | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | UX-008 | P2 | UX / Bug | 取消准备被当故障 | 已修复 / 原生合成UI与故障回归 | MeetingStore.swift、SafeDiagnostics.swift |
+| SEC-007 | P1 | 安全 / 隐私 | 备用MOV包含非预期屏幕视频 | 已修复 / 生产双轨及媒体流实测 | WhisperPipeline.swift、AudioOnlyRecordingAssembler.swift |
+| BUG-030 | P1 | Bug / 数据完整性 | 正常退出不保护录音/处理 | 已修复 / 原生及故障回归 | MeetingApplicationDelegate.swift、SessionRepository.swift |
+| BUG-031 | P2 | Bug | 本地待办截止日期被截短 | 已修复 / 有效反例、原生UI及导出 | MeetingStore.swift / dueText |
+| UX-009 | P2 | UX / Bug | 导入残留录音权限警告 | 已修复 / 未授权隔离App导入实测 | MeetingStore.swift / importAudio |
 
 ## 项目结构、风险与适用范围
 
@@ -99,7 +103,7 @@ OWASP检查按原生桌面边界应用：认证/会话是第三方模型凭据�
 
 性能以原生I/O、列表构建、进程资源与请求次数衡量，Web LCP/CLS不适用于该界面。100会议×300段、查询最后一条20次：**1.197790秒→0.013592秒（约88.1倍）**，不是整App或首屏快88倍。Lazy列表已用1000段AX和首尾滚动验证；0.11.6补20.7秒Time Profiler采样，potential-hangs为0条（250ms阈值），AX访问参与测量。未测FPS/峰值内存。5万段连续3次事务的最大MainActor调度间隔同步617ms、后台7.6ms；总平均事务耗时相近，不能等同单次耗时或整App性能。
 
-AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和356项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。
+AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和356项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。最新371项回归、本机实际音频及性能测量见acceptance报告。
 
 ## 本轮新增确认缺陷
 
@@ -116,15 +120,17 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 | 验证 | 结果 | 证据 |
 |---|---|---|
-| Swift全量 | 356项，1项云端E2E跳过，0失败；warnings-as-errors | editing/full-tests-final.log |
+| Swift全量 | 371项，1项真实云端E2E跳过，0失败；warnings-as-errors | acceptance/swift-final.log |
 | Python指标 | 28项通过 | upgrade-python-quality.log |
 | Python凭据 | 5项mock通过 | upgrade-python-credentials.log |
-| Python安装与来源 | 5项安装故障、7项来源验证；与指标/凭据共45项通过 | editing/python-tests-final.log |
-| 合成质量门禁 | 7个case与预期一致，含已知退化反例 | editing/quality-final.log |
+| Python安装与来源 | 5项安装故障、7项来源验证；与指标/凭据共45项通过 | acceptance/python-final.log |
+| 合成质量门禁 | 7个case与预期一致，含已知退化反例 | acceptance/quality-final.log |
 | 合成原生界面 | 0.11.2：草稿、owner、双页过期提示、旧全文、1000段首尾AX、工具栏、浅深色；0.11.4补验准备、取消、再次开始、重开恢复；加载页截图未捕获 | upgrade-ui-observations.md与ui-final/证据 |
-| 内置真实引擎 | 官方锁定引擎GPU/CPU加载退出0；JSON可解析，599秒offset保持绝对时间 | editing/runtime-smoke-final.log |
-| 发行产物 | 构建、签名、RPATH/依赖/许可、官方来源/打包哈希、复制/解压后验签通过 | editing/package-final.log / zip-final.log / extracted-audit-final.log |
+| 内置真实引擎 | 官方锁定引擎GPU/CPU加载退出0；JSON可解析，599秒offset保持绝对时间 | acceptance/runtime-smoke-final.log |
+| 发行产物 | 构建、签名、RPATH/依赖/许可、官方来源/打包哈希、复制/解压后验签通过 | acceptance/package-final.log / zip-final.log / extracted-audit-final.log |
 | 合成保存与原生采样 | 1千/1万/5万段调度基准；1000段原生采样20.7秒、无250ms hang记录 | lifecycle/persistence-benchmark.json、ui-observations.md |
+| 本机实际录音/TTS | 双轨27秒ready、全音频；长TTS8段本地整理/播放/原生导出通过 | acceptance/native-capture-final.json、synthetic-pipeline.json |
+| 长文性能/跨页 | 5万句45秒0条>250ms hang；1501句跨页草稿/键盘保存/全量导出通过 | acceptance/profile-after.json、pagination-export.json |
 | 基线对照 | 原290测试与前四批故障取证 | baseline-swift-test.log / batch-01至04-repro.log |
 
 引擎烟测还检出了静音幻觉：直接调用small模型会把全零音频转成虚构文字。App单路/双路数字静音门禁现已补齐，低于原-40dB阈值的有效信号保留；这是App入口防护，不是模型准确率证明。复杂噪声、轻声真实会议、方言/重叠讲话需要另做VAD与质量评测。
@@ -145,7 +151,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 | 顺序 | 工作 | 关联问题 | 执行者 / 验收 |
 |---|---|---|---|
-| 1 | 实机录音矩阵：首次授权、拒麦克风、系统声+耳机、设备拔插、超时停止、快速开始/停止、处理取消重开 | BUG-005/006/007/013/014、UX-001/004 | QA+全栈；合成双声源标记对齐MOV/双轨，故障即时提示且原件保留 |
+| 1 | 实机录音矩阵：首次授权、拒麦克风、系统声+耳机、设备拔插、超时停止、快速开始/停止、处理取消重开 | BUG-005/006/007/013/014、UX-001/004 | QA+全栈；合成双声源标记对齐WAV/双轨，故障即时提示且原件保留 |
 | 2 | VoiceOver与键盘全流程，长文时间锚、编辑保存/取消、最小1060×660窗口，动态字体/高对比 | UX-005/006、VERIFY-UX-001、PERF-002 | QA+UX；实际朗读/焦点可达，不能只看AX树 |
 | 3 | 历史诊断清理已实施；验收失败提示与旧导出/外部备份边界 | SEC-004 | 安全+全栈；合成旧回显字段在UI/导出/存储均无假Key，业务正文不改 |
 | 4 | 首次加载/修补和导入已后台执行；后续按测量迁移小文件保存，扩展磁盘满回归 | ARCH-001 | 架构+全栈；UI可取消、事务顺序可证、旧结果不可被并发写覆盖 |
@@ -173,7 +179,8 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 - [x] 不同端口307目标零请求；无结束SSE标partial；普通JSON一次请求；超大响应拒绝。
 - [x] 假服务回显Key不进入新保存/导出；凭据mock按来源绑定；安全安装5种临时故障场景。
 - [x] 原生1000段首尾AX、工具栏名称、浅深色截图；最终包签名/路径/许可审计。
-- [ ] 真实音源与权限/设备故障、MOV与双轨绝对偏移、长录音GPU与精度。
+- [x] 本机默认音源、已有权限短双轨录音、正常停止/转写、source纯音频且原CAF保留。
+- [ ] 首次/拒绝/撤销权限、设备故障、多声源绝对偏移、长录音GPU与精度。
 - [ ] VoiceOver完整朗读/焦点路径、macOS15、真实云端弱网与HTTPS来源矩阵。
 - [x] 历史诊断迁移、幂等、清理写入失败安全展示；业务正文不改。
 - [x] 官方引擎源码、配置、模型哈希锁定；OSV与公开advisory查询成功并保留结果。
@@ -189,7 +196,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 源码位于当前独立工作树，分支codex/audit-hardening；本地提交与源码快照可回滚，GitHub未推送、未发布。升级包是本机PM Studio Signing证书签名的审查候选构建，不是Developer ID公证发行包。
 
-最新一轮0.11.7/build27已安装并原生启动，3场会议24文件（291314048字节）与全部JSON字段完全一致；备份 `/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-153740` 包含0.11.6 App和完整私有数据。详情见editing/install-final.json，新稳定交付见.review-dist/editing-delivery-location.txt。0.11.6此前锁屏待验的启动也已补齐，见editing/startup-0.11.6.json。
+最新一轮0.11.9/build29已安装并原生启动；实际录音测试会话已移入私有备份后，原3场会议24文件（291314048字节）与全部JSON字段完全一致。备份 `/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-163850` 包含0.11.8 App和完整私有数据；0.11.7回滚备份在20261006-162039。详情见acceptance/install-final.json，新稳定交付见.review-dist/acceptance-delivery-location.txt。历史0.11.7安装见editing/install-final.json。0.11.6此前锁屏待验的启动也已补齐，见editing/startup-0.11.6.json。
 
 此前0.11.6/build26的安装与备份核对见lifecycle/install-final.json，稳定交付路径见.review-dist/lifecycle-delivery-location.txt；全部JSON字段与其他文件逐一核对，具体数量按安装时实际数据。详细问题表、回滚和验收边界见[0.11.6追加报告](lifecycle/review-and-upgrade.md)。
 
@@ -1130,3 +1137,79 @@ BUG-029的完整12字段表、BUG-011取消整理收尾、BUG-028导入快照保
 ## 后台人工编辑补齐
 
 人工保存后台化、失败恢复、正常退出守卫、终态事务名称保护，以及356项回归和本轮原生验收详情见[0.11.7追加报告](editing/review-and-upgrade.md)。本轮补齐既有ARCH-001与BUG-028/029，累计数量仍为48项。ARCH-001尚保留草稿/初始保存及终态的小文件同步I/O，不宣称全架构重构完成。
+
+## 0.11.9追加问题详情
+
+## 新增P1：优先修复并已验收
+
+### SEC-007：备用录音包含非预期屏幕视频
+
+| 字段 | 内容 |
+|---|---|
+| ID | SEC-007 |
+| 类型 | 安全 / 隐私 |
+| 严重级别 | P1 严重 |
+| 置信度 | 高 |
+| 位置 | 修复前WhisperPipeline.swift / MixedRecordingSession的SCRecordingOutput；当前WhisperPipeline.swift:390、AudioOnlyRecordingAssembler.swift:6、SessionStorage.swift:276 |
+| 问题描述 | “会议录音”的备用source.mov同时保存屏幕视频，可能把其他窗口内容带入原件。 |
+| 证据 | native-capture-before-audio-only.json：实际54秒备用MOV具有AAC音频和H264视频流；代码使用display过滤器与SCRecordingOutput。没有查看视频内容或证明凭据已泄漏。 |
+| 影响 | 分享或留存原录音时可能包含未预期屏幕内容，超出音频转写目的。 |
+| 复现步骤 | 1. 修复前版本在已有系统/麦克风权限下采集。2. 正常结束。3. ffprobe检查source.mov，存在video流。仅在受控合成画面下复现。 |
+| 建议修复 | 已移除SCRecordingOutput，仅接audio/microphone；设备停止后排空样本队列并关闭CAF，以16384帧块后台混音为16k单声道source.wav，成功关闭后原子替换；取消owner仍等待独立收尾。保留原CAF和旧MOV，不擅自清除历史数据。 |
+| 验证方式 | AudioOnlyRecordingAssemblerTests验证时间补零、不同尾长、48k归一化、失败不改旧source、取消仍保存；最终生产录音ffprobe确认所有媒体只有audio，CAF存在且无MOV；旧MOV分享前检查并提取音频。 |
+| 是否 AI 生成典型问题 | 不确定；缺少输出媒体范围验证的模式符合“表面可用”风险，不能证明作者身份。 |
+
+### BUG-030：正常退出不保护录音和处理
+
+| 字段 | 内容 |
+|---|---|
+| ID | BUG-030 |
+| 类型 | Bug / 数据完整性 |
+| 严重级别 | P1 严重 |
+| 置信度 | 高 |
+| 位置 | MeetingApplicationDelegate.swift:7 / applicationShouldTerminate |
+| 问题描述 | 旧退出守卫只保护编辑保存/删除，录音准备、活动录音及转写整理仍可正常退出，打断设备与终态写盘。 |
+| 证据 | 修复前delegate未检查isRecording/isPreparingRecording/isProcessing；BackgroundLifecycleTests.testActiveCaptureAndProcessingRefuseNormalQuit验证这些分支；隔离准备/处理及生产活动录音⌘Q实测被阻止。 |
+| 影响 | 用户按⌘Q可能留下不完整录音或未完成状态，核心流程中断；强制结束及系统断电仍不受正常退出守卫保证。 |
+| 复现步骤 | 1. 旧版开始录音或处理。2. 按⌘Q。3. 应用退出；使用合成夹具验证，避免损害真实会议。 |
+| 建议修复 | 已增加准备/采集/处理terminateCancel，提示停止录音或取消处理并等待保存；剩余草稿/status/retry/失败终态迁入SessionRepository，终态提交后才释放占用，避免取消过早允许退出。 |
+| 验证方式 | 5项BackgroundLifecycleTests覆盖草稿提交前取消、导入取消、retry保全部manifest、恢复占用/保重命名、退出守卫；正常空闲⌘Q可退出。 |
+| 是否 AI 生成典型问题 | 不确定 |
+
+## 新增P2：功能与体验
+
+### BUG-031：本地待办截止日期被截短
+
+| 字段 | 内容 |
+|---|---|
+| ID | BUG-031 |
+| 类型 | Bug |
+| 严重级别 | P2 一般 |
+| 置信度 | 高 |
+| 位置 | MeetingStore.swift:2391 / MeetingAnalysisBuilder.dueText |
+| 问题描述 | 逐字稿明确“下周三”，本地整理仅保存“下周”；具体日期后的时段也被丢失。 |
+| 证据 | export-before-deadline.md与deadline-repro.log：有效3测试7断言失败；当前export-final.md待办保留“下周三”。 |
+| 影响 | 待办时间精度降低，用户可能错过约定时间。 |
+| 复现步骤 | 1. 输入达到素材门禁的合成逐字稿，含“约定交付日期是下周三”。2. 使用本地保守整理。3. 检查dueText及Markdown。 |
+| 建议修复 | 已先匹配完整年月日/具体星期，再匹配相对日期，并保留上午/下午/几点/半等时段；保留原文相对表述，不凭空转换实际日期。 |
+| 验证方式 | LocalActionDeadlineTests三项验证具体星期/时间、年月日/相对日时段、无截止日期不编造；最终原生UI和Markdown显示下周三。 |
+| 是否 AI 生成典型问题 | 不确定 |
+
+### UX-009：导入后残留录音权限警告
+
+| 字段 | 内容 |
+|---|---|
+| ID | UX-009 |
+| 类型 | UX / Bug |
+| 严重级别 | P2 一般 |
+| 置信度 | 高 |
+| 位置 | MeetingStore.swift / importAudio |
+| 问题描述 | 系统采集未授权时尝试录音留下captureBlockedNotice，转而导入音频后仍显示该录音警告。 |
+| 证据 | 独立Device App权限preflight及后续原生导入路径；synthetic-pipeline.json记录import_clears_previous_capture_permission_notice=true；importAudio现清空旧notice。 |
+| 影响 | 导入用户被无关警告干扰，误以为已导入会议处理失败。 |
+| 复现步骤 | 1. 无屏幕采集权限尝试录音。2. 改为导入已有音频。3. 检查导入结果和警告。 |
+| 建议修复 | 已在开始导入时清除上次录音权限提示，导入错误继续用自己的失败状态显示。 |
+| 验证方式 | 独立未授权App导入短/长TTS成功，录音权限警告消失；不需要修改系统权限。 |
+| 是否 AI 生成典型问题 | 不确定 |
+
+本轮具体修复、真实验收边界与回滚见[0.11.9报告](acceptance/review-and-upgrade.md)。第二台macOS15用户确认暂无；VoiceOver、特殊设备/长时录音、真实HTTPS弱网和Developer ID公证保持待验证。

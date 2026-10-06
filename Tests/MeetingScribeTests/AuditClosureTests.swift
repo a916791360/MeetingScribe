@@ -169,11 +169,11 @@ final class AuditClosureTests: XCTestCase {
         store.startRecording()
         store.startRecording()
         store.importAudio(url: root.appendingPathComponent("unused.wav"))
-        XCTAssertEqual(creations, 1)
-        XCTAssertEqual(store.sessions.count, 1)
         XCTAssertTrue(store.isPreparingRecording)
         XCTAssertNil(store.recordingStartedAt)
         try await waitFor { recorder.startContinuation != nil }
+        XCTAssertEqual(creations, 1)
+        XCTAssertEqual(store.sessions.count, 1)
         store.deleteSession(try XCTUnwrap(store.sessions.first))
         XCTAssertEqual(store.sessions.count, 1)
         store.stopRecording()

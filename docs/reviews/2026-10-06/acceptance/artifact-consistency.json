@@ -1,0 +1,8 @@
+{
+  "version": "0.11.9",
+  "build": 29,
+  "installed_candidate_and_zip_executable_sha256": "dad8ffe07ed25231a403b2cb3ec00f1ef189faacfc9b684d5882ad8dfa5cc4e6",
+  "all_three_identical": true,
+  "text_evidence_private_title_scan_passed": true,
+  "raw_media_and_traces_excluded": true
+}

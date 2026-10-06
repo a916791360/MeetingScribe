@@ -275,7 +275,7 @@ final class SessionStorage: @unchecked Sendable {
         case .microphone:
             return "source.wav"
         case .mixed:
-            return "source.mov"
+            return "source.wav"
         case .imported:
             return "source"
         }

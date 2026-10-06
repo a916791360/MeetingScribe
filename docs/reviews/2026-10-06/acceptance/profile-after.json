@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "synthetic_only": true,
+  "phase": "after_pagination",
+  "trace_duration_seconds": 45,
+  "segment_counts": [
+    50000
+  ],
+  "rows_per_page": 500,
+  "operation": "select original tab; last page; accessibility scroll to bottom; previous page",
+  "potential_hangs_ms": [],
+  "post_trace_single_rss_kib": 179840,
+  "limitations": "AX and Instruments participated; before trace also included 10,000 segments. RSS is a post-trace single sample, not peak or leak proof; no FPS claim. Actual device/macOS identities omitted."
+}

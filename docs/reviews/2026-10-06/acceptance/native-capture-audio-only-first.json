@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "native_installed_app": "0.11.9/build29",
+  "session_status_at_probe": "ready",
+  "capture_warning_present": false,
+  "transcript_segment_count_at_probe": 2,
+  "permission_prompts_required": false,
+  "source": "production MixedRecordingSession, existing system/microphone authorization",
+  "synthetic_system_sound_played": true,
+  "microphone_environment": "not acoustically isolated; no accuracy or distinct-speaker attribution claim",
+  "audio_content_included": false,
+  "media": {
+    "source.wav": {
+      "bytes": 601422,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "18.666438",
+          "start_time": null
+        }
+      ]
+    },
+    "input.wav": {
+      "bytes": 601422,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "18.666438",
+          "start_time": null
+        }
+      ]
+    },
+    "local.wav": {
+      "bytes": 601422,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "18.666438",
+          "start_time": null
+        }
+      ]
+    },
+    "remote.wav": {
+      "bytes": 599586,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "18.609063",
+          "start_time": null
+        }
+      ]
+    }
+  },
+  "all_media_audio_only": true
+}

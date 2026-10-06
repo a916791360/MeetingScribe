@@ -162,7 +162,8 @@ final class BackgroundEditingTests: XCTestCase {
 
     @MainActor
     func testRecordingFailurePreservesUnpublishedRename() async throws {
-        try await fixture { storage, _, store, gate in
+        try await fixture { storage, _, _, gate in
+            let store = MeetingStore(storage: storage, recordingFactory: { _, _, _ in FailingEditReviewRecorder(gate: gate) }, capturePermissions: { (.granted, .granted) })
             store.startRecording()
             try await waitForGate(gate)
             let draft = try XCTUnwrap(store.sessions.first)

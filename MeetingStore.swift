@@ -297,15 +297,9 @@ final class MeetingStore: ObservableObject {
 
         // A single recording action captures both system audio and the Mac microphone.
         captureMode = .mixed
-        let draft: MeetingSession
-        do { draft = try storage.createDraftSession(captureMode: .mixed) }
-        catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription; return }
         isPreparingRecording = true
         recordingStartedAt = nil
         recordingStartFailure = nil
-        sessions.insert(draft, at: 0)
-        selectedSessionID = draft.id
-        activeSessionID = draft.id
         errorMessage = nil
         statusText = "正在准备录音..."
         processingStage = ""
@@ -313,64 +307,60 @@ final class MeetingStore: ObservableObject {
         summaryRegenerationID = nil
         savePreferences()
 
-        // 两路的落盘位置必须**在这里**交给录音会话（`local.caf` / `remote.caf`）。
-        // 2026-09-14 这里漏过：构造时只传了 `movieURL`，另外两个参数吃默认值 nil，
-        // 于是双声道整条链路静默退化成单路 —— 录出来一切正常，就是永远没有说话人标签。
-        let trackURLs = DualTrackPaths.captureURLs(in: storage.folderURL(for: draft))
-        Diagnostics.audio.notice(
-            """
-            录音会话接线：我方 \(trackURLs.local.lastPathComponent, privacy: .public)、\
-            对方 \(trackURLs.remote.lastPathComponent, privacy: .public)
-            """
-        )
-        let recorder = recordingFactory(
-            storage.sourceURL(for: draft, preferredFileName: "source.mov"),
-            trackURLs.local,
-            trackURLs.remote
-        )
-        recorder.onFailure = { [weak self] message in
-            guard let self, self.activeSessionID == draft.id else { return }
-            guard self.isRecording || self.isPreparingRecording else { return }
-            self.recordingStartFailure = SafeDiagnostics.processing(message)
-            self.errorMessage = "录音采集已中断，正在保留已有文件。"
-            self.stopRecording()
-        }
-        mixedSession = recorder
-        recordingStartTask = Task {
+        recordingStartTask = Task { [weak self] in
+            guard let self else { return }
+            var draftID: UUID?
+            var recorder: (any RecordingSession)?
             do {
-                try await recorder.start()
+                let draft = try await repository.createDraft(captureMode: .mixed)
+                draftID = draft.id
+                sessions.insert(draft, at: 0)
+                selectedSessionID = draft.id
+                activeSessionID = draft.id
                 try Task.checkCancellation()
-                guard self.activeSessionID == draft.id else { _ = try? await recorder.stop(); return }
-                await MainActor.run {
-                    self.isPreparingRecording = false
-                    self.isRecording = true
-                    self.recordingStartedAt = Date()
-                    self.statusText = "正在录音"
-                    self.updateSessionStatus(draft.id, status: .recording)
-                    self.startRecordingLimit(for: draft.id)
-                    self.recordingLevelTask = Task { [weak self] in
-                        while !Task.isCancelled {
-                            guard let self, self.isRecording, self.activeSessionID == draft.id else { return }
-                            let levels = self.mixedSession?.levels
-                            self.microphoneLevel = levels?.local ?? 0
-                            self.systemAudioLevel = levels?.remote ?? 0
-                            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-                        }
+                let trackURLs = DualTrackPaths.captureURLs(in: storage.folderURL(for: draft))
+                let capture = recordingFactory(storage.sourceURL(for: draft, preferredFileName: draft.sourceFileName), trackURLs.local, trackURLs.remote)
+                recorder = capture
+                capture.onFailure = { [weak self] message in
+                    guard let self, self.activeSessionID == draft.id else { return }
+                    guard self.isRecording || self.isPreparingRecording else { return }
+                    self.recordingStartFailure = SafeDiagnostics.processing(message)
+                    self.errorMessage = "录音采集已中断，正在保留已有文件。"
+                    self.stopRecording()
+                }
+                mixedSession = capture
+                try await capture.start()
+                try Task.checkCancellation()
+                try await updateSessionStatus(draft.id, status: .recording)
+                try Task.checkCancellation()
+                isPreparingRecording = false
+                isRecording = true
+                recordingStartedAt = Date()
+                statusText = "正在录音"
+                startRecordingLimit(for: draft.id)
+                recordingLevelTask = Task { [weak self] in
+                    while !Task.isCancelled {
+                        guard let self, self.isRecording, self.activeSessionID == draft.id else { return }
+                        let levels = self.mixedSession?.levels
+                        self.microphoneLevel = levels?.local ?? 0
+                        self.systemAudioLevel = levels?.remote ?? 0
+                        do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
                     }
                 }
             } catch {
-                let wasUserCancellation = Task.isCancelled && self.recordingStartFailure == nil
-                _ = try? await recorder.stop()
-                await MainActor.run {
-                    guard self.activeSessionID == draft.id else { return }
-                    self.isPreparingRecording = false
-                    self.failSession(draft.id,
-                        message: wasUserCancellation && self.recordingStartFailure == nil
-                            ? SafeDiagnostics.recordingPreparationCancelled
-                            : self.recordingStartFailure ?? error.localizedDescription,
-                        cancelled: wasUserCancellation && self.recordingStartFailure == nil)
+                let wasUserCancellation = Task.isCancelled && recordingStartFailure == nil
+                _ = try? await recorder?.stop()
+                if let draftID {
+                    await failSession(draftID,
+                        message: wasUserCancellation ? SafeDiagnostics.recordingPreparationCancelled : recordingStartFailure ?? error.localizedDescription,
+                        cancelled: wasUserCancellation)
+                } else {
+                    isPreparingRecording = false
+                    errorMessage = wasUserCancellation ? nil : SafeDiagnostics.processing(error.localizedDescription)
+                    statusText = wasUserCancellation ? "已取消录音准备" : errorMessage ?? "录音准备失败"
                 }
             }
+            recordingStartTask = nil
         }
     }
 
@@ -392,7 +382,6 @@ final class MeetingStore: ObservableObject {
         statusText = processingStage
         recordingLimitTask?.cancel()
         recordingLimitTask = nil
-        updateSessionStatus(sessionID, status: .processing)
 
         processingTask = Task { [weak self] in
             guard let self else { return }
@@ -403,7 +392,8 @@ final class MeetingStore: ObservableObject {
                 mixedSession = nil
                 _ = microphoneSession?.stop()
                 microphoneSession = nil
-                let session = try storage.session(with: sessionID)
+                try await updateSessionStatus(sessionID, status: .processing)
+                let session = try await repository.session(with: sessionID)
                 let sourceURL = storage.sourceURL(for: session, preferredFileName: session.sourceFileName)
                 let inputURL: URL
                 var dualTracks: DualTrackInput?
@@ -412,8 +402,12 @@ final class MeetingStore: ObservableObject {
                 case .microphone:
                     inputURL = sourceURL
                 case .mixed:
-                    inputURL = storage.inputURL(for: session, preferredFileName: "input.wav")
-                    try await transcoder.convertToWav(inputURL: sourceURL, outputURL: inputURL)
+                    if sourceURL.pathExtension.lowercased() == "wav" {
+                        inputURL = sourceURL
+                    } else {
+                        inputURL = storage.inputURL(for: session, preferredFileName: "input.wav")
+                        try await transcoder.convertToWav(inputURL: sourceURL, outputURL: inputURL)
+                    }
                     // 双声道（P2-2a）：**两路都拿到才算数**。只有一路时宁可不做标注 ——
                     // 麦克风那一路本来就混着外放出来的对方声音，只按它标"我方"，
                     // 会把对方说的话算成我方，而且读起来完全自然、永远没人发现。
@@ -435,9 +429,9 @@ final class MeetingStore: ObservableObject {
                     dualTracks: dualTracks
                 )
             } catch is CancellationError {
-                cancelFinishedProcessing(sessionID: sessionID)
+                await cancelFinishedProcessing(sessionID: sessionID)
             } catch {
-                failProcessing(sessionID: sessionID, message: error.localizedDescription)
+                await failProcessing(sessionID: sessionID, message: error.localizedDescription)
             }
         }
     }
@@ -445,57 +439,53 @@ final class MeetingStore: ObservableObject {
     func importAudio(url: URL) {
         guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
 
-        var draftID: UUID?
-        do {
-            let draft = try storage.createDraftSession(captureMode: .imported)
-            draftID = draft.id
-            sessions.insert(draft, at: 0)
-            selectedSessionID = draft.id
-            activeSessionID = draft.id
-            errorMessage = nil
-            isProcessing = true
-            processingProgress = 0
-            processingStage = "正在导入音频..."
-            statusText = "正在导入音频..."
-            summaryRegenerationID = nil
-            savePreferences()
-
-            processingTask = Task { [weak self] in
-                guard let self else { return }
-                let isSecurityScoped = url.startAccessingSecurityScopedResource()
-                defer {
-                    if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
+        captureBlockedNotice = nil
+        errorMessage = nil
+        isProcessing = true
+        processingProgress = 0
+        processingStage = "正在导入音频..."
+        statusText = processingStage
+        summaryRegenerationID = nil
+        savePreferences()
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            var draftID: UUID?
+            let isSecurityScoped = url.startAccessingSecurityScopedResource()
+            defer { if isSecurityScoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let draft = try await repository.createDraft(captureMode: .imported)
+                draftID = draft.id
+                sessions.insert(draft, at: 0)
+                selectedSessionID = draft.id
+                activeSessionID = draft.id
+                try Task.checkCancellation()
+                let copiedSource = try await Task.detached(priority: .utility) { [storage] in
+                    try storage.copyImportedAudio(url: url, into: draft)
+                }.value
+                try Task.checkCancellation()
+                let importedSession = try await repository.update(draft.id) { importedSession in
+                    importedSession.status = .processing
+                    importedSession.processingStage = "正在转换音频..."
+                    importedSession.processingProgress = 0
+                    importedSession.processingStartedAt = Date()
+                    importedSession.updatedAt = Date()
                 }
-                do {
-                    let copiedSource = try await Task.detached(priority: .utility) { [storage] in
-                        try storage.copyImportedAudio(url: url, into: draft)
-                    }.value
-                    try Task.checkCancellation()
-                    let importedSession = try await repository.update(draft.id) { importedSession in
-                        importedSession.status = .processing
-                        importedSession.processingStage = "正在转换音频..."
-                        importedSession.processingProgress = 0
-                        importedSession.processingStartedAt = Date()
-                        importedSession.updatedAt = Date()
-                    }
-                    replaceSession(importedSession)
-                    let inputURL = storage.inputURL(for: draft, preferredFileName: "input.wav")
-                    processingStage = "正在转换音频..."
-                    statusText = processingStage
-                    try await transcoder.convertToWav(inputURL: copiedSource, outputURL: inputURL)
-                    try await process(sessionID: draft.id, inputURL: inputURL, resume: false)
-                } catch is CancellationError {
-                    cancelFinishedProcessing(sessionID: draft.id)
-                } catch {
-                    failProcessing(sessionID: draft.id, message: error.localizedDescription)
+                replaceSession(importedSession)
+                let inputURL = storage.inputURL(for: draft, preferredFileName: "input.wav")
+                processingStage = "正在转换音频..."
+                statusText = processingStage
+                try await transcoder.convertToWav(inputURL: copiedSource, outputURL: inputURL)
+                try await process(sessionID: draft.id, inputURL: inputURL, resume: false)
+            } catch {
+                if let draftID {
+                    if error is CancellationError { await cancelFinishedProcessing(sessionID: draftID) }
+                    else { await failProcessing(sessionID: draftID, message: error.localizedDescription) }
+                } else {
+                    errorMessage = error is CancellationError ? nil : SafeDiagnostics.processing(error.localizedDescription)
+                    statusText = error is CancellationError ? "已取消导入" : errorMessage ?? "导入失败"
+                    isProcessing = false
+                    processingTask = nil
                 }
-            }
-        } catch {
-            if let draftID {
-                failSession(draftID, message: error.localizedDescription)
-            } else {
-                errorMessage = error.localizedDescription
-                statusText = error.localizedDescription
             }
         }
     }
@@ -1083,60 +1073,58 @@ final class MeetingStore: ObservableObject {
             return
         }
 
-        var resetSession: MeetingSession
-        do { resetSession = try storage.session(with: session.id) }
-        catch { errorMessage = error.localizedDescription; return }
-        resetSession.processingRetainsPreviousResults = !resetSession.transcriptText.isEmpty || !resetSession.transcriptSegments.isEmpty
-        resetSession.status = .processing
-        resetSession.updatedAt = Date()
-        resetSession.inputAudioFileName = inputURL.lastPathComponent
-        resetSession.errorMessage = nil
-        resetSession.processingProgress = 0
-        resetSession.processingStage = "准备重新处理"
-        resetSession.processingStartedAt = nil
-        resetSession.processingCompletedChunks = 0
-        resetSession.processingTotalChunks = nil
-        resetSession.processingNextOffset = 0
-        resetSession.processingChunkStartedAt = nil
-        resetSession.dualTrackCheckpoint = nil
-        resetSession.singleTrackCheckpoint = nil
-
-        do {
-            try storage.save(resetSession)
-            replaceSession(resetSession)
-            selectedSessionID = resetSession.id
-            activeSessionID = resetSession.id
-            isProcessing = true
-            processingProgress = 0
-            processingStage = "准备重新处理"
-            statusText = "准备重新处理..."
-            errorMessage = nil
-            summaryRegenerationID = nil
-
-            processingTask = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    var preparedURL = inputURL
-                    if preparedURL.pathExtension.lowercased() != "wav" {
-                        preparedURL = storage.inputURL(for: resetSession, preferredFileName: "input.wav")
-                        try await transcoder.convertToWav(inputURL: inputURL, outputURL: preparedURL)
-                    }
-                    try Task.checkCancellation()
-                    try await process(
-                        sessionID: resetSession.id,
-                        inputURL: preparedURL,
-                        resume: false,
-                        dualTracks: resolvedDualTracks(for: resetSession)
-                    )
-                } catch is CancellationError {
-                    cancelFinishedProcessing(sessionID: resetSession.id)
-                } catch {
-                    failProcessing(sessionID: resetSession.id, message: error.localizedDescription)
+        selectedSessionID = session.id
+        activeSessionID = session.id
+        isProcessing = true
+        processingProgress = 0
+        processingStage = "准备重新处理"
+        statusText = "准备重新处理..."
+        errorMessage = nil
+        summaryRegenerationID = nil
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            var didReset = false
+            do {
+                let resetSession = try await repository.update(session.id) { current in
+                    current.processingRetainsPreviousResults = !current.transcriptText.isEmpty || !current.transcriptSegments.isEmpty
+                    current.status = .processing
+                    current.updatedAt = Date()
+                    current.inputAudioFileName = inputURL.lastPathComponent
+                    current.errorMessage = nil
+                    current.processingProgress = 0
+                    current.processingStage = "准备重新处理"
+                    current.processingStartedAt = nil
+                    current.processingCompletedChunks = 0
+                    current.processingTotalChunks = nil
+                    current.processingNextOffset = 0
+                    current.processingChunkStartedAt = nil
+                    current.dualTrackCheckpoint = nil
+                    current.singleTrackCheckpoint = nil
+                }
+                didReset = true
+                replaceSession(resetSession)
+                try Task.checkCancellation()
+                var preparedURL = inputURL
+                if preparedURL.pathExtension.lowercased() != "wav" {
+                    preparedURL = storage.inputURL(for: resetSession, preferredFileName: "input.wav")
+                    try await transcoder.convertToWav(inputURL: inputURL, outputURL: preparedURL)
+                }
+                try Task.checkCancellation()
+                try await process(sessionID: resetSession.id, inputURL: preparedURL, resume: false,
+                                  dualTracks: resolvedDualTracks(for: resetSession))
+            } catch {
+                if didReset {
+                    if error is CancellationError { await cancelFinishedProcessing(sessionID: session.id) }
+                    else { await failProcessing(sessionID: session.id, message: error.localizedDescription) }
+                } else {
+                    // No reset was committed: leave old checkpoints and results untouched.
+                    errorMessage = error is CancellationError ? nil : SafeDiagnostics.processing(error.localizedDescription)
+                    statusText = error is CancellationError ? "已取消重新处理" : errorMessage ?? "重新处理失败"
+                    activeSessionID = nil
+                    isProcessing = false
+                    processingTask = nil
                 }
             }
-        } catch {
-            errorMessage = error.localizedDescription
-            statusText = error.localizedDescription
         }
     }
 
@@ -1485,14 +1473,14 @@ final class MeetingStore: ObservableObject {
         }
     }
 
-    private func failSession(_ sessionID: UUID, message: String, cancelled: Bool = false) {
+    private func failSession(_ sessionID: UUID, message: String, cancelled: Bool = false) async {
         guard activeSessionID == sessionID else { return }
         if var session = sessions.first(where: { $0.id == sessionID }) {
             session.status = .failed
             session.errorMessage = message
             session.updatedAt = Date()
             session.processingStage = cancelled ? "已取消录音准备" : "处理失败"
-            persistRecoveryState(&session)
+            await persistRecoveryState(&session)
             replaceSession(session)
         }
         if storageWriteNotice == nil { errorMessage = cancelled ? nil : SafeDiagnostics.processing(message) }
@@ -1510,14 +1498,14 @@ final class MeetingStore: ObservableObject {
         recordingLimitTask = nil
     }
 
-    private func failProcessing(sessionID: UUID, message: String) {
+    private func failProcessing(sessionID: UUID, message: String) async {
         guard activeSessionID == sessionID else { return }
         if var session = sessions.first(where: { $0.id == sessionID }) {
             session.status = .failed
             session.errorMessage = message
             session.updatedAt = Date()
             session.processingStage = "处理失败"
-            persistRecoveryState(&session)
+            await persistRecoveryState(&session)
             replaceSession(session)
         }
         if storageWriteNotice == nil { errorMessage = SafeDiagnostics.processing(message) }
@@ -1533,14 +1521,14 @@ final class MeetingStore: ObservableObject {
         processingTask = nil
     }
 
-    private func cancelFinishedProcessing(sessionID: UUID) {
+    private func cancelFinishedProcessing(sessionID: UUID) async {
         guard activeSessionID == sessionID else { return }
         if var session = sessions.first(where: { $0.id == sessionID }) {
             session.status = .failed
             session.errorMessage = "已取消转写，已保留已经完成的内容，可以重新处理。"
             session.processingStage = "已取消"
             session.updatedAt = Date()
-            persistRecoveryState(&session)
+            await persistRecoveryState(&session)
             replaceSession(session)
         }
         errorMessage = storageWriteNotice
@@ -1573,7 +1561,8 @@ final class MeetingStore: ObservableObject {
         guard let session = sessions.first(where: { $0.status == .processing }) else { return }
         activeSessionID = session.id
         guard let inputURL = processingInputURL(for: session) else {
-            failProcessing(sessionID: session.id, message: "找不到待恢复的音频文件。")
+            isProcessing = true
+            processingTask = Task { await self.failProcessing(sessionID: session.id, message: "找不到待恢复的音频文件。") }
             return
         }
 
@@ -1603,9 +1592,9 @@ final class MeetingStore: ObservableObject {
                     dualTracks: resolvedDualTracks(for: session)
                 )
             } catch is CancellationError {
-                cancelFinishedProcessing(sessionID: session.id)
+                await cancelFinishedProcessing(sessionID: session.id)
             } catch {
-                failProcessing(sessionID: session.id, message: error.localizedDescription)
+                await failProcessing(sessionID: session.id, message: error.localizedDescription)
             }
         }
     }
@@ -1718,8 +1707,7 @@ final class MeetingStore: ObservableObject {
 
     /// 把刚录下来的两路 `.caf` 归一化成 whisper 能直接吃的 16 kHz 单声道 wav。
     ///
-    /// 换算成功后**删掉原始 `.caf`**：16 kHz 浮点单声道一小时约 230 MB，两路就是 460 MB，
-    /// 而原始录音已经完整地留在 `.mov` 里了，再留一份没有意义。
+    /// 原始CAF保留：纯音频回退是16kHz混音，不能代替原始独立音轨的音质和来源。
     private func normalizedTracks(
         from recording: MixedRecordingResult?,
         in session: MeetingSession
@@ -1753,7 +1741,6 @@ final class MeetingStore: ObservableObject {
         }
         let target = storage.inputURL(for: session, preferredFileName: name)
         try await transcoder.convertToWav(inputURL: source, outputURL: target)
-        try? FileManager.default.removeItem(at: source)
         Diagnostics.audio.notice("归一化完成 \(name, privacy: .public)")
         return target
     }
@@ -1940,28 +1927,21 @@ final class MeetingStore: ObservableObject {
         return merged.sorted { $0.start < $1.start }
     }
 
-    private func updateSessionStatus(_ sessionID: UUID, status: MeetingStatus) {
-        guard var session = sessions.first(where: { $0.id == sessionID }) else { return }
-        session.status = status
-        session.updatedAt = Date()
-        persistRecoveryState(&session)
+    private func updateSessionStatus(_ sessionID: UUID, status: MeetingStatus) async throws {
+        let session = try await repository.update(sessionID) { current in
+            current.status = status
+            current.updatedAt = Date()
+        }
         replaceSession(session)
     }
 
     @Published private(set) var storageWriteNotice: String?
     private static let storageFailureMessage = "会议状态未能保存到磁盘。请释放磁盘空间并检查目录权限；已有文件已保留，退出前请导出可见内容。"
 
-    /// Terminal/recovery transitions must still release the recorder when the disk fails.
-    /// Keep their in-memory state visible, but never claim it was durably saved.
-    private func persistRecoveryState(_ session: inout MeetingSession) {
+    /// Wait for terminal persistence even in a cancelled task before releasing the operation slot.
+    private func persistRecoveryState(_ session: inout MeetingSession) async {
         do {
-            let terminal = session
-            session = try storage.update(session.id) { current in
-                current.status = terminal.status
-                current.errorMessage = terminal.errorMessage
-                current.updatedAt = terminal.updatedAt
-                current.processingStage = terminal.processingStage
-            }
+            session = try await repository.recover(session)
             storageWriteNotice = nil
         } catch {
             storageWriteNotice = Self.storageFailureMessage
@@ -2409,17 +2389,14 @@ enum MeetingAnalysisBuilder {
     }
 
     private static func dueText(from text: String) -> String? {
-        let patterns = [
+        let time = #"(?:上午|下午|晚上|中午|早上|凌晨)(?:[0-9一二三四五六七八九十两]{1,3}[点时](?:半|[0-9一二三四五六七八九十]{1,3}分?)?)?"#
+        let dates = [
             #"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?"#,
             #"\d{1,2}月\d{1,2}日"#,
-            #"今天"#,
-            #"明天"#,
-            #"后天"#,
-            #"本周"#,
-            #"下周"#,
-            #"月底"#,
-            #"周[一二三四五六日天]"#
+            #"(?:本周|下周|这周|周|星期)[一二三四五六日天]?"#,
+            #"今天|明天|后天|月底"#
         ]
+        let patterns = dates.map { "(?:" + $0 + ")(?:" + time + ")?" }
 
         for pattern in patterns {
             if let range = text.range(of: pattern, options: .regularExpression) {

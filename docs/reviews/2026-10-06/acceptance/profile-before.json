@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "synthetic_only": true,
+  "phase": "before_pagination",
+  "trace_duration_seconds": 45,
+  "segment_counts": [
+    10000,
+    50000
+  ],
+  "operation": "select original tab; accessibility scroll to bottom",
+  "potential_hangs_ms": [
+    578.103333,
+    258.873792,
+    1576.596625,
+    1817.608391
+  ],
+  "post_trace_single_rss_kib": 1066208,
+  "limitations": "AX access and Instruments participated; single RSS is not peak or leak proof; not FPS. Actual device/macOS identities omitted."
+}

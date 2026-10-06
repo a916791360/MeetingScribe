@@ -1,0 +1,35 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Compiling MeetingScribeTests LocalActionDeadlineTests.swift
+[4/5] Emitting module MeetingScribeTests
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (2.58s)
+Test Suite 'Selected tests' started at 2026-10-06 16:23:10.436.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 16:23:10.436.
+Test Suite 'LocalActionDeadlineTests' started at 2026-10-06 16:23:10.436.
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testCalendarDateAndRelativeDayKeepTimeQualifier]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:24: error: -[MeetingScribeTests.LocalActionDeadlineTests testCalendarDateAndRelativeDayKeepTimeQualifier] : XCTAssertEqual failed: ("Optional("2026年10月9日")") is not equal to ("Optional("2026年10月9日下午三点")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:24: error: -[MeetingScribeTests.LocalActionDeadlineTests testCalendarDateAndRelativeDayKeepTimeQualifier] : XCTAssertEqual failed: ("Optional("明天")") is not equal to ("Optional("明天上午")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:24: error: -[MeetingScribeTests.LocalActionDeadlineTests testCalendarDateAndRelativeDayKeepTimeQualifier] : XCTAssertEqual failed: ("Optional("后天")") is not equal to ("Optional("后天中午")")
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testCalendarDateAndRelativeDayKeepTimeQualifier]' failed (0.071 seconds).
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testMissingDeadlineIsNotInvented]' started.
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testMissingDeadlineIsNotInvented]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:16: error: -[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek] : XCTAssertEqual failed: ("Optional("下周")") is not equal to ("Optional("下周三")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:16: error: -[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek] : XCTAssertEqual failed: ("Optional("本周")") is not equal to ("Optional("本周五下午")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:16: error: -[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek] : XCTAssertEqual failed: ("Optional("周五")") is not equal to ("Optional("周五下午三点")")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/LocalActionDeadlineTests.swift:16: error: -[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek] : XCTAssertEqual failed: ("nil") is not equal to ("Optional("星期一上午十点半")")
+Test Case '-[MeetingScribeTests.LocalActionDeadlineTests testSpecificWeekdayAndTimeAreNotShortenedToWeek]' failed (0.003 seconds).
+Test Suite 'LocalActionDeadlineTests' failed at 2026-10-06 16:23:10.510.
+	 Executed 3 tests, with 7 failures (0 unexpected) in 0.074 (0.074) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 16:23:10.510.
+	 Executed 3 tests, with 7 failures (0 unexpected) in 0.074 (0.074) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 16:23:10.510.
+	 Executed 3 tests, with 7 failures (0 unexpected) in 0.074 (0.075) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

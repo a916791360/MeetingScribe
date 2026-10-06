@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "native_installed_app": "0.11.9/build29",
+  "session_status": "ready",
+  "capture_warning_present": false,
+  "permission_prompts_required": false,
+  "synthetic_system_sound_played": true,
+  "microphone_environment": "not acoustically isolated; content retained only in private backup",
+  "audio_content_included": false,
+  "all_media_audio_only": true,
+  "original_caf_retained": true,
+  "redundant_input_copy_absent": true,
+  "original_24_files_unchanged": true,
+  "media": {
+    "remote.caf": {
+      "bytes": 1748252,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_f32le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "27.252437"
+        }
+      ]
+    },
+    "remote.wav": {
+      "bytes": 876174,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "27.252437"
+        }
+      ]
+    },
+    "source.wav": {
+      "bytes": 879534,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "27.357437"
+        }
+      ]
+    },
+    "local.caf": {
+      "bytes": 5256720,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_f32le",
+          "sample_rate": "48000",
+          "channels": 1,
+          "duration": "27.357417"
+        }
+      ]
+    },
+    "local.wav": {
+      "bytes": 879534,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "pcm_s16le",
+          "sample_rate": "16000",
+          "channels": 1,
+          "duration": "27.357437"
+        }
+      ]
+    }
+  }
+}

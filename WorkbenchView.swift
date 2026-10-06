@@ -607,6 +607,8 @@ struct WorkbenchSessionWorkspace: View {
     /// 用**递增计数**而不是 `Bool`：连点两次要滚两次，`Bool` 第二次不触发（值没变），
     /// 表现为「按钮偶尔失灵」——而用户会以为是自己没点到。
     @State private var scrollToPlayheadTick = 0
+    @State private var transcriptPageIndex = 0
+    @State private var transcriptScrollTarget: UUID?
 
     var body: some View {
         Group {
@@ -685,7 +687,20 @@ struct WorkbenchSessionWorkspace: View {
                                 onSelectTab: { selectedTab = $0 },
                                 onJump: playerJump,
                                 playheadSegmentID: playheadSegmentID,
-                                onScrollToPlayhead: { scrollToPlayheadTick += 1 }
+                                onScrollToPlayhead: {
+                                    guard let id = playheadSegmentID,
+                                          let index = session.transcriptSegments.firstIndex(where: { $0.id == id }) else { return }
+                                    transcriptPageIndex = TranscriptPage.index(containing: index, total: session.transcriptSegments.count)
+                                    transcriptScrollTarget = id
+                                    scrollToPlayheadTick += 1
+                                },
+                                transcriptPageIndex: transcriptPageIndex,
+                                onSelectTranscriptPage: { page in
+                                    let range = TranscriptPage(total: session.transcriptSegments.count, requestedIndex: page).range
+                                    transcriptPageIndex = page
+                                    transcriptScrollTarget = range.first.map { session.transcriptSegments[$0].id }
+                                    scrollToPlayheadTick += 1
+                                }
                             )
                             .frame(maxWidth: AppTheme.contentColumn, alignment: .leading)
                             .padding(.top, AppTheme.space3)
@@ -700,9 +715,12 @@ struct WorkbenchSessionWorkspace: View {
                         // 往上翻着看前面某一句；一场一小时的会上千段，这种"拽回去"
                         // 会反复发生，是那种让人最后干脆不用这一页的问题。
                         .onChange(of: scrollToPlayheadTick) { _, _ in
-                            guard let id = playheadSegmentID else { return }
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                proxy.scrollTo(id, anchor: .center)
+                            guard let id = transcriptScrollTarget else { return }
+                            // The destination page must be rendered before its row can be found.
+                            Task { @MainActor in
+                                await Task.yield()
+                                guard transcriptScrollTarget == id else { return }
+                                proxy.scrollTo(id, anchor: .top)
                             }
                         }
                     }
@@ -724,6 +742,8 @@ struct WorkbenchSessionWorkspace: View {
         .onDisappear { audioPlayer.stop() }
         .onChange(of: session.id) { _, _ in
             selectedTab = .overview
+            transcriptPageIndex = 0
+            transcriptScrollTarget = nil
             playheadSegmentID = nil
             audioPlayer.load(url: store.audioURL(for: session))
         }
@@ -962,6 +982,8 @@ struct WorkbenchResultDocument: View {
     let playheadSegmentID: UUID?
     /// 「跳到当前句」。只有原文页会调它。
     let onScrollToPlayhead: (() -> Void)?
+    var transcriptPageIndex: Int = 0
+    var onSelectTranscriptPage: ((Int) -> Void)?
 
     var body: some View {
         switch tab {
@@ -970,7 +992,9 @@ struct WorkbenchResultDocument: View {
                 session: session,
                 onJump: onJump,
                 playheadSegmentID: playheadSegmentID,
-                onScrollToPlayhead: onScrollToPlayhead
+                onScrollToPlayhead: onScrollToPlayhead,
+                pageIndex: transcriptPageIndex,
+                onSelectPage: onSelectTranscriptPage
             )
         case .overview:
             WorkbenchOverviewDocument(session: session, onSelectTab: onSelectTab, onJump: onJump)
@@ -1610,6 +1634,9 @@ struct WorkbenchOriginalDocument: View {
     /// 在"往上翻着看前面"的场景里是纯粹的干扰。给一个按钮，就把"要不要跟"
     /// 交回给用户，而且这个按钮本身就是"我在哪儿"的提示。
     let onScrollToPlayhead: (() -> Void)?
+    var pageIndex: Int = 0
+    var onSelectPage: ((Int) -> Void)?
+    private var page: TranscriptPage { TranscriptPage(total: session.transcriptSegments.count, requestedIndex: pageIndex) }
     /// 就地编辑要**写回盘**（`updateTranscriptSegment`），所以这一页需要 store；
     /// 注入链和纪要页一样，由上层给。
     @EnvironmentObject private var store: MeetingStore
@@ -1635,8 +1662,10 @@ struct WorkbenchOriginalDocument: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
+                if page.count > 1 { pageNavigation }
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(session.transcriptSegments.enumerated()), id: \.element.id) { index, segment in
+                    ForEach(page.range, id: \.self) { index in
+                        let segment = session.transcriptSegments[index]
                         WorkbenchTranscriptDocumentRow(
                             segment: segment,
                             isEditing: editingSegmentID == segment.id,
@@ -1650,15 +1679,30 @@ struct WorkbenchOriginalDocument: View {
                         // 「跳到当前句」靠它定位。`ForEach` 的 id 只管 diff，
                         // `ScrollViewReader.scrollTo` 要的是这条 `.id()`。
                         .id(segment.id)
-                        if index != session.transcriptSegments.count - 1 {
+                        if index != page.range.upperBound - 1 {
                             // 三页共用同一条分隔线画法（`WorkbenchDocumentRowDivider`），
                             // 起笔线也同一个 —— 原来这里是手写的一份,现在收归一处。
                             WorkbenchDocumentRowDivider()
                         }
                     }
                 }
+                if page.count > 1 { pageNavigation }
             }
         }
+    }
+
+    private var pageNavigation: some View {
+        HStack(spacing: AppTheme.space2) {
+            Text("第 \(page.range.lowerBound + 1)–\(page.range.upperBound) 句，共 \(session.transcriptSegments.count) 句")
+                .font(.caption).foregroundStyle(AppTheme.muted).monospacedDigit()
+            Spacer(minLength: AppTheme.space2)
+            Button("首段") { onSelectPage?(0) }.disabled(page.index == 0)
+            Button("上一段") { onSelectPage?(page.index - 1) }.disabled(page.index == 0)
+            Button("下一段") { onSelectPage?(page.index + 1) }.disabled(page.index == page.count - 1)
+            Button("末段") { onSelectPage?(page.count - 1) }.disabled(page.index == page.count - 1)
+        }
+        .disabled(store.isSavingSessions)
+        .help("分段阅读长逐字稿；复制和导出仍包含全部内容")
     }
 
     /// 页眉：一行「日期 · 这一页是什么」的眉标，不是标题 ——

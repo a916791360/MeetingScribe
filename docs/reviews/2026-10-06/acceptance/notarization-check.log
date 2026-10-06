@@ -1,0 +1,10 @@
+=== 阶段 5-2 前置条件体检 ===
+  ❌ 没找到 Developer ID Application 证书（当前只能是本机自签，别人装不上）
+     → Xcode → Settings → Accounts → Manage Certificates → 加一张 Developer ID Application
+  ❌ 钥匙串里没有公证凭据「MeetingScribeNotary」（或凭据无效）
+     → xcrun notarytool store-credentials "MeetingScribeNotary" --apple-id <邮箱> --team-id <TeamID> --password <App专用密码>
+  ✅ entitlements：Packaging/MeetingScribe.entitlements
+  ✅ notarytool 1.1.2 (41)
+  ✅ 图标资源齐全
+
+前置条件未满足，停止。上面标 ❌ 的每一项都要先解决。

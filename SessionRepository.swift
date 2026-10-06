@@ -5,10 +5,33 @@ import Foundation
 actor SessionRepository {
     private let storage: SessionStorage
     private let beforeMutation: @Sendable () async throws -> Void
+    private let beforeRecovery: @Sendable () async -> Void
 
-    init(storage: SessionStorage, beforeMutation: @escaping @Sendable () async throws -> Void = {}) {
+    init(storage: SessionStorage, beforeMutation: @escaping @Sendable () async throws -> Void = {}, beforeRecovery: @escaping @Sendable () async -> Void = {}) {
         self.storage = storage
         self.beforeMutation = beforeMutation
+        self.beforeRecovery = beforeRecovery
+    }
+
+    func createDraft(captureMode: CaptureMode) async throws -> MeetingSession {
+        try Task.checkCancellation()
+        try await beforeMutation()
+        try Task.checkCancellation()
+        // Return a committed draft even if cancellation arrives during the write.
+        // The caller owns its ID and must persist the terminal state before releasing its slot.
+        return try storage.createDraftSession(captureMode: captureMode)
+    }
+
+    /// Cancellation must not skip the durable terminal transition. This only updates
+    /// lifecycle fields in the latest manifest, preserving concurrent edits/checkpoints.
+    func recover(_ terminal: MeetingSession) async throws -> MeetingSession {
+        await beforeRecovery()
+        return try storage.update(terminal.id) { current in
+            current.status = terminal.status
+            current.errorMessage = terminal.errorMessage
+            current.updatedAt = terminal.updatedAt
+            current.processingStage = terminal.processingStage
+        }
     }
 
     func session(with id: UUID) throws -> MeetingSession {

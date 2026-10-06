@@ -94,3 +94,24 @@ enum WorkbenchContentBlock: String, CaseIterable, Hashable {
         }
     }
 }
+
+/// Bound rendered rows for very long imports; all source segments remain available
+/// to playback, editing, copying and export. Page boundaries never drop a segment.
+struct TranscriptPage: Equatable {
+    static let size = 500
+    let index: Int
+    let count: Int
+    let range: Range<Int>
+
+    init(total: Int, requestedIndex: Int) {
+        let total = max(0, total)
+        count = total <= 1000 ? 1 : total / Self.size + (total % Self.size == 0 ? 0 : 1)
+        index = min(max(0, requestedIndex), count - 1)
+        let start = count == 1 ? 0 : index * Self.size
+        range = start..<min(total, start + (count == 1 ? total : Self.size))
+    }
+
+    static func index(containing segmentIndex: Int, total: Int) -> Int {
+        total <= 1000 ? 0 : max(0, segmentIndex) / size
+    }
+}

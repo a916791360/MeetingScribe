@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前开发版本：`0.11.7`（本轮审查升级，本地构建；尚未发布到 GitHub）
+当前开发版本：`0.11.9`（本轮审查升级，本地构建；尚未发布到 GitHub）
 
 ## 目标
 
@@ -16,6 +16,16 @@
 - 点时间锚回放那一段（速览 / 纪要 / 原文三页都能跳）；播放时当前句高亮
 - 一键导出 Markdown / 复制全文，**带走之后还能回原文核对**
 - 录音和逐字稿在本机保存；选择云端整理时，逐字稿会发送到你配置的服务商，选择本地整理则不发送。导出与复制由你手动触发
+
+## 录音文件与隐私
+
+0.11.9起只把系统音频和麦克风样本写入文件，不保存屏幕视频。`source.wav`是16kHz单声道混音，原始独立音轨`local.caf` / `remote.caf`保留供核对与恢复，`local.wav` / `remote.wav`用于转写。系统音频采集仍需要macOS的屏幕与系统音频录制授权。
+
+旧版本的`source.mov`可能包含屏幕视频；升级不会删除或改写旧原件。分享旧录音前请检查媒体内容，或先提取为纯音频文件。
+
+超过1000句的原文分段阅读，每页最多500句；首段、末段和相邻段导航可访问全部原文，“跳到当前句”会切到对应段。复制和导出仍包含全部内容。
+
+录音、准备、处理、保存或删除期间，正常退出会提示先停止/取消并等待保存完成。强制结束和掉电不受此退出守卫保护。
 
 ## 总结模型
 
@@ -43,7 +53,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-0.11.7-macOS.zip
+shasum -a 256 MeetingScribe-0.11.9-macOS.zip
 ```
 
 ## 运行
@@ -187,7 +197,7 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
-本地审查版 0.11.7 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
+本地审查版 0.11.9 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
 whisper.cpp v1.9.4 提交和官方 small 模型 SHA-256。使用已有模型构建，不修改已安装 App：
 
 ```bash
@@ -202,13 +212,13 @@ App 内 `Contents/Resources/RuntimeProvenance.plist` 记录源码、模型、构
 
 
 
-### 0.11.7 后台人工保存
+### 0.11.9 后台人工保存
 
 人工校正和重命名在后台原子保存；保存成功才关闭编辑，失败保留草稿。
 保存中显示明确状态，阻止重复提交与冲突操作；正常退出会提示等待保存完成。
 录音/处理故障收尾只更新最新记录的终态字段，保留已保存的新名称。
 
-验收与回滚见 [0.11.7追加报告](docs/reviews/2026-10-06/editing/review-and-upgrade.md)。
+验收与回滚见 [0.11.9追加报告](docs/reviews/2026-10-06/editing/review-and-upgrade.md)。
 
 ### 0.11.6 后续修复
 

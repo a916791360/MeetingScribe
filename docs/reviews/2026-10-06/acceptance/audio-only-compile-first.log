@@ -1,0 +1,79 @@
+[0/1] Planning build
+Building for debugging...
+[0/8] Write sources
+[2/8] Write swift-version--58304C5D6DBC2206.txt
+[4/14] Compiling MeetingScribe MeetingStore.swift
+[5/14] Emitting module MeetingScribe
+[6/14] Compiling MeetingScribe AudioOnlyRecordingAssembler.swift
+[7/14] Compiling MeetingScribe SessionStorage.swift
+[8/14] Compiling MeetingScribe WhisperPipeline.swift
+[9/14] Compiling MeetingScribe AudioTrackRecorder.swift
+[10/18] Compiling MeetingScribe TranscriptionCheckpoint.swift
+[11/18] Compiling MeetingScribe MeetingScribeApp.swift
+[12/18] Compiling MeetingScribe SafeDiagnostics.swift
+[13/18] Compiling MeetingScribe WorkbenchView.swift
+[13/18] Write Objects.LinkFileList
+[14/18] Linking MeetingScribe
+[15/18] Applying MeetingScribe
+[17/58] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[18/58] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[19/58] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[20/58] Compiling MeetingScribeTests TranscriptPageTests.swift
+[21/58] Compiling MeetingScribeTests MeetingExportTests.swift
+[22/58] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[23/58] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[24/58] Compiling MeetingScribeTests OverviewBulletTests.swift
+[25/62] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[26/62] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[27/62] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[28/62] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[29/62] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[30/62] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[31/62] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[32/62] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[33/62] Compiling MeetingScribeTests AppAppearanceTests.swift
+[34/62] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[35/62] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[36/62] Compiling MeetingScribeTests AuditClosureTests.swift
+[37/62] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[38/62] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[39/62] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[40/62] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[41/62] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[42/62] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[43/62] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[44/62] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[45/62] Compiling MeetingScribeTests ExportWiringTests.swift
+[46/62] Compiling MeetingScribeTests GlossaryTests.swift
+[47/62] Compiling MeetingScribeTests LayoutTokenTests.swift
+[48/62] Compiling MeetingScribeTests LocalActionDeadlineTests.swift
+[49/62] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[50/62] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[51/62] Emitting module MeetingScribeTests
+[52/62] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[53/62] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[54/62] Compiling MeetingScribeTests QualityEvalTests.swift
+[55/62] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[56/62] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[57/62] Compiling MeetingScribeTests AuditNetworkTests.swift
+[58/62] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[59/62] Compiling MeetingScribeTests BackgroundEditingTests.swift
+[60/62] Compiling MeetingScribeTests BackgroundLifecycleTests.swift
+[60/62] Write Objects.LinkFileList
+[61/62] Linking MeetingScribePackageTests
+Build complete! (23.64s)
+Test Suite 'Selected tests' started at 2026-10-06 16:34:11.348.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 16:34:11.351.
+Test Suite 'MixedRecordingSessionConcurrencyTests' started at 2026-10-06 16:34:11.351.
+Test Case '-[MeetingScribeTests.MixedRecordingSessionConcurrencyTests testCaptureFailureCallbackMayArriveOffMainActorAndReportsOnlyOnce]' started.
+Test Case '-[MeetingScribeTests.MixedRecordingSessionConcurrencyTests testCaptureFailureCallbackMayArriveOffMainActorAndReportsOnlyOnce]' passed (0.004 seconds).
+Test Suite 'MixedRecordingSessionConcurrencyTests' passed at 2026-10-06 16:34:11.355.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 16:34:11.355.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 16:34:11.355.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.004 (0.007) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

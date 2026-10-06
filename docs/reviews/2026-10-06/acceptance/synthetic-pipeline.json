@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "synthetic_only": true,
+  "real_whisper_runtime_used": true,
+  "audio_seconds": 131.72525,
+  "transcript_segments": 8,
+  "state": "ready",
+  "local_summary_model": "本地保守整理",
+  "local_action_deadlines": [
+    "下周三"
+  ],
+  "reference_characters_after_alphanumeric_normalization": 455,
+  "hypothesis_characters_after_alphanumeric_normalization": 455,
+  "character_edit_distance": 23,
+  "character_error_rate_this_sample": 0.05054945054945055,
+  "exported_through_native_save_panel_before_deadline_fix": true,
+  "playback_state_advanced_in_native_ui": true,
+  "permission_preflight_blocks_ungranted_capture": true,
+  "import_clears_previous_capture_permission_notice": true,
+  "limitations": "One Ting-Ting synthetic speech sample, punctuation removed. Not real-meeting accuracy, noise robustness or speaker attribution. Homophone names were recognized incorrectly.",
+  "native_final_export_passed": true,
+  "export_preserves_deadline": true,
+  "all_transcript_segments_in_final_export": true
+}

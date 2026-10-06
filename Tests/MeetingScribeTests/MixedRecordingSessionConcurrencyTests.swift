@@ -1,43 +1,20 @@
 import Foundation
-import ScreenCaptureKit
 import XCTest
 @testable import MeetingScribe
 
-private final class UnsafeSendableBox<Value>: @unchecked Sendable {
-    let value: Value
-
-    init(_ value: Value) {
-        self.value = value
-    }
-}
-
 final class MixedRecordingSessionConcurrencyTests: XCTestCase {
-    func testRecordingStartCallbackMayArriveOffMainActor() async throws {
+    func testCaptureFailureCallbackMayArriveOffMainActorAndReportsOnlyOnce() async throws {
+        let failure = expectation(description: "Capture failure delivered on MainActor")
         let temp = FileManager.default.temporaryDirectory
-        let outputURL = temp.appendingPathComponent("MeetingScribe-delegate-test-\(UUID().uuidString).mov")
         let session = await MainActor.run {
-            MixedRecordingSession(
-                movieURL: outputURL,
-                localTrackURL: temp.appendingPathComponent("delegate-test-local-\(UUID().uuidString).caf"),
-                remoteTrackURL: temp.appendingPathComponent("delegate-test-remote-\(UUID().uuidString).caf")
-            )
+            let session = MixedRecordingSession(movieURL: temp.appendingPathComponent("delegate-\(UUID()).wav"), localTrackURL: temp.appendingPathComponent("local-\(UUID()).caf"), remoteTrackURL: temp.appendingPathComponent("remote-\(UUID()).caf"))
+            session.onFailure = { _ in MainActor.preconditionIsolated(); failure.fulfill() }
+            return session
         }
-
-        let configuration = SCRecordingOutputConfiguration()
-        configuration.outputURL = outputURL
-        configuration.outputFileType = .mov
-        let output = SCRecordingOutput(configuration: configuration, delegate: session)
-
-        let callbackCompleted = expectation(description: "ScreenCaptureKit callback completed")
-        let sessionBox = UnsafeSendableBox(session)
-        let outputBox = UnsafeSendableBox(output)
-        let expectationBox = UnsafeSendableBox(callbackCompleted)
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            sessionBox.value.recordingOutputDidStartRecording(outputBox.value)
-            expectationBox.value.fulfill()
-        }
-
-        await fulfillment(of: [callbackCompleted], timeout: 2)
+        await Task.detached {
+            session.receiveCaptureFailure(PipelineError.failedToStopCapture)
+            session.receiveCaptureFailure(PipelineError.failedToStopCapture)
+        }.value
+        await fulfillment(of: [failure], timeout: 2)
     }
 }
