@@ -1,0 +1,140 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/11] Compiling MeetingScribe TranscriptEditor.swift
+[5/11] Compiling MeetingScribe SessionRepository.swift
+[6/12] Compiling MeetingScribe MeetingScribeApp.swift
+[7/12] Emitting module MeetingScribe
+[8/12] Compiling MeetingScribe WorkbenchView.swift
+[9/12] Compiling MeetingScribe MeetingStore.swift
+[9/14] Write Objects.LinkFileList
+[10/14] Linking MeetingScribe
+[11/14] Applying MeetingScribe
+[13/26] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[14/26] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[15/27] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[16/27] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[17/27] Compiling MeetingScribeTests ExportWiringTests.swift
+[18/27] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[19/27] Compiling MeetingScribeTests AuditNetworkTests.swift
+[20/27] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[21/27] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[22/27] Compiling MeetingScribeTests AuditClosureTests.swift
+[23/27] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[24/27] Emitting module MeetingScribeTests
+[25/27] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[25/27] Write Objects.LinkFileList
+[26/27] Linking MeetingScribePackageTests
+Build complete! (6.17s)
+Test Suite 'Selected tests' started at 2026-10-06 15:28:27.706.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 15:28:27.708.
+Test Suite 'AuditDeliveryTests' started at 2026-10-06 15:28:27.708.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEditedTranscriptMarksOldMinutesStale]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEditedTranscriptMarksOldMinutesStale]' passed (0.052 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEmojiTitleFitsFilesystemByteLimit]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEmojiTitleFitsFilesystemByteLimit]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testExtremeTimestampDoesNotOverflowDuringDisplay]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testExtremeTimestampDoesNotOverflowDuringDisplay]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testLegacyTextRemainsReadableMaterial]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testLegacyTextRemainsReadableMaterial]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testPlaybackTimerDoesNotRetainOwner]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testPlaybackTimerDoesNotRetainOwner]' passed (0.166 seconds).
+Test Suite 'AuditDeliveryTests' passed at 2026-10-06 15:28:27.929.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.221 (0.221) seconds
+Test Suite 'AuditRecordingPipelineTests' started at 2026-10-06 15:28:27.929.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCancellationFinishesEvenIfCLIRejectsSIGTERM]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCancellationFinishesEvenIfCLIRejectsSIGTERM]' passed (2.858 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testChunkOwnershipPreservesTheCompleteBoundarySentence]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testChunkOwnershipPreservesTheCompleteBoundarySentence]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCleaningPreservesDifferentSpeakers]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCleaningPreservesDifferentSpeakers]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCrosstalkPreservesOppositeDecisions]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCrosstalkPreservesOppositeDecisions]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDeletionWaitsForOldTaskBeforeStartingAnother]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDeletionWaitsForOldTaskBeforeStartingAnother]' passed (1.525 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' passed (1.919 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackRecoveryInvalidatesOnlyChangedSource]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackRecoveryInvalidatesOnlyChangedSource]' passed (1.956 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackRetryRecoveryPreservesOldEditsUntilSuccess]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackRetryRecoveryPreservesOldEditsUntilSuccess]' passed (1.910 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testFailedTrackIsRejectedForDualTranscription]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testFailedTrackIsRejectedForDualTranscription]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testIndependentRepeatsBySameSpeakerArePreserved]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testIndependentRepeatsBySameSpeakerArePreserved]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testRunawayCLILogIsTerminatedAndDiagnosticIsBounded]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testRunawayCLILogIsTerminatedAndDiagnosticIsBounded]' passed (0.785 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSampleTimestampGapIsPreserved]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSampleTimestampGapIsPreserved]' passed (0.004 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSecondTrackFailurePreservesFirstTrackCheckpoint]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSecondTrackFailurePreservesFirstTrackCheckpoint]' passed (1.885 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSharedEpochPreservesFirstPacketOffsetsAndActualLevels]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSharedEpochPreservesFirstPacketOffsetsAndActualLevels]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSingleTrackRecoveryInvalidatesChangedModel]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSingleTrackRecoveryInvalidatesChangedModel]' passed (1.218 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSingleTrackRecoveryRetainsEditsAndSkipsCompletedChunk]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSingleTrackRecoveryRetainsEditsAndSkipsCompletedChunk]' passed (1.186 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testUnequalTrackDurationsCountActualCompletedChunks]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testUnequalTrackDurationsCountActualCompletedChunks]' passed (1.179 seconds).
+Test Suite 'AuditRecordingPipelineTests' passed at 2026-10-06 15:28:44.361.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 16.431 (16.432) seconds
+Test Suite 'CheckpointRepositoryTests' started at 2026-10-06 15:28:44.361.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testBackgroundTransactionPreservesConcurrentUnrelatedEdits]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testBackgroundTransactionPreservesConcurrentUnrelatedEdits]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testCheckpointRejectsChangedSourceAndInvalidCounters]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testCheckpointRejectsChangedSourceAndInvalidCounters]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testEnvironmentChangesInvalidateResume]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testEnvironmentChangesInvalidateResume]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testLateBackgroundPublicationCannotOverwriteNewerRenameInUI]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testTransactionCannotChangeManifestIdentity]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testTransactionCannotChangeManifestIdentity]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testTransactionRevisionCannotOverflowOrBeChangedByMutation]' started.
+Test Case '-[MeetingScribeTests.CheckpointRepositoryTests testTransactionRevisionCannotOverflowOrBeChangedByMutation]' passed (0.001 seconds).
+Test Suite 'CheckpointRepositoryTests' passed at 2026-10-06 15:28:44.369.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'SummaryLifecycleTests' started at 2026-10-06 15:28:44.369.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testDeletionAfterSummaryCancellationWaitsForCompletion]' passed (0.026 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testFailedBackgroundDeletionKeepsMeetingAndReleasesGate]' passed (0.015 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCancellationRetainsTaskSlotUntilCompletion]' passed (0.041 seconds).
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' started.
+Test Case '-[MeetingScribeTests.SummaryLifecycleTests testSummaryCompletionPreservesRenameAndRequestSnapshot]' passed (0.031 seconds).
+Test Suite 'SummaryLifecycleTests' passed at 2026-10-06 15:28:44.481.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.112 (0.112) seconds
+Test Suite 'TranscriptEditPersistenceTests' started at 2026-10-06 15:28:44.481.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' passed (0.004 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' passed (0.003 seconds).
+Test Suite 'TranscriptEditPersistenceTests' passed at 2026-10-06 15:28:44.510.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.028 (0.029) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 15:28:44.510.
+	 Executed 43 tests, with 0 failures (0 unexpected) in 16.799 (16.802) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 15:28:44.510.
+	 Executed 43 tests, with 0 failures (0 unexpected) in 16.799 (16.804) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

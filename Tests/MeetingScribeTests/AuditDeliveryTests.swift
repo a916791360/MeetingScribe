@@ -4,7 +4,7 @@ import AVFoundation
 
 final class AuditDeliveryTests: XCTestCase {
     @MainActor
-    func testEditedTranscriptMarksOldMinutesStale() throws {
+    func testEditedTranscriptMarksOldMinutesStale() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("ms-batch3-edit-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let storage = SessionStorage(rootURL: root)
@@ -19,7 +19,7 @@ final class AuditDeliveryTests: XCTestCase {
         session.analysis = MeetingAnalysis(overview: [], timeline: [], decisions: [], actions: [], confidence: 0.9, minutesText: "审查甲下周一交付报价单。", summaryModel: "审查模型", headline: "下周一交付")
         try storage.save(session)
         let store = MeetingStore(storage: storage)
-        guard case .saved = store.updateTranscriptSegment(sessionID: session.id, segmentID: session.transcriptSegments[0].id, text: "审查甲改为下周三交付报价单。") else { return XCTFail("fixture edit must succeed") }
+        guard case .saved = await store.updateTranscriptSegment(sessionID: session.id, segmentID: session.transcriptSegments[0].id, text: "审查甲改为下周三交付报价单。") else { return XCTFail("fixture edit must succeed") }
         let edited = try storage.session(with: session.id)
         XCTAssertNotNil(edited.transcriptEditedAt)
         XCTAssertEqual(edited.analysis, session.analysis)

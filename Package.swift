@@ -27,6 +27,7 @@ let package = Package(
             ],
             sources: [
                 "MeetingScribeApp.swift",
+                "MeetingApplicationDelegate.swift",
                 "AppTheme.swift",
                 "WorkbenchView.swift",
                 "WorkbenchContentPlan.swift",

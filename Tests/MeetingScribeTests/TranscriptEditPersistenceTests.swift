@@ -46,12 +46,12 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync() throws {
+    func testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync() async throws {
         let (storage, session, store) = try makeReadySession()
         XCTAssertEqual(store.sessions.count, 1, "夹具只有一个会话，说明读的确实是这个临时目录")
 
         let target = session.transcriptSegments[0]
-        let outcome = store.updateTranscriptSegment(
+        let outcome = await store.updateTranscriptSegment(
             sessionID: session.id,
             segmentID: target.id,
             text: "  客户那边下周来验收  "
@@ -80,12 +80,12 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testRejectedEditWritesNothingAtAll() throws {
+    func testRejectedEditWritesNothingAtAll() async throws {
         let (storage, session, store) = try makeReadySession()
         let target = session.transcriptSegments[0]
 
         for blank in ["", "   ", "\n\n"] {
-            guard case .rejected = store.updateTranscriptSegment(
+            guard case .rejected = await store.updateTranscriptSegment(
                 sessionID: session.id,
                 segmentID: target.id,
                 text: blank
@@ -101,11 +101,11 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testSavingWithoutChangingAnythingDoesNotTouchTheFile() throws {
+    func testSavingWithoutChangingAnythingDoesNotTouchTheFile() async throws {
         let (storage, session, store) = try makeReadySession()
         let target = session.transcriptSegments[0]
 
-        let outcome = store.updateTranscriptSegment(
+        let outcome = await store.updateTranscriptSegment(
             sessionID: session.id,
             segmentID: target.id,
             text: "课考那边下周来验收"
@@ -123,10 +123,10 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     /// （单测里已分别验过 `applyingTerminology` 会跳过，这里验的是**store 里那个用法**
     /// 没有把它关掉。）
     @MainActor
-    func testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns() throws {
+    func testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns() async throws {
         let (_, session, store) = try makeReadySession()
         let target = session.transcriptSegments[0]
-        _ = store.updateTranscriptSegment(
+        _ = await store.updateTranscriptSegment(
             sessionID: session.id,
             segmentID: target.id,
             text: "客户那边下周来验收"

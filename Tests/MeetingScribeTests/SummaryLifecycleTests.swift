@@ -138,7 +138,7 @@ final class SummaryLifecycleTests: XCTestCase {
             if await gate.calls == 1 { break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        store.renameSession(session, to: "人工指定名称")
+        await store.renameSession(session, to: "人工指定名称")
         await gate.release()
         for _ in 0..<600 where store.isProcessing { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertFalse(store.isProcessing)

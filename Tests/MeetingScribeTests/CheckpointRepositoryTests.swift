@@ -82,7 +82,7 @@ final class CheckpointRepositoryTests: XCTestCase {
             $0.processingCompletedChunks = 2
             $0.analysis.minutesText = "合成完整纪要"
         }
-        store.renameSession(draft, to: "晚到结果不可覆盖的人工名称")
+        await store.renameSession(draft, to: "晚到结果不可覆盖的人工名称")
         store.replaceSession(oldPublication)
         let disk = try storage.session(with: draft.id)
         XCTAssertEqual(store.sessions.first?.title, disk.title)

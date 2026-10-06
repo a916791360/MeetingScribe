@@ -13,7 +13,7 @@ enum TranscriptEditor {
     /// 用户点一下保存、什么都没动，也会写盘 + 打上「已人工校正」——
     /// 于是页眉改口、段尾徽标从置信度变成「已校正」，全都发生在一次无操作的点击之后。
     /// 而且每个会话每启动一次都可能被"改"一次（见 `needsMaterialGateRepair` 的幂等教训）。
-    enum Outcome: Equatable {
+    enum Outcome: Equatable, Sendable {
         /// 改到了，落定后的完整数组。
         case saved([TranscriptSegment])
         /// 归一化之后与原文本一致 —— 一个字节都不该动。

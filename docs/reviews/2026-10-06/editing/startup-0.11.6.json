@@ -1,0 +1,11 @@
+{
+  "version": "0.11.6",
+  "launched_successfully": true,
+  "idle_start_button_observed": true,
+  "meeting_count": 3,
+  "files": 24,
+  "data_bytes": 291314048,
+  "all_data_identical_to_pre_install_backup": true,
+  "real_recording_or_cloud_started": false,
+  "private_content_in_evidence": false
+}

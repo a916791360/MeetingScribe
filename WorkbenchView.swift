@@ -273,7 +273,8 @@ struct WorkbenchSessionRowView: View {
         }
         .sheet(isPresented: $isRenamePresented) {
             WorkbenchRenameSessionSheet(initialTitle: session.title) { title in
-                store.renameSession(session, to: title)
+                let saved = await store.renameSession(session, to: title)
+                return saved ? nil : (store.errorMessage ?? "当前正在保存或读取会议，请稍后重试。")
             }
         }
         .alert("删除这场会议？", isPresented: $isDeleteConfirmationPresented) {
@@ -307,9 +308,11 @@ struct WorkbenchRenameSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isTitleFocused: Bool
     @State private var title: String
-    let onSave: (String) -> Void
+    @State private var isSaving = false
+    @State private var rejection: String?
+    let onSave: (String) async -> String?
 
-    init(initialTitle: String, onSave: @escaping (String) -> Void) {
+    init(initialTitle: String, onSave: @escaping (String) async -> String?) {
         _title = State(initialValue: initialTitle)
         self.onSave = onSave
     }
@@ -328,25 +331,30 @@ struct WorkbenchRenameSessionSheet: View {
             TextField("会议名称", text: $title)
                 .textFieldStyle(.roundedBorder)
                 .focused($isTitleFocused)
+                .accessibilityLabel("会议名称")
+                .disabled(isSaving)
                 .onSubmit(save)
 
+            if let rejection { Text(rejection).foregroundStyle(AppTheme.ink) }
             HStack {
                 Spacer(minLength: 0)
 
                 Button("取消", role: .cancel) {
                     dismiss()
                 }
+                .disabled(isSaving)
                 .buttonStyle(.plain)
                 .foregroundStyle(AppTheme.muted)
 
-                Button("保存") {
+                Button(isSaving ? "正在保存…" : "保存") {
                     save()
                 }
                 .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
                 .keyboardShortcut(.defaultAction)
-                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
+        .interactiveDismissDisabled(isSaving)
         .padding(AppTheme.space6)
         .frame(width: 380)
         .background(AppTheme.paper)
@@ -357,9 +365,14 @@ struct WorkbenchRenameSessionSheet: View {
 
     private func save() {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanTitle.isEmpty else { return }
-        onSave(cleanTitle)
-        dismiss()
+        guard !isSaving, !cleanTitle.isEmpty else { return }
+        isSaving = true
+        rejection = nil
+        Task {
+            rejection = await onSave(cleanTitle)
+            isSaving = false
+            if rejection == nil { dismiss() }
+        }
     }
 }
 
@@ -464,7 +477,7 @@ struct WorkbenchDetailView: View {
             // 一整条宽度换不来任何信息（§六 记录项 ⑤）。改成交代"这一屏现在能做什么"。
             return Text("还没有会议 · 可以直接开始录音，或者导入一段已有音频")
         }
-        if store.isDeletingSessions || store.isPreparingRecording || store.isRecording || store.isProcessing {
+        if store.isSavingSessions || store.isDeletingSessions || store.isPreparingRecording || store.isRecording || store.isProcessing {
             // 进行中：`statusText` 本身已经说明了状态（「正在录音」/「正在转写第 1/2 段 · 0%」），
             // 所以元信息里不再重复那个状态词，否则副标题末尾会再挂一个「转写中」。
             return Text("\(store.statusText)  ·  \(session.metaLine(includingStatus: false))")
@@ -513,7 +526,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
                     .help(primaryTitle(for: session))
                     .accessibilityLabel(primaryTitle(for: session))
-                    .disabled(store.isLoadingSessions || store.isDeletingSessions)
+                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions)
 
                     Button {
                         store.importAudioPresented = true
@@ -525,7 +538,7 @@ struct WorkbenchDetailView: View {
                     .buttonStyle(WorkbenchToolbarButtonStyle())
                     .help("导入一段已有音频")
                     .accessibilityLabel("导入音频")
-                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
+                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                     Button {
                         store.showSettings = true
@@ -1630,7 +1643,7 @@ struct WorkbenchOriginalDocument: View {
                             canEdit: canEdit,
                             onBeginEditing: { editingSegmentID = segment.id },
                             onCancel: { store.transcriptDrafts.removeValue(forKey: segment.id); editingSegmentID = nil },
-                            onCommit: { text in commit(text, for: segment) },
+                            onCommit: { text in await commit(text, for: segment) },
                             onJump: onJump.map { jump in { jump(segment.start) } },
                             isPlayhead: playheadSegmentID == segment.id
                         )
@@ -1691,7 +1704,7 @@ struct WorkbenchOriginalDocument: View {
     /// 转写没完成时改不了（还没写完的逐字稿没有稳定内容）；正在整理纪要时也改不了 ——
     /// 那一句正是模型这次要读的材料，放它进来会得到"模型整理旧文本、用户看着新文本"。
     private var canEdit: Bool {
-        session.status == .ready && !store.isLoadingSessions && !store.isDeletingSessions && !store.isPreparingRecording && !store.isProcessing && !store.isRecording
+        session.status == .ready && !store.isLoadingSessions && !store.isDeletingSessions && !store.isSavingSessions && !store.isPreparingRecording && !store.isProcessing && !store.isRecording
     }
 
     private var editedCount: Int {
@@ -1702,8 +1715,8 @@ struct WorkbenchOriginalDocument: View {
     ///
     /// 校验放在 `TranscriptEditor` 里而不是这里：它要判的是"这次改动该不该落盘"，
     /// 而落盘与否决定用户明天打开还看不看得到自己的修改 —— 必须由单测钉住。
-    private func commit(_ text: String, for segment: TranscriptSegment) -> String? {
-        switch store.updateTranscriptSegment(
+    private func commit(_ text: String, for segment: TranscriptSegment) async -> String? {
+        switch await store.updateTranscriptSegment(
             sessionID: session.id,
             segmentID: segment.id,
             text: text
@@ -2005,7 +2018,7 @@ struct WorkbenchTranscriptDocumentRow: View {
     let onBeginEditing: () -> Void
     let onCancel: () -> Void
     /// 返回拒绝理由；nil = 通过。
-    let onCommit: (String) -> String?
+    let onCommit: (String) async -> String?
     /// 点这一行的时间 → 回放这一句。
     ///
     /// **为什么把时间戳做成把手，而不是整行可点**：整行已经有「双击进编辑」，
@@ -2022,6 +2035,7 @@ struct WorkbenchTranscriptDocumentRow: View {
     }
     /// 就地拒绝的理由（比如"不能改成空"）。它必须显示在**这一行**上 ——
     /// 只往底栏状态里塞一句的话，用户的眼睛在段落这里，等于没告诉他。
+    @State private var isSubmitting = false
     @State private var rejection: String?
     @FocusState private var isFocused: Bool
 
@@ -2175,7 +2189,8 @@ struct WorkbenchTranscriptDocumentRow: View {
                     // 而且这种输入几乎没有正当用途。
                     .lineLimit(1...12)
                     .focused($isFocused)
-                    .onExitCommand { onCancel() }
+                    .disabled(isSubmitting)
+                    .onExitCommand { if !isSubmitting { onCancel() } }
                     .padding(.horizontal, AppTheme.space2)
                     .padding(.vertical, AppTheme.space2)
                     .background(
@@ -2206,8 +2221,14 @@ struct WorkbenchTranscriptDocumentRow: View {
                 .buttonStyle(WorkbenchStripIconButtonStyle())
                 .help("放弃这次修改（Esc）")
                 .accessibilityLabel("放弃这次修改")
+                .disabled(isSubmitting)
             }
 
+            if isSubmitting {
+                Text("正在保存这句修改…")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.ink)
+            }
             if let rejection {
                 // **语义给图标、可读性给文字**（同 2D 的状态行）：`danger` 那一档是按
                 // "图标 / 描边 / 底盘"的量级调出来的，直接当 11pt 正文用，浅色下实测
@@ -2231,6 +2252,7 @@ struct WorkbenchTranscriptDocumentRow: View {
     /// 判据来自 `TranscriptEditor.verdict`，**不在这里重写一遍**：重写的那一份迟早
     /// 会与 `apply` 走岔，而走岔的表现是"按钮亮着但点不动"（或反过来），不报错。
     private var canSubmit: Bool {
+        guard canEdit, !isSubmitting else { return false }
         if case .effective = TranscriptEditor.verdict(for: draft, against: segment.text) {
             return true
         }
@@ -2238,7 +2260,14 @@ struct WorkbenchTranscriptDocumentRow: View {
     }
 
     private func submit() {
-        rejection = onCommit(draft)
+        guard canSubmit else { return }
+        let submittedText = draft
+        isSubmitting = true
+        rejection = nil
+        Task {
+            rejection = await onCommit(submittedText)
+            isSubmitting = false
+        }
     }
 }
 
@@ -3305,7 +3334,7 @@ struct WorkbenchEmptyState: View {
                     Label("开始录音", systemImage: "record.circle")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-                .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
+                .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                 Button {
                     store.importAudioPresented = true
@@ -3316,7 +3345,7 @@ struct WorkbenchEmptyState: View {
                     Label("导入音频", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
-                .disabled(store.isLoadingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
+                .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
             }
 
             // 点了「开始录音」却被权限拦下时的那条说明。

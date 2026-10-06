@@ -221,7 +221,7 @@ final class AuditRecordingPipelineTests: XCTestCase {
         defer { restore(snapshot) }
         first.whisperCLIPath = cli.path
         first.whisperModelPath = model.path
-        if retainPrevious { first.renameSession(session, to: "用户指定的会议名称") }
+        if retainPrevious { await first.renameSession(session, to: "用户指定的会议名称") }
         first.retryProcessing(session)
         try await waitFor { !first.isProcessing }
         var interrupted = try storage.session(with: session.id)

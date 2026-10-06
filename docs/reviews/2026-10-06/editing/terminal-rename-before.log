@@ -1,0 +1,71 @@
+[0/1] Planning build
+Building for debugging...
+[0/8] Write sources
+[2/8] Write swift-version--58304C5D6DBC2206.txt
+[4/12] Emitting module MeetingScribe
+[5/12] Compiling MeetingScribe MeetingScribeApp.swift
+[6/12] Compiling MeetingScribe MeetingApplicationDelegate.swift
+[7/12] Compiling MeetingScribe MeetingStore.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking MeetingScribe
+[9/12] Applying MeetingScribe
+[11/49] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[12/49] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[13/49] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[14/49] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[15/53] Compiling MeetingScribeTests AppAppearanceTests.swift
+[16/53] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[17/53] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[18/53] Compiling MeetingScribeTests AuditClosureTests.swift
+[19/53] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[20/53] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[21/53] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[22/53] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[23/53] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[24/53] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[25/53] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[26/53] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[27/53] Compiling MeetingScribeTests OverviewBulletTests.swift
+[28/53] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[29/53] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[30/53] Compiling MeetingScribeTests QualityEvalTests.swift
+[31/53] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[32/53] Compiling MeetingScribeTests MeetingExportTests.swift
+[33/53] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[34/53] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[35/53] Compiling MeetingScribeTests ExportWiringTests.swift
+[36/53] Compiling MeetingScribeTests GlossaryTests.swift
+[37/53] Compiling MeetingScribeTests LayoutTokenTests.swift
+[38/53] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[39/53] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[40/53] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[41/53] Compiling MeetingScribeTests AuditNetworkTests.swift
+[42/53] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[43/53] Compiling MeetingScribeTests BackgroundEditingTests.swift
+[44/53] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[45/53] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[46/53] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[47/53] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[48/53] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[49/53] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[50/53] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[51/53] Emitting module MeetingScribeTests
+[51/53] Write Objects.LinkFileList
+[52/53] Linking MeetingScribePackageTests
+Build complete! (3.90s)
+Test Suite 'Selected tests' started at 2026-10-06 15:32:46.426.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 15:32:46.427.
+Test Suite 'BackgroundEditingTests' started at 2026-10-06 15:32:46.427.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:174: error: -[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename] : XCTAssertEqual failed: ("会议 10-06 15:32") is not equal to ("未发布但已保存的人工名称")
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' failed (0.146 seconds).
+Test Suite 'BackgroundEditingTests' failed at 2026-10-06 15:32:46.573.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.146 (0.147) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 15:32:46.573.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.146 (0.147) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 15:32:46.573.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.146 (0.147) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,101 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Compiling MeetingScribe MeetingScribeApp.swift
+[5/8] Emitting module MeetingScribe
+[5/9] Write Objects.LinkFileList
+[6/9] Linking MeetingScribe
+[7/9] Applying MeetingScribe
+[9/46] Compiling MeetingScribeTests OverviewBulletTests.swift
+[10/46] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[11/46] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[12/46] Compiling MeetingScribeTests QualityEvalTests.swift
+[13/50] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[14/50] Compiling MeetingScribeTests MeetingExportTests.swift
+[15/50] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[16/50] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[17/50] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[18/50] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[19/50] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[20/50] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[21/50] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[22/50] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[23/50] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[24/50] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[25/50] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[26/50] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[27/50] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[28/50] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[29/50] Emitting module MeetingScribeTests
+[30/50] Compiling MeetingScribeTests ExportWiringTests.swift
+[31/50] Compiling MeetingScribeTests GlossaryTests.swift
+[32/50] Compiling MeetingScribeTests LayoutTokenTests.swift
+[33/50] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[34/50] Compiling MeetingScribeTests BackgroundEditingTests.swift
+[35/50] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[36/50] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[37/50] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[38/50] Compiling MeetingScribeTests AppAppearanceTests.swift
+[39/50] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[40/50] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[41/50] Compiling MeetingScribeTests AuditClosureTests.swift
+[42/50] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[43/50] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[44/50] Compiling MeetingScribeTests AuditNetworkTests.swift
+[45/50] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[46/50] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[47/50] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[48/50] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[49/50] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[49/51] Write Objects.LinkFileList
+[50/51] Linking MeetingScribePackageTests
+Build complete! (3.13s)
+Test Suite 'Selected tests' started at 2026-10-06 15:31:53.471.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 15:31:53.472.
+Test Suite 'BackgroundEditingTests' started at 2026-10-06 15:31:53.472.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testCancelledSaveBeforeCommitKeepsOldFileAndDraft]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testCancelledSaveBeforeCommitKeepsOldFileAndDraft]' passed (0.069 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testEditTransactionPreservesLatestConcurrentName]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testEditTransactionPreservesLatestConcurrentName]' passed (0.019 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testPendingEditKeepsDraftAndBlocksConflictingWork]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testPendingEditKeepsDraftAndBlocksConflictingWork]' passed (0.018 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' passed (0.034 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testWriteFailureKeepsDraftAndReleasesSaveGate]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testWriteFailureKeepsDraftAndReleasesSaveGate]' passed (0.020 seconds).
+Test Suite 'BackgroundEditingTests' passed at 2026-10-06 15:31:53.631.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.159 (0.160) seconds
+Test Suite 'TranscriptEditPersistenceTests' started at 2026-10-06 15:31:53.631.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' passed (0.002 seconds).
+Test Suite 'TranscriptEditPersistenceTests' passed at 2026-10-06 15:31:53.657.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.025 (0.026) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 15:31:53.657.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.184 (0.185) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 15:31:53.657.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.184 (0.186) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -83,7 +83,7 @@ Use six adequate synthetic segments and the supported comma glossary format; pre
 
 **Logged**: 2026-10-06
 **Priority**: low
-**Status**: pending
+**Status**: resolved
 **Area**: infra
 
 ### Summary
@@ -94,6 +94,9 @@ The Mac is locked and automatic unlock could not unlock it.
 
 ### Next Action
 Retain the installed verified candidate and private rollback backup. Mark native startup and post-launch data verification pending; resume after the user unlocks normally. Do not bypass lock or substitute shell launch for native verification.
+
+### Resolution
+On the next authorized continuation, CUA started 0.11.6 successfully after normal unlock; all 24 data files matched the private pre-install backup. See editing/startup-0.11.6.json.
 
 ## [ERR-20261006-011] Profiler sanitization assertion scope
 
@@ -107,3 +110,16 @@ A verification assertion incorrectly rejected the entire target element after it
 
 ### Resolution
 Validate absence of environment, UUID and device-name fields rather than the useful synthetic target metadata. Also replace the synthetic app's private temp path with a relative bundle path. The failed assertion ran after successful installed-data comparisons; it did not indicate a data mismatch.
+
+## [ERR-20261006-012] Background edit test helper isolation and identity selection
+
+**Logged**: 2026-10-06
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+The async gate helper required MainActor isolation under Swift6; the recording fixture assertion selected the first sorted row instead of its ID.
+
+### Resolution
+Annotate only the helper, compare the specific draft ID, and preserve both initial logs as fixture errors. Restoring the old terminal persistence afterward produces the independent, genuine saved-name overwrite failure. Final 356-test suite has one cloud skip and no failures.

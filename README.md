@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前开发版本：`0.11.6`（本轮审查升级，本地构建；尚未发布到 GitHub）
+当前开发版本：`0.11.7`（本轮审查升级，本地构建；尚未发布到 GitHub）
 
 ## 目标
 
@@ -43,7 +43,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-0.11.6-macOS.zip
+shasum -a 256 MeetingScribe-0.11.7-macOS.zip
 ```
 
 ## 运行
@@ -187,7 +187,7 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
-本地审查版 0.11.6 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
+本地审查版 0.11.7 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
 whisper.cpp v1.9.4 提交和官方 small 模型 SHA-256。使用已有模型构建，不修改已安装 App：
 
 ```bash
@@ -201,6 +201,14 @@ App 内 `Contents/Resources/RuntimeProvenance.plist` 记录源码、模型、构
 发行审计校验锁定来源、模型和实际文件。自签证书及来源记录不等同于 Apple 公证。
 
 
+
+### 0.11.7 后台人工保存
+
+人工校正和重命名在后台原子保存；保存成功才关闭编辑，失败保留草稿。
+保存中显示明确状态，阻止重复提交与冲突操作；正常退出会提示等待保存完成。
+录音/处理故障收尾只更新最新记录的终态字段，保留已保存的新名称。
+
+验收与回滚见 [0.11.7追加报告](docs/reviews/2026-10-06/editing/review-and-upgrade.md)。
 
 ### 0.11.6 后续修复
 

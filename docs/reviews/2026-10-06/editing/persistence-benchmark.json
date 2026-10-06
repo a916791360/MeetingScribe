@@ -1,0 +1,49 @@
+{
+  "measurements" : [
+    {
+      "background_repository" : {
+        "main_actor_ticks" : 8,
+        "max_main_actor_tick_gap_ms" : 7.5486666610231623,
+        "mean_transaction_ms" : 5.9920833300566301
+      },
+      "manifest_bytes" : 410228,
+      "segments" : 1000,
+      "synchronous_main_actor" : {
+        "main_actor_ticks" : 7,
+        "max_main_actor_tick_gap_ms" : 20.44249999744352,
+        "mean_transaction_ms" : 6.8031666693665711
+      }
+    },
+    {
+      "background_repository" : {
+        "main_actor_ticks" : 24,
+        "max_main_actor_tick_gap_ms" : 7.5458750070538372,
+        "mean_transaction_ms" : 42.79093055811245
+      },
+      "manifest_bytes" : 4136229,
+      "segments" : 10000,
+      "synchronous_main_actor" : {
+        "main_actor_ticks" : 6,
+        "max_main_actor_tick_gap_ms" : 133.25908333354164,
+        "mean_transaction_ms" : 41.939055551968828
+      }
+    },
+    {
+      "background_repository" : {
+        "main_actor_ticks" : 93,
+        "max_main_actor_tick_gap_ms" : 7.5572916539385915,
+        "mean_transaction_ms" : 214.66125000248817
+      },
+      "manifest_bytes" : 20856229,
+      "segments" : 50000,
+      "synchronous_main_actor" : {
+        "main_actor_ticks" : 7,
+        "max_main_actor_tick_gap_ms" : 671.30766666377895,
+        "mean_transaction_ms" : 223.75722222204786
+      }
+    }
+  ],
+  "note" : "Three transactions per mode on this machine. Tick gaps measure MainActor scheduling, not UI FPS or an Instruments trace.",
+  "schema" : 1,
+  "synthetic_only" : true
+}

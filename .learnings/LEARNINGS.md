@@ -67,3 +67,21 @@ New signing can change Mach-O bytes even when inputs are identical. Verify fixed
 ### Metadata
 - Source: error
 - Related Files: docs/reviews/2026-10-06/lifecycle/runtime-smoke.py, ReviewPersistenceBenchmark.swift, ui-observations.md
+
+## [LRN-20261006-013] best_practice
+
+**Logged**: 2026-10-06
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+Moving accepted edits off MainActor requires persistence-aware UI and normal-quit protection.
+
+### Details
+Keep editor drafts and rename sheets until the transaction reports success. Gate conflicting work, duplicate submissions, dismissal and normal quit while saving; report failure without claiming persistence. Terminal recovery must update only its owned fields on the latest manifest and publish the resulting revision, rather than save an old UI snapshot. Use synthetic delayed transactions to capture the native intermediate state; do not infer it from a later completed screen.
+
+### Metadata
+- Source: error
+- Related Files: MeetingApplicationDelegate.swift, SessionRepository.swift, MeetingStore.swift, WorkbenchView.swift, BackgroundEditingTests.swift
+- Pattern-Key: harden.async_edit_persistence

@@ -1,0 +1,71 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[2/7] Write swift-version--58304C5D6DBC2206.txt
+[4/9] Compiling MeetingScribe MeetingStore.swift
+[5/9] Emitting module MeetingScribe
+[6/11] Compiling MeetingScribe MeetingScribeApp.swift
+[7/11] Compiling MeetingScribe WorkbenchView.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking MeetingScribe
+[9/12] Applying MeetingScribe
+[11/24] Compiling MeetingScribeTests AuditClosureTests.swift
+[12/24] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[13/24] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[14/25] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[15/25] Compiling MeetingScribeTests ExportWiringTests.swift
+[16/25] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[17/25] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[18/25] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[19/25] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[20/25] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[21/25] Compiling MeetingScribeTests AuditNetworkTests.swift
+[22/25] Emitting module MeetingScribeTests
+[23/25] Compiling MeetingScribeTests BackgroundEditingTests.swift
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:60:23: error: sending 'self' risks causing data races [#SendingRisksDataRace]
+ 58 |             store.transcriptDrafts[segment.id] = "人工合成校正"
+ 59 |             let task = Task { await store.updateTranscriptSegment(sessionID: session.id, segmentID: segment.id, text: "人工合成校正") }
+ 60 |             try await waitForGate(gate)
+    |                       |- error: sending 'self' risks causing data races [#SendingRisksDataRace]
+    |                       `- note: sending main actor-isolated 'self' to nonisolated instance method 'waitForGate' risks causing data races between nonisolated and main actor-isolated uses
+ 61 |             XCTAssertTrue(store.isSavingSessions)
+ 62 |             XCTAssertEqual(store.transcriptDrafts[segment.id], "人工合成校正")
+
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:91:23: error: sending 'self' risks causing data races [#SendingRisksDataRace]
+ 89 |         try await fixture { storage, session, store, gate in
+ 90 |             let task = Task { await store.updateTranscriptSegment(sessionID: session.id, segmentID: session.transcriptSegments[0].id, text: "人工校正合成内容") }
+ 91 |             try await waitForGate(gate)
+    |                       |- error: sending 'self' risks causing data races [#SendingRisksDataRace]
+    |                       `- note: sending main actor-isolated 'self' to nonisolated instance method 'waitForGate' risks causing data races between nonisolated and main actor-isolated uses
+ 92 |             try storage.update(session.id) { $0.title = "后台最新人工名称"; $0.titleManuallyEdited = true }
+ 93 |             await gate.release()
+
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:108:23: error: sending 'self' risks causing data races [#SendingRisksDataRace]
+106 |             let before = try Data(contentsOf: file)
+107 |             let task = Task { await store.updateTranscriptSegment(sessionID: session.id, segmentID: segment.id, text: "取消前的合成草稿") }
+108 |             try await waitForGate(gate)
+    |                       |- error: sending 'self' risks causing data races [#SendingRisksDataRace]
+    |                       `- note: sending main actor-isolated 'self' to nonisolated instance method 'waitForGate' risks causing data races between nonisolated and main actor-isolated uses
+109 |             task.cancel()
+110 |             await gate.release()
+
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:124:23: error: sending 'self' risks causing data races [#SendingRisksDataRace]
+122 |             store.transcriptDrafts[segment.id] = "待重试合成草稿"
+123 |             let task = Task { await store.updateTranscriptSegment(sessionID: session.id, segmentID: segment.id, text: "待重试合成草稿") }
+124 |             try await waitForGate(gate)
+    |                       |- error: sending 'self' risks causing data races [#SendingRisksDataRace]
+    |                       `- note: sending main actor-isolated 'self' to nonisolated instance method 'waitForGate' risks causing data races between nonisolated and main actor-isolated uses
+125 |             // A non-file manifest simulates a read/write failure on an isolated root.
+126 |             let manifest = storage.folderURL(for: session).appendingPathComponent("session.json")
+
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:144:23: error: sending 'self' risks causing data races [#SendingRisksDataRace]
+142 |         try await fixture { storage, _, store, gate in
+143 |             store.startRecording()
+144 |             try await waitForGate(gate)
+    |                       |- error: sending 'self' risks causing data races [#SendingRisksDataRace]
+    |                       `- note: sending main actor-isolated 'self' to nonisolated instance method 'waitForGate' risks causing data races between nonisolated and main actor-isolated uses
+145 |             let draft = try XCTUnwrap(store.sessions.first)
+146 |             try storage.update(draft.id) { $0.title = "未发布但已保存的人工名称"; $0.titleManuallyEdited = true }
+
+[#SendingRisksDataRace]: <https://docs.swift.org/compiler/documentation/diagnostics/sending-risks-data-race>
+error: fatalError

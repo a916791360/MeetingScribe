@@ -26,6 +26,7 @@ final class MeetingStore: ObservableObject {
     @Published private(set) var storageIssueCount = 0
     @Published private(set) var isLoadingSessions = false
     @Published private(set) var isDeletingSessions = false
+    @Published private(set) var isSavingSessions = false
     @Published var appearance: AppAppearance {
         didSet {
             guard oldValue != appearance else { return }
@@ -155,7 +156,7 @@ final class MeetingStore: ObservableObject {
     /// 靠环境变量把整个进程的数据根改掉 —— 一旦哪天变量没生效，它就会写进
     /// **用户真实的数据根**（这条已经被证明过一次，见 `SessionStorage.defaultRootURL`）。
     /// 显式传进来的目录不存在"忘设就落到真实根"的可能。
-    init(storage: SessionStorage? = nil,
+    init(storage: SessionStorage? = nil, repository: SessionRepository? = nil,
          loadSessionsInBackground: Bool? = nil,
          recordingFactory: @escaping @MainActor (URL, URL, URL) -> any RecordingSession = {
              MixedRecordingSession(movieURL: $0, localTrackURL: $1, remoteTrackURL: $2)
@@ -168,7 +169,7 @@ final class MeetingStore: ObservableObject {
          }) {
         let actualStorage = storage ?? SessionStorage()
         self.storage = actualStorage
-        self.repository = SessionRepository(storage: actualStorage)
+        self.repository = repository ?? SessionRepository(storage: actualStorage)
         self.recordingFactory = recordingFactory
         self.capturePermissions = capturePermissions
         self.summaryAnalyzer = summaryAnalyzer
@@ -247,7 +248,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func reloadSessions() {
-        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         isLoadingSessions = true
         statusText = "正在读取会议记录..."
         Task { [weak self, storage] in
@@ -280,7 +281,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func startRecording() {
-        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         // 录音前先当场看一眼两道权限门（纯 preflight，不弹窗）。
         //
@@ -418,9 +419,9 @@ final class MeetingStore: ObservableObject {
                     // 会把对方说的话算成我方，而且读起来完全自然、永远没人发现。
                     dualTracks = try await normalizedTracks(from: recording, in: session)
                     if dualTracks == nil {
-                        var updated = try storage.session(with: sessionID)
-                        updated.captureWarning = "双路音频不完整，本次使用混合原件转写，无法确认说话人归属。若未授予麦克风权限，本机发言可能缺失。"
-                        try storage.save(updated)
+                        let updated = try await repository.update(sessionID) { updated in
+                            updated.captureWarning = "双路音频不完整，本次使用混合原件转写，无法确认说话人归属。若未授予麦克风权限，本机发言可能缺失。"
+                        }
                         replaceSession(updated)
                     }
                 case .imported:
@@ -442,7 +443,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func importAudio(url: URL) {
-        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         var draftID: UUID?
         do {
@@ -470,13 +471,13 @@ final class MeetingStore: ObservableObject {
                         try storage.copyImportedAudio(url: url, into: draft)
                     }.value
                     try Task.checkCancellation()
-                    var importedSession = try storage.session(with: draft.id)
-                    importedSession.status = .processing
-                    importedSession.processingStage = "正在转换音频..."
-                    importedSession.processingProgress = 0
-                    importedSession.processingStartedAt = Date()
-                    importedSession.updatedAt = Date()
-                    try storage.save(importedSession)
+                    let importedSession = try await repository.update(draft.id) { importedSession in
+                        importedSession.status = .processing
+                        importedSession.processingStage = "正在转换音频..."
+                        importedSession.processingProgress = 0
+                        importedSession.processingStartedAt = Date()
+                        importedSession.updatedAt = Date()
+                    }
                     replaceSession(importedSession)
                     let inputURL = storage.inputURL(for: draft, preferredFileName: "input.wav")
                     processingStage = "正在转换音频..."
@@ -806,8 +807,9 @@ final class MeetingStore: ObservableObject {
         testSummaryModel()
     }
 
-    func renameSession(_ session: MeetingSession, to title: String) {
-        guard !isLoadingSessions, !isDeletingSessions else { return }
+    @discardableResult
+    func renameSession(_ session: MeetingSession, to title: String) async -> Bool {
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions else { return false }
         let cleanTitle = title
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -817,21 +819,25 @@ final class MeetingStore: ObservableObject {
         guard !cleanTitle.isEmpty else {
             errorMessage = "会议名称不能为空。"
             statusText = errorMessage ?? ""
-            return
+            return false
         }
-        guard cleanTitle != session.title else { return }
+        guard cleanTitle != session.title else { return true }
 
+        isSavingSessions = true
+        defer { isSavingSessions = false }
         do {
-            let updated = try storage.update(session.id) { updated in
+            let updated = try await repository.update(session.id) { updated in
                 updated.title = cleanTitle
                 updated.titleManuallyEdited = true
                 updated.updatedAt = Date()
             }
             replaceSession(updated)
             selectedSessionID = updated.id
+            return true
         } catch {
             errorMessage = error.localizedDescription
             statusText = error.localizedDescription
+            return false
         }
     }
 
@@ -849,34 +855,24 @@ final class MeetingStore: ObservableObject {
         sessionID: UUID,
         segmentID: UUID,
         text: String
-    ) -> TranscriptEditor.Outcome {
-        if isLoadingSessions || isDeletingSessions || isProcessing || isRecording || isPreparingRecording {
-            return .rejected("正在整理纪要，等它结束再改这一句。")
+    ) async -> TranscriptEditor.Outcome {
+        if isLoadingSessions || isDeletingSessions || isSavingSessions || isProcessing || isRecording || isPreparingRecording {
+            return .rejected("正在读取、保存或处理会议，完成后再改这一句。")
         }
-
+        isSavingSessions = true
+        statusText = "正在保存这句修改…"
+        defer { isSavingSessions = false }
         do {
-            var updated = try storage.session(with: sessionID)
-            let outcome = TranscriptEditor.apply(
-                text: text,
-                to: updated.transcriptSegments,
-                segmentID: segmentID
-            )
-            guard case let .saved(segments) = outcome else { return outcome }
-
-            updated.transcriptSegments = segments
-            // 全文是**派生**的，必须跟着一起走。落下一处不改，同一个会话里就有了
-            // 两份不一致的逐字稿（一份是段数组、一份是拼好的全文），
-            // 而哪一份被用到取决于走的是哪条路 —— 这种不一致只能靠"改就一起改"避免。
-            updated.transcriptText = segments.map(\.text).joined(separator: "\n")
-            updated.transcriptEditedAt = Date()
-            updated.analysisStale = true
-            updated.updatedAt = Date()
-            try storage.save(updated)
-            replaceSession(updated)
-            selectedSessionID = updated.id
-            statusText = "已保存这句修改，可以重新整理纪要了"
-            errorMessage = nil
-            return .saved(segments)
+            let result = try await repository.editTranscript(sessionID: sessionID, segmentID: segmentID, text: text)
+            if let updated = result.session {
+                replaceSession(updated)
+                selectedSessionID = updated.id
+                statusText = "已保存这句修改，可以重新整理纪要了"
+                errorMessage = nil
+            } else {
+                statusText = "这句修改未写入，原文保持不变"
+            }
+            return result.outcome
         } catch {
             errorMessage = error.localizedDescription
             statusText = error.localizedDescription
@@ -954,7 +950,7 @@ final class MeetingStore: ObservableObject {
     /// 界面照样给出「重新整理」，点下去必然失败——典型的假入口。
     /// （阶段 1-1 补的单测 `testReadinessNeedsModelWhenKeyPresentButModelEmpty` 钉住了这一格。）
     var canRegenerateSummaryNow: Bool {
-        guard !isLoadingSessions, !isDeletingSessions else { return false }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions else { return false }
         if summarySettings.provider == .localRules { return true }
         let model = summarySettings.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !model.isEmpty else { return false }
@@ -977,7 +973,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func regenerateSummary(for session: MeetingSession) {
-        guard !isLoadingSessions, !isDeletingSessions, session.status == .ready, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, session.status == .ready, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard !session.materialSegments.isEmpty else {
             statusText = "这场会议还没有逐字稿，暂时无法整理纪要。"
             return
@@ -1080,7 +1076,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func retryProcessing(_ session: MeetingSession) {
-        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let inputURL = processingInputURL(for: session) else {
             errorMessage = "找不到这场会议的音频文件。"
             statusText = errorMessage ?? ""
@@ -1145,7 +1141,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func deleteSession(_ session: MeetingSession) {
-        guard !isLoadingSessions, !isDeletingSessions else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions else { return }
         if activeSessionID == session.id && (isRecording || isPreparingRecording) {
             errorMessage = "请先结束录音，确认文件已保存后再删除这场会议。"
             return
@@ -1496,7 +1492,7 @@ final class MeetingStore: ObservableObject {
             session.errorMessage = message
             session.updatedAt = Date()
             session.processingStage = cancelled ? "已取消录音准备" : "处理失败"
-            persistRecoveryState(session)
+            persistRecoveryState(&session)
             replaceSession(session)
         }
         if storageWriteNotice == nil { errorMessage = cancelled ? nil : SafeDiagnostics.processing(message) }
@@ -1521,7 +1517,7 @@ final class MeetingStore: ObservableObject {
             session.errorMessage = message
             session.updatedAt = Date()
             session.processingStage = "处理失败"
-            persistRecoveryState(session)
+            persistRecoveryState(&session)
             replaceSession(session)
         }
         if storageWriteNotice == nil { errorMessage = SafeDiagnostics.processing(message) }
@@ -1544,7 +1540,7 @@ final class MeetingStore: ObservableObject {
             session.errorMessage = "已取消转写，已保留已经完成的内容，可以重新处理。"
             session.processingStage = "已取消"
             session.updatedAt = Date()
-            persistRecoveryState(session)
+            persistRecoveryState(&session)
             replaceSession(session)
         }
         errorMessage = storageWriteNotice
@@ -1573,7 +1569,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func resumePendingProcessing() {
-        guard !isLoadingSessions, !isDeletingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !isLoadingSessions, !isDeletingSessions, !isSavingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let session = sessions.first(where: { $0.status == .processing }) else { return }
         activeSessionID = session.id
         guard let inputURL = processingInputURL(for: session) else {
@@ -1948,7 +1944,7 @@ final class MeetingStore: ObservableObject {
         guard var session = sessions.first(where: { $0.id == sessionID }) else { return }
         session.status = status
         session.updatedAt = Date()
-        persistRecoveryState(session)
+        persistRecoveryState(&session)
         replaceSession(session)
     }
 
@@ -1957,9 +1953,15 @@ final class MeetingStore: ObservableObject {
 
     /// Terminal/recovery transitions must still release the recorder when the disk fails.
     /// Keep their in-memory state visible, but never claim it was durably saved.
-    private func persistRecoveryState(_ session: MeetingSession) {
+    private func persistRecoveryState(_ session: inout MeetingSession) {
         do {
-            try storage.save(session)
+            let terminal = session
+            session = try storage.update(session.id) { current in
+                current.status = terminal.status
+                current.errorMessage = terminal.errorMessage
+                current.updatedAt = terminal.updatedAt
+                current.processingStage = terminal.processingStage
+            }
             storageWriteNotice = nil
         } catch {
             storageWriteNotice = Self.storageFailureMessage

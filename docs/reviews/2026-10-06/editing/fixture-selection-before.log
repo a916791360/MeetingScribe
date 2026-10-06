@@ -1,0 +1,58 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[1/6] Write swift-version--58304C5D6DBC2206.txt
+[3/6] Emitting module MeetingScribeTests
+[4/6] Compiling MeetingScribeTests BackgroundEditingTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.42s)
+Test Suite 'Selected tests' started at 2026-10-06 15:30:44.159.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 15:30:44.160.
+Test Suite 'BackgroundEditingTests' started at 2026-10-06 15:30:44.160.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testCancelledSaveBeforeCommitKeepsOldFileAndDraft]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testCancelledSaveBeforeCommitKeepsOldFileAndDraft]' passed (0.059 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testEditTransactionPreservesLatestConcurrentName]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testEditTransactionPreservesLatestConcurrentName]' passed (0.018 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testPendingEditKeepsDraftAndBlocksConflictingWork]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testPendingEditKeepsDraftAndBlocksConflictingWork]' passed (0.018 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/BackgroundEditingTests.swift:154: error: -[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename] : XCTAssertEqual failed: ("Optional("会议 10-06 15:30")") is not equal to ("Optional("未发布但已保存的人工名称")")
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testRecordingFailurePreservesUnpublishedRename]' failed (0.119 seconds).
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testWriteFailureKeepsDraftAndReleasesSaveGate]' started.
+Test Case '-[MeetingScribeTests.BackgroundEditingTests testWriteFailureKeepsDraftAndReleasesSaveGate]' passed (0.019 seconds).
+Test Suite 'BackgroundEditingTests' failed at 2026-10-06 15:30:44.393.
+	 Executed 5 tests, with 1 failure (0 unexpected) in 0.233 (0.233) seconds
+Test Suite 'TranscriptEditPersistenceTests' started at 2026-10-06 15:30:44.393.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' passed (0.002 seconds).
+Test Suite 'TranscriptEditPersistenceTests' passed at 2026-10-06 15:30:44.413.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.019 (0.020) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 15:30:44.413.
+	 Executed 16 tests, with 1 failure (0 unexpected) in 0.253 (0.253) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 15:30:44.413.
+	 Executed 16 tests, with 1 failure (0 unexpected) in 0.253 (0.254) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

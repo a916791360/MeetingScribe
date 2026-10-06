@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "version": "0.11.7",
+  "build": 27,
+  "swift_total": 356,
+  "swift_skipped": 1,
+  "swift_failures": 0,
+  "python_passed": 45,
+  "synthetic_quality_cases": 7,
+  "native_edit_save_state_observed": true,
+  "native_normal_quit_protection_observed": true,
+  "native_rename_save_state_observed": true,
+  "native_app_startup_verified": true,
+  "installed_data_unchanged": true,
+  "unique_issues": 48,
+  "source_diff_check": "passed",
+  "private_meeting_data_in_evidence": false,
+  "note": "Synthetic UI uses a deliberately delayed transaction. Stronger forced-quit, real device, VoiceOver, other-machine and notarization claims are not made."
+}

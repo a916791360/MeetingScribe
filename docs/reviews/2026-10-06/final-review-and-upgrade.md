@@ -1,6 +1,6 @@
-# MeetingScribe 完整审查与0.11.6升级报告
+# MeetingScribe 完整审查与0.11.7升级报告
 
-日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已更新到0.11.6并完成安装后数据核对；本轮启动因Mac锁屏待验，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
+日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已更新到0.11.7，原生启动及全部会议文件核对通过；上轮0.11.6锁屏阻塞的启动验收也已补齐，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
 
 ## 执行摘要
 
@@ -8,7 +8,7 @@
 
 完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项与后续6项，共48项：**P0 1 / P1 30 / P2 17**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
 
-最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.6/build26**；后续完成独立单路/双路恢复检查点、后台原子保存、自定义名称保留和官方运行时来源锁定，前轮已完成历史诊断清理与后台首次加载/导入，0.11.6补齐取消收尾门禁、导入重命名保护与后台旧结果发布版本控制，并完成合成保存调度和1000段原生Instruments测量。仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
+最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.7/build27**；后续完成独立单路/双路恢复检查点、后台原子保存、自定义名称保留和官方运行时来源锁定，前轮已完成历史诊断清理与后台首次加载/导入，0.11.6补齐取消收尾门禁、导入重命名保护与后台旧结果发布版本控制，并完成合成保存调度和1000段原生Instruments测量。0.11.7继续把人工校正/重命名迁入后台事务，补保存状态、失败保草稿及正常退出保护；故障收尾保留最新名称。仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
 
 ## Top 10 高优先级问题
 
@@ -29,7 +29,7 @@
 
 ## 完整问题列表与修复状态
 
-“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新修复和验收见[0.11.6报告](lifecycle/review-and-upgrade.md)，上轮见[0.11.5报告](continuation/review-and-upgrade.md)，前轮原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
+“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新修复和验收见[0.11.7报告](editing/review-and-upgrade.md)，此前见[0.11.6报告](lifecycle/review-and-upgrade.md)，上轮见[0.11.5报告](continuation/review-and-upgrade.md)，前轮原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
 
 | ID | 原严重级别 | 类型 | 问题 | 当前状态 | 当前修复位置 |
 |---|---|---|---|---|---|
@@ -66,7 +66,7 @@
 | UX-007 | P1 | UX / Bug | 准备期误称已采集且提前计时 | 已修复 / 原生合成UI与回归 | WorkbenchView.swift、MeetingStore.swift |
 | ARCH-001 | P2 | 架构 / 可维护性（附性能风险） | 编排与副作用集中，隔离不足 | 部分改善 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | BUG-018 | P2 | Bug | 字符长度限制不保证合法文件名字节数 | 已修复 / 写盘回归 | [MeetingExport.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift) |
-| BUG-028 | P2 | Bug / UX | 重新处理覆盖自定义会议名 | 已修复 / 恢复与导入回归 | MeetingStore.swift、MeetingModels.swift、SessionStorage.swift；详情见0.11.5及0.11.6追加报告 |
+| BUG-028 | P2 | Bug / UX | 重新处理覆盖自定义会议名 | 已修复 / 恢复、导入及终态事务回归 | MeetingStore.swift、MeetingModels.swift、SessionStorage.swift；详情见0.11.5至0.11.7追加报告 |
 | BUG-029 | P2 | Bug / UX | 晚到后台结果覆盖新名称UI | 已修复 / 发布时序回归 | MeetingStore.swift、SessionStorage.swift；详情见0.11.6追加报告 |
 | BUG-019 | P2 | Bug / 性能 | 播放器计时器没有覆盖离开与失败生命周期 | 已修复 / 生命周期回归 | [AudioPlayback.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift) |
 | BUG-021 | P2 | Bug / 性能 | 网关正常返回普通 JSON 却被重复调用 | 已修复 / 请求计数 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
@@ -99,7 +99,7 @@ OWASP检查按原生桌面边界应用：认证/会话是第三方模型凭据�
 
 性能以原生I/O、列表构建、进程资源与请求次数衡量，Web LCP/CLS不适用于该界面。100会议×300段、查询最后一条20次：**1.197790秒→0.013592秒（约88.1倍）**，不是整App或首屏快88倍。Lazy列表已用1000段AX和首尾滚动验证；0.11.6补20.7秒Time Profiler采样，potential-hangs为0条（250ms阈值），AX访问参与测量。未测FPS/峰值内存。5万段连续3次事务的最大MainActor调度间隔同步617ms、后台7.6ms；总平均事务耗时相近，不能等同单次耗时或整App性能。
 
-AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和350项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。
+AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speaker清洗、字面相似度误删否定、EOF假完成、配置拼凑凭据、文档承诺漂移与安装只考虑成功路径。此处识别的是代码模式，不证明作者身份。没有凭模型名字或未经调用的网络API就认定“幻觉API”。Swift6 warnings-as-errors、实际系统API编译和356项回归提供运行证据；没有把本地保守整理的空结果误判为伪实现。
 
 ## 本轮新增确认缺陷
 
@@ -116,14 +116,14 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 | 验证 | 结果 | 证据 |
 |---|---|---|
-| Swift全量 | 350项，1项云端E2E跳过，0失败；warnings-as-errors | lifecycle/full-tests-final.log |
+| Swift全量 | 356项，1项云端E2E跳过，0失败；warnings-as-errors | editing/full-tests-final.log |
 | Python指标 | 28项通过 | upgrade-python-quality.log |
 | Python凭据 | 5项mock通过 | upgrade-python-credentials.log |
-| Python安装与来源 | 5项安装故障、7项来源验证；与指标/凭据共45项通过 | lifecycle/python-tests-final.log |
-| 合成质量门禁 | 7个case与预期一致，含已知退化反例 | lifecycle/quality-final.log |
+| Python安装与来源 | 5项安装故障、7项来源验证；与指标/凭据共45项通过 | editing/python-tests-final.log |
+| 合成质量门禁 | 7个case与预期一致，含已知退化反例 | editing/quality-final.log |
 | 合成原生界面 | 0.11.2：草稿、owner、双页过期提示、旧全文、1000段首尾AX、工具栏、浅深色；0.11.4补验准备、取消、再次开始、重开恢复；加载页截图未捕获 | upgrade-ui-observations.md与ui-final/证据 |
-| 内置真实引擎 | 官方锁定引擎GPU/CPU加载退出0；JSON可解析，599秒offset保持绝对时间 | lifecycle/runtime-smoke-final.log |
-| 发行产物 | 构建、签名、RPATH/依赖/许可、官方来源/打包哈希、复制/解压后验签通过 | lifecycle/package-final.log / zip-final.log / extracted-audit-final.log |
+| 内置真实引擎 | 官方锁定引擎GPU/CPU加载退出0；JSON可解析，599秒offset保持绝对时间 | editing/runtime-smoke-final.log |
+| 发行产物 | 构建、签名、RPATH/依赖/许可、官方来源/打包哈希、复制/解压后验签通过 | editing/package-final.log / zip-final.log / extracted-audit-final.log |
 | 合成保存与原生采样 | 1千/1万/5万段调度基准；1000段原生采样20.7秒、无250ms hang记录 | lifecycle/persistence-benchmark.json、ui-observations.md |
 | 基线对照 | 原290测试与前四批故障取证 | baseline-swift-test.log / batch-01至04-repro.log |
 
@@ -182,12 +182,16 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 - [x] 取消整理等实际收尾才释放占用；删除独立门禁贯穿等待与文件移除；失败保留记录。
 - [x] 导入旧草稿不覆盖重命名；晚到后台snapshot不覆盖UI新名；revision溢出/非法mutation拒绝。
 - [x] 整理请求点击时固定配置/术语；成功路径不提前生成fallback；合成主线程调度及原生1000段采样。
+- [x] 人工校正/重命名后台事务；保存期间独立门禁、失败保留草稿、无改动不写盘；正常退出提示等待。
+- [x] 故障收尾只更新最新终态字段；原生捕获保存状态、⌘Return及⌘Q保护；0.11.7启动后所有数据一致。
 
 ## 交付与安装状态
 
 源码位于当前独立工作树，分支codex/audit-hardening；本地提交与源码快照可回滚，GitHub未推送、未发布。升级包是本机PM Studio Signing证书签名的审查候选构建，不是Developer ID公证发行包。
 
-最新一轮0.11.6/build26已安装（原生启动因Mac锁屏待验），备份核对见lifecycle/install-final.json，稳定交付路径见.review-dist/lifecycle-delivery-location.txt；全部JSON字段与其他文件逐一核对，具体数量按安装时实际数据。详细问题表、回滚和验收边界见[0.11.6追加报告](lifecycle/review-and-upgrade.md)。
+最新一轮0.11.7/build27已安装并原生启动，3场会议24文件（291314048字节）与全部JSON字段完全一致；备份 `/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-153740` 包含0.11.6 App和完整私有数据。详情见editing/install-final.json，新稳定交付见.review-dist/editing-delivery-location.txt。0.11.6此前锁屏待验的启动也已补齐，见editing/startup-0.11.6.json。
+
+此前0.11.6/build26的安装与备份核对见lifecycle/install-final.json，稳定交付路径见.review-dist/lifecycle-delivery-location.txt；全部JSON字段与其他文件逐一核对，具体数量按安装时实际数据。详细问题表、回滚和验收边界见[0.11.6追加报告](lifecycle/review-and-upgrade.md)。
 
 上轮已从0.11.4/build24升级到0.11.5/build25，备份位于/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-135256；启动后全部JSON字段与24个数据文件逐字节一致，详情见continuation/install-final.json。新交付目录路径见工作树.review-dist/continuation-delivery-location.txt，SHA在交付目录内delivery-manifest.json记录。
 
@@ -1122,3 +1126,7 @@ VERIFY-UX-001：基线1000段原文AX没有正文子节点，工具遍历/时间
 ## BUG-029及生命周期补齐详情
 
 BUG-029的完整12字段表、BUG-011取消整理收尾、BUG-028导入快照保护，以及本轮后台事务和性能证据见[0.11.6追加报告](lifecycle/review-and-upgrade.md)。新增问题为P2；已确认P0/P1没有新增计数。
+
+## 后台人工编辑补齐
+
+人工保存后台化、失败恢复、正常退出守卫、终态事务名称保护，以及356项回归和本轮原生验收详情见[0.11.7追加报告](editing/review-and-upgrade.md)。本轮补齐既有ARCH-001与BUG-028/029，累计数量仍为48项。ARCH-001尚保留草稿/初始保存及终态的小文件同步I/O，不宣称全架构重构完成。
