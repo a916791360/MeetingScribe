@@ -1,0 +1,11 @@
+=== 分发前审计 ===
+产物：/private/tmp/ms-release-stage.6IETCi/MeetingScribe.app
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
+已生成：.review-dist/MeetingScribe-0.11.4-macOS.zip
+版本：0.11.4 (build 24)
+大小：455110134 字节（434.0 MB）
+SHA-256：3f192f61d473c114797ec40896e0d48e9df8f4b83ebe4ec45c33fda40426c9c5
+
+把这两行填进 Release 说明：
+| 文件 | `MeetingScribe-0.11.4-macOS.zip`（434.0 MB / 455110134 字节） |
+| SHA-256 | `3f192f61d473c114797ec40896e0d48e9df8f4b83ebe4ec45c33fda40426c9c5` |

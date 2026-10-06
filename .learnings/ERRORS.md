@@ -41,3 +41,10 @@ Only after matching scheme, host and effective port, copy original Authorization
 
 ### Metadata
 - Related Files: SummaryEngine.swift, Tests/MeetingScribeTests/AuditNetworkTests.swift
+
+## [ERR-20261006-004] Swift throwing comparison assertion
+
+Status: resolved
+Area: tests
+
+The new timing assertion did not compile because an unparenthesized try appeared after >=. Replaced it with XCTAssertGreaterThanOrEqual and a captured pre-confirmation Date. The final focused and full warnings-as-errors test runs passed.

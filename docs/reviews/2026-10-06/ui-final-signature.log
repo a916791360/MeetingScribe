@@ -1,0 +1,28 @@
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/.build/MeetingScribe.app: valid on disk
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/.build/MeetingScribe.app: satisfies its Designated Requirement
+Executable=/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/.build/MeetingScribe.app/Contents/MacOS/MeetingScribe
+Identifier=com.qingmeng.meetingscribe
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20400 size=10195 flags=0x0(none) hashes=312+3 location=embedded
+VersionPlatform=1
+VersionMin=983040
+VersionSDK=1705216
+Hash type=sha256 size=32
+CandidateCDHash sha256=7101d5ffd67ede762fb18c4aa9f692fe7aeac061
+CandidateCDHashFull sha256=7101d5ffd67ede762fb18c4aa9f692fe7aeac06100e710c5db1ec4da274d1fcf
+Hash choices=sha256
+CMSDigest=7101d5ffd67ede762fb18c4aa9f692fe7aeac06100e710c5db1ec4da274d1fcf
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=1638400
+Executable Segment flags=0x1
+Page size=16384
+CDHash=7101d5ffd67ede762fb18c4aa9f692fe7aeac061
+Signature size=1620
+Authority=PM Studio Signing
+Signed Time=Oct 6, 2026 at 13:16:42
+Info.plist entries=17
+TeamIdentifier=not set
+Sealed Resources version=2 rules=13 files=30
+Internal requirements count=1 size=104
+Version/build verified: 0.11.4/24

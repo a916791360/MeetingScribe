@@ -1,0 +1,43 @@
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/6] Compiling MeetingScribeTests AuditClosureTests.swift
+[4/6] Emitting module MeetingScribeTests
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.53s)
+Test Suite 'Selected tests' started at 2026-10-06 13:14:45.033.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 13:14:45.034.
+Test Suite 'AuditClosureTests' started at 2026-10-06 13:14:45.034.
+Test Case '-[MeetingScribeTests.AuditClosureTests testBackgroundStartupGatesNewTasksUntilExistingMeetingsAreLoaded]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testBackgroundStartupGatesNewTasksUntilExistingMeetingsAreLoaded]' passed (0.062 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testDirectUntrustedNoticeNeverLeaksIntoExport]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testDirectUntrustedNoticeNeverLeaksIntoExport]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedImportCopyPreservesExistingDestinationAndManifest]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedImportCopyPreservesExistingDestinationAndManifest]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedLegacyMigrationStillLoadsSafeMeetingAndReportsFailure]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailedLegacyMigrationStillLoadsSafeMeetingAndReportsFailure]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailureDuringPreparationAndOldCallbackCannotCorruptNextRecording]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testFailureDuringPreparationAndOldCallbackCannotCorruptNextRecording]' passed (0.066 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testLegacyDiagnosticMigrationRemovesArbitrarySecretsButPreservesMeetingContent]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testLegacyDiagnosticMigrationRemovesArbitrarySecretsButPreservesMeetingContent]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testManifestFailureDuringTranscriptionCannotReportSuccess]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testManifestFailureDuringTranscriptionCannotReportSuccess]' passed (0.760 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationCancellationStillReportsRecoveryWriteFailure]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationCancellationStillReportsRecoveryWriteFailure]' passed (0.026 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationIsExclusiveAndCancellationCannotBecomeLateRecording]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testPreparationIsExclusiveAndCancellationCannotBecomeLateRecording]' passed (0.027 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testStopReleasesRecordingEvenWhenTerminalStateCannotBeSaved]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testStopReleasesRecordingEvenWhenTerminalStateCannotBeSaved]' passed (0.040 seconds).
+Test Case '-[MeetingScribeTests.AuditClosureTests testSuccessfulImportReplacementIsCompleteAndLeavesNoStagingFile]' started.
+Test Case '-[MeetingScribeTests.AuditClosureTests testSuccessfulImportReplacementIsCompleteAndLeavesNoStagingFile]' passed (0.004 seconds).
+Test Suite 'AuditClosureTests' passed at 2026-10-06 13:14:46.029.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.994 (0.995) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 13:14:46.029.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.994 (0.995) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 13:14:46.029.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.994 (0.996) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

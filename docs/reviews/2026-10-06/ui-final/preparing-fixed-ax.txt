@@ -1,0 +1,41 @@
+Window: "会议 10-06 13:15", App: MSClosureReview.
+0 standard window 会议 10-06 13:15 – 正在准备录音...  ·  2026/10/6 13:15, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1
+	1 split group SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1, SidebarNavigationSplitView
+		2 container
+			3 text MeetingScribe 把会议录下来，结束后直接得到可读的结果。
+			4 scroll area
+				5 text 最近会议 6
+				6 list Secondary Actions: AXScrollToTop, AXScrollToBottom
+					7 button (selected) 会议 10-06 13:15, 10月6日 13:15, 正在准备录音
+					8 button 会议 10-06 13:09, 10月6日 13:09, 失败
+					9 button 审查夹具：编辑与待办, 9月21日 22:13, 00:52, ·, 已完成
+					10 button 审查夹具：旧版全文, 9月21日 22:12, 00:12, ·, 已完成
+					11 button 审查夹具：空结果, 9月21日 22:11, 00:12, ·, 已完成
+					12 button 审查夹具：1000段长逐字稿, 9月21日 22:10, 01:00:00, ·, 已完成
+		13 splitter (disabled, settable, float) 282
+		14 container
+			15 image waveform
+			16 text 正在准备录音 系统声音与 Mac 麦克风
+			17 busy indicator 0
+			18 text 正在连接采集设备，尚未确认开始录音 准备完成后才会显示录音计时。可在顶部取消准备。
+			19 busy indicator 0
+			20 text 请等待设备连接完成；此时尚未确认采集已开始。
+	21 toolbar
+		22 button Description: Hide Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel
+		23 container 取消录音准备
+			24 button 取消录音准备
+			25 button (disabled) Description: 导入音频, Help: 导入一段已有音频
+			26 button Description: 设置, ID: gearshape
+	27 close button
+	28 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	29 minimize button
+	30 text 会议 10-06 13:15 正在准备录音...  ·  2026/10/6 13:15
+31 menu bar
+	32 MSClosureReview
+	33 File
+	34 Edit
+	35 View
+	36 Window
+	37 Help
+
+The focused UI element is 0 standard window 会议 10-06 13:15 – 正在准备录音...  ·  2026/10/6 13:15, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1

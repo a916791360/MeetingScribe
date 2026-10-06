@@ -1,0 +1,37 @@
+Window: "会议 10-06 13:16", App: MSClosureReview.
+0 standard window 会议 10-06 13:16 – 2026/10/6 13:16  ·  已取消录音准备, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1
+	1 split group SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1, SidebarNavigationSplitView
+		2 container
+			3 text MeetingScribe 把会议录下来，结束后直接得到可读的结果。
+			4 scroll area
+				5 text 最近会议 7
+				6 list Secondary Actions: AXScrollToTop, AXScrollToBottom
+					7 button (selected) 会议 10-06 13:16, 10月6日 13:16, 已取消录音准备
+					8 button 会议 10-06 13:15, 10月6日 13:15, 已取消录音准备
+					9 button 会议 10-06 13:09, 10月6日 13:09, 失败
+					10 button 审查夹具：编辑与待办, 9月21日 22:13, 00:52, ·, 已完成
+					11 button 审查夹具：旧版全文, 9月21日 22:12, 00:12, ·, 已完成
+					12 button 审查夹具：空结果, 9月21日 22:11, 00:12, ·, 已完成
+					13 button 审查夹具：1000段长逐字稿, 9月21日 22:10, 01:00:00, ·, 已完成
+		14 splitter (disabled, settable, float) 282
+		15 container
+			16 text 已取消录音准备 已取消录音准备，尚未确认开始录音。可以重新开始录音。 点击顶部「开始录音」即可重试。已有文件保留在本机。
+	17 toolbar
+		18 button Description: Hide Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel
+		19 container 开始录音
+			20 button 开始录音
+			21 button Description: 导入音频, Help: 导入一段已有音频
+			22 button Description: 设置, ID: gearshape
+	23 close button
+	24 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	25 minimize button
+	26 text 会议 10-06 13:16 2026/10/6 13:16  ·  已取消录音准备
+27 menu bar
+	28 MSClosureReview
+	29 File
+	30 Edit
+	31 View
+	32 Window
+	33 Help
+
+The focused UI element is 0 standard window 会议 10-06 13:16 – 2026/10/6 13:16  ·  已取消录音准备, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1

@@ -1,0 +1,21 @@
+{
+  "old_version": "0.11.1",
+  "installed_version": "0.11.4",
+  "build": "24",
+  "app_exit_confirmed": true,
+  "backup_dir": "/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-131922",
+  "backup_verified": true,
+  "data_bytes": 291314048,
+  "files": 24,
+  "data_unchanged_before_launch": true,
+  "app_signature_verified": true,
+  "rollback_app_retained": true,
+  "contains_private_meeting_data": false,
+  "launched_successfully": true,
+  "meeting_count": 3,
+  "meeting_ids_preserved": true,
+  "all_non_diagnostic_json_fields_identical": true,
+  "audio_and_other_files_identical": true,
+  "rewritten_manifests": 0,
+  "real_recording_or_cloud_request_started": false
+}

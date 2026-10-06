@@ -22,6 +22,7 @@ enum MeetingResultTab: String, CaseIterable, Identifiable {
 }
 
 extension MeetingSession {
+    var displayStatusTitle: String { isRecordingPreparationCancelled ? "已取消录音准备" : status.title }
     /// 会议元信息压成一行**纯文本**。
     ///
     /// 为什么是纯文本：窗口副标题（`navigationSubtitle`）只吃 `Text`，
@@ -37,7 +38,7 @@ extension MeetingSession {
     func metaLine(includingStatus: Bool) -> String {
         var parts = [createdAt.formatted(date: .numeric, time: .shortened)]
         if let duration { parts.append(duration.clockLabel) }
-        if includingStatus { parts.append(status.title) }
+        if includingStatus { parts.append(displayStatusTitle) }
         // 只挂模型名，不挂服务商。存下来的 `summaryModel` 是「服务商 · 模型」，
         // 前半截在这条一行的副标题里是噪音（见 `MeetingAnalysis.modelLabel`）。
         if let model = analysis.modelLabel { parts.append(model) }
@@ -215,7 +216,12 @@ struct WorkbenchSessionRowView: View {
 
                     Spacer(minLength: 8)
 
-                    WorkbenchStatusDot(status: session.status)
+                    if session.isRecordingPreparationCancelled || (session.status == .recording && store.isPreparingRecording) {
+                        Image(systemName: session.isRecordingPreparationCancelled ? "minus.circle" : "hourglass")
+                            .foregroundStyle(AppTheme.muted)
+                    } else {
+                        WorkbenchStatusDot(status: session.status)
+                    }
                 }
 
                 Text(session.createdAt, format: .dateTime.month().day().hour().minute())
@@ -227,7 +233,7 @@ struct WorkbenchSessionRowView: View {
                         Text(duration.clockLabel)
                         Text("·")
                     }
-                    Text(session.status.title)
+                    Text(session.status == .recording && store.isPreparingRecording ? "正在准备录音" : session.displayStatusTitle)
                 }
                 .font(.caption)
                 .foregroundStyle(subtitleColor)
@@ -458,7 +464,7 @@ struct WorkbenchDetailView: View {
             // 一整条宽度换不来任何信息（§六 记录项 ⑤）。改成交代"这一屏现在能做什么"。
             return Text("还没有会议 · 可以直接开始录音，或者导入一段已有音频")
         }
-        if store.isRecording || store.isProcessing {
+        if store.isPreparingRecording || store.isRecording || store.isProcessing {
             // 进行中：`statusText` 本身已经说明了状态（「正在录音」/「正在转写第 1/2 段 · 0%」），
             // 所以元信息里不再重复那个状态词，否则副标题末尾会再挂一个「转写中」。
             return Text("\(store.statusText)  ·  \(session.metaLine(includingStatus: false))")
@@ -593,12 +599,25 @@ struct WorkbenchSessionWorkspace: View {
         Group {
             switch session.status {
             case .failed:
-                WorkbenchFailureState(
-                    session: session,
-                    openFolderAction: store.openSelectedSessionFolder,
-                    retryAction: { store.retryProcessing(session) }
-                )
-                .padding(AppTheme.space6)
+                if session.isRecordingPreparationCancelled {
+                    VStack(alignment: .leading, spacing: AppTheme.space4) {
+                        Label("已取消录音准备", systemImage: "minus.circle")
+                            .font(.headline)
+                        Text(SafeDiagnostics.recordingPreparationCancelled)
+                        Text("点击顶部「开始录音」即可重试。已有文件保留在本机。")
+                            .font(.callout)
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(AppTheme.space6)
+                } else {
+                    WorkbenchFailureState(
+                        session: session,
+                        openFolderAction: store.openSelectedSessionFolder,
+                        retryAction: { store.retryProcessing(session) }
+                    )
+                    .padding(AppTheme.space6)
+                }
             case .processing, .recording:
                 // 卡片只负责说明"现在在干什么"，不再摆按钮：
                 // 状态迁移统一由标题栏那**一个**主按钮承担，一处唯一，
@@ -2680,6 +2699,7 @@ struct WorkbenchProcessingState: View {
     let session: MeetingSession
 
     private var isRecordingPhase: Bool { session.status == .recording }
+    private var isPreparingRecording: Bool { isRecordingPhase && store.isPreparingRecording }
 
     /// 这张卡片其实横跨三个真实阶段，原来的界面把它们揉成了同一句话：
     ///
@@ -2733,7 +2753,7 @@ struct WorkbenchProcessingState: View {
 
     private var statusBar: some View {
         HStack(spacing: AppTheme.space3) {
-            if isRecordingPhase {
+            if isRecordingPhase && !isPreparingRecording {
                 WorkbenchLiveDot()
             } else {
                 Image(systemName: phase == .analyzing ? "sparkles" : "waveform")
@@ -2764,7 +2784,7 @@ struct WorkbenchProcessingState: View {
 
     private var statusTitle: String {
         switch phase {
-        case .preparing: return isRecordingPhase ? "录音中" : "正在准备"
+        case .preparing: return isPreparingRecording ? "正在准备录音" : isRecordingPhase ? "录音中" : "正在准备"
         case .transcribing: return "正在转写"
         case .analyzing: return "正在整理"
         }
@@ -2785,7 +2805,19 @@ struct WorkbenchProcessingState: View {
 
     @ViewBuilder
     private var content: some View {
-        if isRecordingPhase {
+        if isPreparingRecording {
+            VStack(spacing: AppTheme.space4) {
+                Spacer(minLength: AppTheme.space4)
+                ProgressView().controlSize(.large)
+                Text("正在连接采集设备，尚未确认开始录音")
+                    .font(.headline)
+                Text("准备完成后才会显示录音计时。可在顶部取消准备。")
+                    .foregroundStyle(AppTheme.muted)
+                Spacer(minLength: AppTheme.space4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(AppTheme.space5)
+        } else if isRecordingPhase {
             recordingBody
         } else {
             transcriptionBody
@@ -2926,7 +2958,7 @@ struct WorkbenchProcessingState: View {
                 // 录音没有"进度"可言，用不确定进度条表达"在跑"，不假装一个百分比。
                 ProgressView()
                     .progressViewStyle(.linear)
-                    .tint(AppTheme.danger)
+                    .tint(isPreparingRecording ? AppTheme.accent : AppTheme.danger)
             } else {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let shown = smoothProgress(now: context.date)
@@ -2975,6 +3007,7 @@ struct WorkbenchProcessingState: View {
     /// 录音到点是**直接 `stopRecording()`**、没有任何预告的（原来的 B6），
     /// 主计时器旁边随时能看到"还剩多久"是这里唯一能做的补救。
     private func footerNote(now: Date) -> String {
+        if isPreparingRecording { return "请等待设备连接完成；此时尚未确认采集已开始。" }
         if isRecordingPhase { return recordingFooterNote(now: now) }
         if phase == .analyzing {
             return "逐字稿已经全部转完，正在梳理结构、提炼决策与待办。"
@@ -2983,7 +3016,7 @@ struct WorkbenchProcessingState: View {
     }
 
     private func recordingFooterNote(now: Date) -> String {
-        let remaining = MeetingStore.maxRecordingSeconds - max(0, now.timeIntervalSince(session.createdAt))
+        let remaining = MeetingStore.maxRecordingSeconds - recordingElapsed(now: now)
         if remaining <= Self.recordingLimitWarningWindow {
             let minutes = max(1, Int((remaining / 60).rounded(.up)))
             return "录音会在约 \(minutes) 分钟后自动停止，请及时结束并保存。"
@@ -2994,8 +3027,8 @@ struct WorkbenchProcessingState: View {
     private static let recordingLimitWarningWindow: TimeInterval = 15 * 60
 
     private func isNearRecordingLimit(now: Date) -> Bool {
-        guard isRecordingPhase else { return false }
-        let elapsed = max(0, now.timeIntervalSince(session.createdAt))
+        guard isRecordingPhase, !isPreparingRecording else { return false }
+        let elapsed = recordingElapsed(now: now)
         return MeetingStore.maxRecordingSeconds - elapsed <= Self.recordingLimitWarningWindow
     }
 
@@ -3025,9 +3058,14 @@ struct WorkbenchProcessingState: View {
     }
 
     private func elapsedClock(now: Date) -> String {
-        let startedAt = isRecordingPhase ? session.createdAt : session.processingStartedAt
+        let startedAt = isRecordingPhase ? store.recordingStartedAt : session.processingStartedAt
         guard let startedAt else { return "00:00" }
         return max(0, now.timeIntervalSince(startedAt)).clockLabel
+    }
+
+    private func recordingElapsed(now: Date) -> TimeInterval {
+        guard let startedAt = store.recordingStartedAt else { return 0 }
+        return max(0, now.timeIntervalSince(startedAt))
     }
 
     /// 预计剩余：按「已完成段的平均耗时」外推。

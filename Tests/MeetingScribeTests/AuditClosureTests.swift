@@ -172,6 +172,7 @@ final class AuditClosureTests: XCTestCase {
         XCTAssertEqual(creations, 1)
         XCTAssertEqual(store.sessions.count, 1)
         XCTAssertTrue(store.isPreparingRecording)
+        XCTAssertNil(store.recordingStartedAt)
         try await waitFor { recorder.startContinuation != nil }
         store.deleteSession(try XCTUnwrap(store.sessions.first))
         XCTAssertEqual(store.sessions.count, 1)
@@ -182,6 +183,11 @@ final class AuditClosureTests: XCTestCase {
         XCTAssertFalse(store.isProcessing)
         XCTAssertEqual(recorder.stopCount, 1)
         XCTAssertEqual(storage.loadSessions().first?.status, .failed)
+        XCTAssertNil(store.errorMessage, "User cancellation must not show a failure alert")
+        XCTAssertEqual(store.statusText, "已取消录音准备")
+        XCTAssertTrue(storage.loadSessions().first?.isRecordingPreparationCancelled == true)
+        XCTAssertEqual(storage.loadSessions().first?.errorMessage, SafeDiagnostics.recordingPreparationCancelled)
+        XCTAssertNil(store.recordingStartedAt)
     }
 
     @MainActor
@@ -205,10 +211,15 @@ final class AuditClosureTests: XCTestCase {
         try await waitFor { !store.isPreparingRecording }
         XCTAssertFalse(store.isRecording)
         XCTAssertEqual(first.stopCount, 1)
+        XCTAssertNotNil(store.errorMessage, "A capture failure must still report an error")
+        XCTAssertFalse(store.selectedSession?.isRecordingPreparationCancelled == true)
         store.startRecording()
         try await waitFor { second.startContinuation != nil }
+        let confirmedAfter = Date()
         second.completeStart()
         try await waitFor { store.isRecording }
+        XCTAssertNotNil(store.recordingStartedAt)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(store.recordingStartedAt), confirmedAfter)
         let secondID = store.selectedSessionID
         lateCallback?("old failure")
         XCTAssertTrue(store.isRecording)
@@ -219,6 +230,31 @@ final class AuditClosureTests: XCTestCase {
         XCTAssertFalse(store.isRecording)
         XCTAssertEqual(second.stopCount, 1)
         XCTAssertEqual(store.selectedSession?.status, .failed)
+    }
+
+    @MainActor
+    func testPreparationCancellationStillReportsRecoveryWriteFailure() async throws {
+        let root = try root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = preferences()
+        defer { restore(snapshot) }
+        let recorder = SyntheticRecorder()
+        let storage = SessionStorage(rootURL: root)
+        let store = MeetingStore(storage: storage, recordingFactory: { _, _, _ in recorder }, capturePermissions: { (.granted, .granted) })
+        store.startRecording()
+        try await waitFor { recorder.startContinuation != nil }
+        let session = try XCTUnwrap(store.selectedSession)
+        let manifest = storage.folderURL(for: session).appendingPathComponent("session.json")
+        try FileManager.default.removeItem(at: manifest)
+        try FileManager.default.createDirectory(at: manifest, withIntermediateDirectories: true)
+        store.stopRecording()
+        recorder.completeStart()
+        try await waitFor { !store.isPreparingRecording }
+        XCTAssertEqual(recorder.stopCount, 1)
+        XCTAssertFalse(store.isRecording)
+        XCTAssertNil(store.recordingStartedAt)
+        XCTAssertNotNil(store.storageWriteNotice)
+        XCTAssertTrue(store.errorMessage?.contains("未能保存") == true)
     }
 
     @MainActor

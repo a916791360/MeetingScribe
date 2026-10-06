@@ -1,0 +1,2 @@
+There has been no change in the accessibility tree for Window: "审查夹具：编辑与待办".
+The focused UI element is 0 standard window 审查夹具：编辑与待办 – 2026/9/21 22:13  ·  00:52  ·  已完成  ·  审查模型, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MSClosureReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MSClosureReview.MeetingStore>>>-1-AppWindow-1

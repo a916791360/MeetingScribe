@@ -110,6 +110,7 @@ final class MeetingStore: ObservableObject {
     private let capturePermissions: @MainActor () -> (ScreenCapturePermission, MicrophonePermission)
     private var recordingStartFailure: String?
     @Published private(set) var isPreparingRecording = false
+    @Published private(set) var recordingStartedAt: Date?
     private var recordingStartTask: Task<Void, Never>?
     private var recordingLevelTask: Task<Void, Never>?
     @Published private(set) var microphoneLevel: Double = 0
@@ -287,6 +288,7 @@ final class MeetingStore: ObservableObject {
         do { draft = try storage.createDraftSession(captureMode: .mixed) }
         catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription; return }
         isPreparingRecording = true
+        recordingStartedAt = nil
         recordingStartFailure = nil
         sessions.insert(draft, at: 0)
         selectedSessionID = draft.id
@@ -329,6 +331,7 @@ final class MeetingStore: ObservableObject {
                 await MainActor.run {
                     self.isPreparingRecording = false
                     self.isRecording = true
+                    self.recordingStartedAt = Date()
                     self.statusText = "正在录音"
                     self.updateSessionStatus(draft.id, status: .recording)
                     self.startRecordingLimit(for: draft.id)
@@ -343,11 +346,16 @@ final class MeetingStore: ObservableObject {
                     }
                 }
             } catch {
+                let wasUserCancellation = Task.isCancelled && self.recordingStartFailure == nil
                 _ = try? await recorder.stop()
                 await MainActor.run {
                     guard self.activeSessionID == draft.id else { return }
                     self.isPreparingRecording = false
-                    self.failSession(draft.id, message: self.recordingStartFailure ?? error.localizedDescription)
+                    self.failSession(draft.id,
+                        message: wasUserCancellation && self.recordingStartFailure == nil
+                            ? SafeDiagnostics.recordingPreparationCancelled
+                            : self.recordingStartFailure ?? error.localizedDescription,
+                        cancelled: wasUserCancellation && self.recordingStartFailure == nil)
                 }
             }
         }
@@ -361,6 +369,7 @@ final class MeetingStore: ObservableObject {
         }
         guard isRecording, let sessionID = activeSessionID else { return }
         isRecording = false
+        recordingStartedAt = nil
         recordingLevelTask?.cancel()
         microphoneLevel = 0
         systemAudioLevel = 0
@@ -1430,19 +1439,20 @@ final class MeetingStore: ObservableObject {
         }
     }
 
-    private func failSession(_ sessionID: UUID, message: String) {
+    private func failSession(_ sessionID: UUID, message: String, cancelled: Bool = false) {
         guard activeSessionID == sessionID else { return }
         if var session = sessions.first(where: { $0.id == sessionID }) {
             session.status = .failed
             session.errorMessage = message
             session.updatedAt = Date()
-            session.processingStage = "处理失败"
+            session.processingStage = cancelled ? "已取消录音准备" : "处理失败"
             persistRecoveryState(session)
             replaceSession(session)
         }
-        if storageWriteNotice == nil { errorMessage = SafeDiagnostics.processing(message) }
-        statusText = errorMessage ?? SafeDiagnostics.processing(message) ?? "处理失败"
+        if storageWriteNotice == nil { errorMessage = cancelled ? nil : SafeDiagnostics.processing(message) }
+        statusText = errorMessage ?? (cancelled ? "已取消录音准备" : SafeDiagnostics.processing(message) ?? "处理失败")
         isPreparingRecording = false
+        recordingStartedAt = nil
         isRecording = false
         isProcessing = false
         activeSessionID = nil
