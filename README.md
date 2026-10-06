@@ -187,6 +187,20 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
+本地审查版 0.11.5 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
+whisper.cpp v1.9.4 提交和官方 small 模型 SHA-256。使用已有模型构建，不修改已安装 App：
+
+```bash
+python3 Scripts/build_pinned_runtime.py --model /path/to/ggml-small.bin --cmake /path/to/cmake
+WHISPER_ROOT="$PWD/.build/pinned-whisper" REQUIRE_PINNED_RUNTIME=1 Scripts/package_app.sh
+REQUIRE_PINNED_RUNTIME=1 Scripts/make_release_zip.sh
+```
+
+构建限定 Apple Silicon、macOS 15+，需要 Xcode 命令行工具和 CMake。
+App 内 `Contents/Resources/RuntimeProvenance.plist` 记录源码、模型、构建配置及打包后的文件哈希；
+发行审计校验锁定来源、模型和实际文件。自签证书及来源记录不等同于 Apple 公证。
+
+
 
 ### 0.11.3 审查收尾
 

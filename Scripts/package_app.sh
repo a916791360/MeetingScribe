@@ -36,6 +36,10 @@ if [[ ! -f "$WHISPER_MODEL" ]]; then
     exit 1
 fi
 
+if [[ "${REQUIRE_PINNED_RUNTIME:-0}" == "1" || -f "$WHISPER_ROOT/runtime-provenance.json" ]]; then
+    python3 "$ROOT_DIR/Scripts/runtime_provenance.py" --runtime "$WHISPER_ROOT"
+fi
+
 if swift build --configuration "$CONFIGURATION" --disable-sandbox; then
     BIN_DIR="$(swift build --configuration "$CONFIGURATION" --disable-sandbox --show-bin-path)"
 else
@@ -130,7 +134,10 @@ for binary in "$RUNTIME_DIR/bin/whisper-cli" "$RUNTIME_DIR/bin/"*.dylib; do
     [[ -f "$binary" ]] || continue
     codesign --force --sign "$SIGNING_IDENTITY" "$binary" >/dev/null
 done
-codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_DIR" >/dev/null
+if [[ -f "$WHISPER_ROOT/runtime-provenance.json" ]]; then
+    python3 "$ROOT_DIR/Scripts/runtime_provenance.py" --runtime "$WHISPER_ROOT" --bundle "$APP_DIR"
+fi
+codesign --force --sign "$SIGNING_IDENTITY" "$APP_DIR" >/dev/null
 
 print "Packaged: $APP_DIR"
 print "Signed with: $SIGNING_IDENTITY"

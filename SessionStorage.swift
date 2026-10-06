@@ -98,6 +98,19 @@ final class SessionStorage: @unchecked Sendable {
         indexLock.withLock { foldersByID[session.id] = folder }
     }
 
+    @discardableResult
+    func update(_ id: UUID, _ mutation: (inout MeetingSession) throws -> Void) throws -> MeetingSession {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        var session = try self.session(with: id)
+        let folderName = session.folderName
+        try mutation(&session)
+        guard session.id == id, session.folderName == folderName else { throw StorageError.invalidManifest }
+        session = session.sanitizingDiagnostics
+        try save(session)
+        return session
+    }
+
     func delete(_ session: MeetingSession) throws {
         ioLock.lock()
         defer { ioLock.unlock() }

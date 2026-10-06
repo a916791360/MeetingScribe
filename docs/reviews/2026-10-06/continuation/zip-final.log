@@ -1,0 +1,12 @@
+=== 分发前审计 ===
+产物：/private/tmp/ms-release-stage.r05TGa/MeetingScribe.app
+Locked runtime provenance and input hashes verified
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
+已生成：.review-dist/MeetingScribe-0.11.5-macOS.zip
+版本：0.11.5 (build 25)
+大小：455741776 字节（434.6 MB）
+SHA-256：a698635971d0fce4d85d825c6b32f81594b3273636a82fe8f23aa217cdf17c70
+
+把这两行填进 Release 说明：
+| 文件 | `MeetingScribe-0.11.5-macOS.zip`（434.6 MB / 455741776 字节） |
+| SHA-256 | `a698635971d0fce4d85d825c6b32f81594b3273636a82fe8f23aa217cdf17c70` |

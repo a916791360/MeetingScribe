@@ -99,8 +99,9 @@ final class MeetingStore: ObservableObject {
     @Published var errorMessage: String?
 
     private let storage: SessionStorage
+    private let repository: SessionRepository
     private let transcoder = AudioTranscoder()
-    private let durationReader = AudioDurationReader()
+    private let audioWorker = AudioTranscriptionWorker()
     private let transcriber = WhisperCLIRunner()
     private let summaryEngine = MeetingSummaryEngine()
     private let keychain = KeychainStore.shared
@@ -158,7 +159,9 @@ final class MeetingStore: ObservableObject {
          capturePermissions: @escaping @MainActor () -> (ScreenCapturePermission, MicrophonePermission) = {
              (MixedRecordingSession.screenCapturePreflight, MicrophoneAccess.permission)
          }) {
-        self.storage = storage ?? SessionStorage()
+        let actualStorage = storage ?? SessionStorage()
+        self.storage = actualStorage
+        self.repository = SessionRepository(storage: actualStorage)
         self.recordingFactory = recordingFactory
         self.capturePermissions = capturePermissions
         let defaults = Self.defaultRuntimePaths()
@@ -209,20 +212,10 @@ final class MeetingStore: ObservableObject {
         summaryAPIKeyStatus = keychain.contains(for: summaryProvider) ? "已保存到钥匙串" : "未保存"
         savePreferences()
         if loadSessionsInBackground ?? (storage == nil) {
-            isLoadingSessions = true
-            statusText = "正在读取会议记录..."
-            Task { [weak self, storage = self.storage] in
-                let report = await Task.detached(priority: .userInitiated) {
-                    MeetingSessionLoader.load(storage: storage)
-                }.value
-                guard let self else { return }
-                self.applySessionLoad(report)
-                self.isLoadingSessions = false
-                self.statusText = "准备就绪"
-                self.resumePendingProcessing()
-            }
-        } else {
             reloadSessions()
+        } else {
+            // Deterministic fixture initialization; normal app startup uses the background path.
+            applySessionLoad(MeetingSessionLoader.load(storage: self.storage))
             Task { @MainActor [weak self] in self?.resumePendingProcessing() }
         }
     }
@@ -246,8 +239,19 @@ final class MeetingStore: ObservableObject {
     }
 
     func reloadSessions() {
-        guard !isLoadingSessions else { return }
-        applySessionLoad(MeetingSessionLoader.load(storage: storage, activeID: activeSessionID))
+        guard !isLoadingSessions, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        isLoadingSessions = true
+        statusText = "正在读取会议记录..."
+        Task { [weak self, storage] in
+            let report = await Task.detached(priority: .userInitiated) {
+                MeetingSessionLoader.load(storage: storage)
+            }.value
+            guard let self else { return }
+            self.applySessionLoad(report)
+            self.isLoadingSessions = false
+            self.statusText = report.issues.isEmpty && !report.writeFailed ? "准备就绪" : "会议已读取，请检查异常提示"
+            self.resumePendingProcessing()
+        }
     }
 
     private func applySessionLoad(_ load: SessionLoadReport) {
@@ -795,6 +799,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func renameSession(_ session: MeetingSession, to title: String) {
+        guard !isLoadingSessions else { return }
         let cleanTitle = title
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -809,10 +814,11 @@ final class MeetingStore: ObservableObject {
         guard cleanTitle != session.title else { return }
 
         do {
-            var updated = try storage.session(with: session.id)
-            updated.title = cleanTitle
-            updated.updatedAt = Date()
-            try storage.save(updated)
+            let updated = try storage.update(session.id) { updated in
+                updated.title = cleanTitle
+                updated.titleManuallyEdited = true
+                updated.updatedAt = Date()
+            }
             replaceSession(updated)
             selectedSessionID = updated.id
         } catch {
@@ -836,7 +842,7 @@ final class MeetingStore: ObservableObject {
         segmentID: UUID,
         text: String
     ) -> TranscriptEditor.Outcome {
-        if isProcessing || isRecording || isPreparingRecording {
+        if isLoadingSessions || isProcessing || isRecording || isPreparingRecording {
             return .rejected("正在整理纪要，等它结束再改这一句。")
         }
 
@@ -1090,6 +1096,8 @@ final class MeetingStore: ObservableObject {
         resetSession.processingTotalChunks = nil
         resetSession.processingNextOffset = 0
         resetSession.processingChunkStartedAt = nil
+        resetSession.dualTrackCheckpoint = nil
+        resetSession.singleTrackCheckpoint = nil
 
         do {
             try storage.save(resetSession)
@@ -1131,6 +1139,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func deleteSession(_ session: MeetingSession) {
+        guard !isLoadingSessions else { return }
         if activeSessionID == session.id && (isRecording || isPreparingRecording) {
             errorMessage = "请先结束录音，确认文件已保存后再删除这场会议。"
             return
@@ -1176,41 +1185,64 @@ final class MeetingStore: ObservableObject {
             throw PipelineError.transcriptionFailed("找不到待处理的音频文件。")
         }
 
-        let duration = try durationReader.duration(for: inputURL)
-        let totalChunks = Self.chunkCount(for: duration)
-        var session = try storage.session(with: sessionID)
+        var duration = try await audioWorker.duration(for: inputURL)
+        var totalChunks = Self.chunkCount(for: duration)
+        var session = try await repository.session(with: sessionID)
         let startedAt = session.processingStartedAt ?? Date()
-        let canResume = resume && session.processingRetainsPreviousResults != true && dualTracks == nil
-        var completedChunks = canResume ? min(session.processingCompletedChunks ?? 0, totalChunks) : 0
-        var nextOffset = canResume
-            ? min(max(session.processingNextOffset ?? Double(completedChunks) * Self.chunkDuration, 0), duration)
-            : 0
-        var segments = canResume ? session.transcriptSegments : []
+        let initialPrompt = glossary.whisperInitialPrompt()
+        let cleaningOptions = TranscriptCleaner.Options(terminology: glossary.replacementTable)
+        let environment = TranscriptionEnvironment(
+            cliSHA256: try await audioWorker.sha256(of: cliURL),
+            modelSHA256: try await audioWorker.sha256(of: modelURL),
+            initialPrompt: initialPrompt, chunkSeconds: Self.chunkDuration, overlapSeconds: Self.chunkOverlap
+        )
+        var singleCheckpoint: SingleTrackCheckpoint?
+        if dualTracks == nil {
+            let sha256 = try await audioWorker.sha256(of: inputURL)
+            if resume, let previous = session.singleTrackCheckpoint, previous.environment == environment,
+               previous.track.canResume(sourceName: inputURL.lastPathComponent, sha256: sha256,
+                                        duration: duration, totalChunks: totalChunks, speaker: nil) {
+                singleCheckpoint = previous
+            } else {
+                singleCheckpoint = SingleTrackCheckpoint(environment: environment, track: TrackTranscriptionCheckpoint(
+                    sourceName: inputURL.lastPathComponent, sourceSHA256: sha256, duration: duration, totalChunks: totalChunks))
+            }
+        }
+        var completedChunks = singleCheckpoint?.track.completedChunks ?? 0
+        var nextOffset = min(duration, Double(completedChunks) * Self.chunkDuration)
+        var segments = singleCheckpoint?.track.segments ?? []
 
         try Task.checkCancellation()
         guard activeSessionID == sessionID else { throw CancellationError() }
-        session.status = .processing
-        session.updatedAt = Date()
-        session.inputAudioFileName = inputURL.lastPathComponent
-        // 两路文件名要存下来：**重新处理 / 崩溃恢复**不经过录音，只能靠这两个名字
-        // 把说话人找回来（不存的话，那两条路会静默丢掉全部说话人标注 —— 其他都对，
-        // 就是标签没了，没人看得出是这里出的问题）。
-        session.localAudioFileName = dualTracks?.local.lastPathComponent
-        session.remoteAudioFileName = dualTracks?.remote.lastPathComponent
-        session.whisperCLIPath = cliURL.path
-        session.whisperModelPath = modelURL.path
-        session.processingProgress = Double(completedChunks) / Double(totalChunks)
-        session.processingStage = completedChunks >= totalChunks
-            ? "正在整理会议结果..."
-            : "准备第 \(completedChunks + 1)/\(totalChunks) 段"
-        session.processingStartedAt = startedAt
-        session.processingCompletedChunks = completedChunks
-        session.processingTotalChunks = totalChunks
-        session.processingNextOffset = nextOffset
-        // 第一段的起点就是"现在"。进度条用它算段内的连续百分比（见 MeetingSession 注释）。
-        session.processingChunkStartedAt = Date()
-        session.errorMessage = nil
-        try storage.save(session)
+        let initialInputName = inputURL.lastPathComponent
+        let initialCompleted = completedChunks
+        let initialTotal = totalChunks
+        let initialOffset = nextOffset
+        let initialSingleCheckpoint = singleCheckpoint
+        session = try await repository.update(sessionID) { session in
+            session.status = .processing
+            session.updatedAt = Date()
+            session.inputAudioFileName = initialInputName
+            // 两路文件名要存下来：**重新处理 / 崩溃恢复**不经过录音，只能靠这两个名字
+            // 把说话人找回来（不存的话，那两条路会静默丢掉全部说话人标注 —— 其他都对，
+            // 就是标签没了，没人看得出是这里出的问题）。
+            session.localAudioFileName = dualTracks?.local.lastPathComponent
+            session.remoteAudioFileName = dualTracks?.remote.lastPathComponent
+            session.whisperCLIPath = cliURL.path
+            session.whisperModelPath = modelURL.path
+            session.processingProgress = Double(initialCompleted) / Double(initialTotal)
+            session.processingStage = initialCompleted >= initialTotal
+                ? "正在整理会议结果..."
+                : "准备第 \(initialCompleted + 1)/\(initialTotal) 段"
+            session.processingStartedAt = startedAt
+            session.processingCompletedChunks = initialCompleted
+            session.processingTotalChunks = initialTotal
+            session.processingNextOffset = initialOffset
+            // 第一段的起点就是"现在"。进度条用它算段内的连续百分比（见 MeetingSession 注释）。
+            session.processingChunkStartedAt = Date()
+            session.errorMessage = nil
+            session.singleTrackCheckpoint = initialSingleCheckpoint
+        }
         replaceSession(session)
         processingProgress = session.processingProgress ?? 0
         processingStage = session.processingStage ?? "正在转写..."
@@ -1220,23 +1252,27 @@ final class MeetingStore: ObservableObject {
         // 术语表在这**一次转写开始时取一次快照**：中途用户改了设置，也不该让同一场会议
         // 前半段和后半段用两份不同的提示词（whisper 的偏置本来就有"越往后越弱"的问题，
         // 再叠一层变化就更没法解释了）。下一次转写自然用新词表。
-        let initialPrompt = glossary.whisperInitialPrompt()
 
         if let dualTracks {
             // 双声道：两路各转一遍，再合并打说话人。分块窗口与"哪一段归谁"的算法
             // 与下面那条单路循环**共用同一份实现**（`chunkWindow` / `ownedSegments`）。
-            segments = try await transcribeDualTracks(
+            let result = try await transcribeDualTracks(
                 dualTracks,
                 sessionID: sessionID,
                 session: session,
                 cliURL: cliURL,
                 modelURL: modelURL,
                 initialPrompt: initialPrompt,
-                startedAt: startedAt
+                startedAt: startedAt,
+                resume: resume,
+                environment: environment
             )
+            segments = result.segments
+            totalChunks = result.totalChunks
+            duration = max(duration, result.duration)
             completedChunks = totalChunks
             nextOffset = duration
-        } else if !(try await isAudible(inputURL, probe: AudioLevelProbe(), threshold: 0)) {
+        } else if !(try await isAudible(inputURL, threshold: 0)) {
             // Imported/mixed fallback audio needs the same guard. For the single track,
             // skip only digital silence; low-volume speech must never be discarded.
             segments = []
@@ -1255,7 +1291,7 @@ final class MeetingStore: ObservableObject {
                 processingProgress = Double(completedChunks) / Double(totalChunks)
                 processingStage = "正在转写第 \(chunkNumber)/\(totalChunks) 段"
                 statusText = "\(processingStage) · \(processingProgress.percentLabel)"
-                try updateProcessingState(
+                try await updateProcessingState(
                     sessionID: sessionID,
                     progress: processingProgress,
                     stage: processingStage,
@@ -1285,30 +1321,39 @@ final class MeetingStore: ObservableObject {
                 completedChunks += 1
                 nextOffset = window.coreEnd
 
-                session = try storage.session(with: sessionID)
-                session.status = .processing
-                session.updatedAt = Date()
-                if session.processingRetainsPreviousResults != true {
-                    session.transcriptSegments = segments
-                    session.transcriptText = segments.map(\.text).joined(separator: "\n")
+                let chunkSegments = segments
+                let chunkCompleted = completedChunks
+                let chunkTotal = totalChunks
+                let chunkOffset = nextOffset
+                let chunkDuration = duration
+                singleCheckpoint?.track.segments = chunkSegments
+                singleCheckpoint?.track.completedChunks = chunkCompleted
+                let committedSingleCheckpoint = singleCheckpoint
+                session = try await repository.update(sessionID) { session in
+                    session.status = .processing
+                    session.updatedAt = Date()
+                    if session.processingRetainsPreviousResults != true {
+                        session.transcriptSegments = chunkSegments
+                        session.transcriptText = chunkSegments.map(\.text).joined(separator: "\n")
+                    }
+                    session.duration = chunkDuration
+                    session.inputAudioFileName = inputURL.lastPathComponent
+                    session.whisperCLIPath = cliURL.path
+                    session.whisperModelPath = modelURL.path
+                    session.processingProgress = Double(chunkCompleted) / Double(chunkTotal)
+                    session.processingStage = chunkCompleted == chunkTotal
+                        ? "正在整理会议结果..."
+                        : "已完成第 \(chunkCompleted)/\(chunkTotal) 段"
+                    session.processingStartedAt = startedAt
+                    session.processingCompletedChunks = chunkCompleted
+                    session.processingTotalChunks = chunkTotal
+                    session.processingNextOffset = chunkOffset
+                    // 这一段已经落地，把"当前段起点"推到此刻 —— 界面上的估算进度会回到
+                    // (已完成段 / 总段数) 这条**真实**基线上，然后继续往上走，绝不回缩。
+                    session.processingChunkStartedAt = Date()
+                    session.errorMessage = nil
+                    session.singleTrackCheckpoint = committedSingleCheckpoint
                 }
-                session.duration = duration
-                session.inputAudioFileName = inputURL.lastPathComponent
-                session.whisperCLIPath = cliURL.path
-                session.whisperModelPath = modelURL.path
-                session.processingProgress = Double(completedChunks) / Double(totalChunks)
-                session.processingStage = completedChunks == totalChunks
-                    ? "正在整理会议结果..."
-                    : "已完成第 \(completedChunks)/\(totalChunks) 段"
-                session.processingStartedAt = startedAt
-                session.processingCompletedChunks = completedChunks
-                session.processingTotalChunks = totalChunks
-                session.processingNextOffset = nextOffset
-                // 这一段已经落地，把"当前段起点"推到此刻 —— 界面上的估算进度会回到
-                // (已完成段 / 总段数) 这条**真实**基线上，然后继续往上走，绝不回缩。
-                session.processingChunkStartedAt = Date()
-                session.errorMessage = nil
-                try storage.save(session)
                 replaceSession(session)
                 processingProgress = session.processingProgress ?? 0
                 processingStage = session.processingStage ?? "正在转写..."
@@ -1326,12 +1371,9 @@ final class MeetingStore: ObservableObject {
         //
         // 替换表来自设置页的术语表（P1-3 / 2D），**显式传入**：用户清空术语表就是
         // "什么都别替我改"，不能悄悄回落到出厂词表。
-        let cleanedSegments = TranscriptCleaner.clean(
-            segments,
-            options: TranscriptCleaner.Options(terminology: glossary.replacementTable)
-        )
+        let cleanedSegments = try await audioWorker.clean(segments, options: cleaningOptions)
 
-        try updateProcessingState(
+        try await updateProcessingState(
             sessionID: sessionID,
             progress: 1,
             stage: processingStage,
@@ -1345,35 +1387,39 @@ final class MeetingStore: ObservableObject {
         try Task.checkCancellation()
 
         guard activeSessionID == sessionID else { throw CancellationError() }
-        session = try storage.session(with: sessionID)
-        session.status = .ready
-        session.updatedAt = Date()
-        session.transcriptSegments = cleanedSegments
-        session.transcriptText = cleanedSegments.map(\.text).joined(separator: "\n")
-        session.analysis = analysis
-        session.analysisStale = nil
-        session.lastRegenerationError = nil
-        session.processingRetainsPreviousResults = nil
-        session.transcriptEditedAt = nil
-        session.inputAudioFileName = inputURL.lastPathComponent
-        session.whisperCLIPath = cliURL.path
-        session.whisperModelPath = modelURL.path
-        session.duration = duration
-        session.errorMessage = nil
-        // 标题从**清洗后**的段落里取，与正文同一份材料。
-        //
-        // 2026-09-17 之前这里传的是 `segments`（清洗前的原始分块）：清洗会把一屏几十条
-        // 15 字的碎行合成正常句子，于是标题可能是从一句**用户根本没在界面上见过**的碎句
-        // 里截的，而下面正文里找不到那句话。同一屏里两处对不上，用户只会以为软件在乱起名。
-        session.title = MeetingAnalysisBuilder.title(for: session, segments: cleanedSegments)
-        session.processingProgress = 1
-        session.processingStage = "已完成"
-        session.processingStartedAt = startedAt
-        session.processingCompletedChunks = totalChunks
-        session.processingTotalChunks = totalChunks
-        session.processingNextOffset = duration
-        session.processingChunkStartedAt = nil
-        try storage.save(session)
+        let finalTotal = totalChunks
+        let finalDuration = duration
+        session = try await repository.update(sessionID) { session in
+            session.status = .ready
+            session.updatedAt = Date()
+            session.transcriptSegments = cleanedSegments
+            session.transcriptText = cleanedSegments.map(\.text).joined(separator: "\n")
+            session.analysis = analysis
+            session.analysisStale = nil
+            session.lastRegenerationError = nil
+            session.processingRetainsPreviousResults = nil
+            session.dualTrackCheckpoint = nil
+            session.singleTrackCheckpoint = nil
+            session.transcriptEditedAt = nil
+            session.inputAudioFileName = inputURL.lastPathComponent
+            session.whisperCLIPath = cliURL.path
+            session.whisperModelPath = modelURL.path
+            session.duration = finalDuration
+            session.errorMessage = nil
+            // 标题从**清洗后**的段落里取，与正文同一份材料。
+            //
+            // 2026-09-17 之前这里传的是 `segments`（清洗前的原始分块）：清洗会把一屏几十条
+            // 15 字的碎行合成正常句子，于是标题可能是从一句**用户根本没在界面上见过**的碎句
+            // 里截的，而下面正文里找不到那句话。同一屏里两处对不上，用户只会以为软件在乱起名。
+            session.title = MeetingAnalysisBuilder.title(for: session, segments: cleanedSegments)
+            session.processingProgress = 1
+            session.processingStage = "已完成"
+            session.processingStartedAt = startedAt
+            session.processingCompletedChunks = finalTotal
+            session.processingTotalChunks = finalTotal
+            session.processingNextOffset = finalDuration
+            session.processingChunkStartedAt = nil
+        }
 
         replaceSession(session)
         selectedSessionID = session.id
@@ -1586,19 +1632,19 @@ final class MeetingStore: ObservableObject {
         totalChunks: Int,
         nextOffset: TimeInterval,
         startedAt: Date
-    ) throws {
+    ) async throws {
         try Task.checkCancellation()
         guard activeSessionID == sessionID else { throw CancellationError() }
-        var session = try storage.session(with: sessionID)
-        session.status = .processing
-        session.updatedAt = Date()
-        session.processingProgress = progress
-        session.processingStage = stage
-        session.processingCompletedChunks = completedChunks
-        session.processingTotalChunks = totalChunks
-        session.processingNextOffset = nextOffset
-        session.processingStartedAt = startedAt
-        try storage.save(session)
+        let session = try await repository.update(sessionID) { session in
+            session.status = .processing
+            session.updatedAt = Date()
+            session.processingProgress = progress
+            session.processingStage = stage
+            session.processingCompletedChunks = completedChunks
+            session.processingTotalChunks = totalChunks
+            session.processingNextOffset = nextOffset
+            session.processingStartedAt = startedAt
+        }
         replaceSession(session)
     }
 
@@ -1720,80 +1766,59 @@ final class MeetingStore: ObservableObject {
         cliURL: URL,
         modelURL: URL,
         initialPrompt: String,
-        startedAt: Date
-    ) async throws -> [TranscriptSegment] {
-        let probe = AudioLevelProbe()
+        startedAt: Date,
+        resume: Bool,
+        environment: TranscriptionEnvironment
+    ) async throws -> (segments: [TranscriptSegment], totalChunks: Int, duration: TimeInterval) {
+        let previous = resume && session.dualTrackCheckpoint?.environment == environment
+            ? session.dualTrackCheckpoint : nil
+        var checkpoint = DualTrackCheckpoint(environment: environment)
         var plan: [(speaker: TranscriptSpeaker, url: URL)] = []
-        if try await isAudible(tracks.local, probe: probe) {
-            plan.append((.local, tracks.local))
+        var longestDuration: TimeInterval = 0
+        for (speaker, url) in [(TranscriptSpeaker.local, tracks.local), (.remote, tracks.remote)] {
+            let duration = try await audioWorker.duration(for: url)
+            longestDuration = max(longestDuration, duration)
+            guard try await isAudible(url) else { continue }
+            let sha256 = try await audioWorker.sha256(of: url)
+            let total = Self.chunkCount(for: duration)
+            if let saved = previous?[speaker], saved.canResume(
+                sourceName: url.lastPathComponent, sha256: sha256, duration: duration,
+                totalChunks: total, speaker: speaker
+            ) {
+                checkpoint[speaker] = saved
+            } else {
+                checkpoint[speaker] = TrackTranscriptionCheckpoint(
+                    sourceName: url.lastPathComponent, sourceSHA256: sha256,
+                    duration: duration, totalChunks: total
+                )
+            }
+            plan.append((speaker, url))
         }
-        if try await isAudible(tracks.remote, probe: probe) {
-            plan.append((.remote, tracks.remote))
-        }
+        guard !plan.isEmpty else { return ([], 1, longestDuration) }
+        try Task.checkCancellation()
+        let initialCheckpoint = checkpoint
+        let prepared = try await repository.update(sessionID) { $0.dualTrackCheckpoint = initialCheckpoint }
+        replaceSession(prepared)
 
-        // 两路都没声音 = 整场就是一段静音。返回空数组，让上层按「材料不足」处理
-        // （根本不调模型），而不是把一段静音交给 whisper 让它编出一整场会。
-        guard !plan.isEmpty else {
-            Diagnostics.audio.notice("转写计划为空：两路都没有可听信号，按「材料不足」处理")
-            return []
-        }
-        Diagnostics.audio.notice(
-            "转写计划：\(plan.map(\.speaker.displayName).joined(separator: "、"), privacy: .public)"
-        )
-
-        var bySpeaker: [TranscriptSpeaker: [TranscriptSegment]] = [:]
-        for (index, entry) in plan.enumerated() {
-            bySpeaker[entry.speaker] = try await transcribeTrack(
-                audioURL: entry.url,
-                sessionID: sessionID,
-                session: session,
-                cliURL: cliURL,
-                modelURL: modelURL,
-                initialPrompt: initialPrompt,
-                startedAt: startedAt,
-                label: entry.speaker.displayName,
-                speaker: entry.speaker,
-                previousSegments: bySpeaker.values.flatMap { $0 },
-                trackIndex: index,
-                trackCount: plan.count
+        for entry in plan {
+            checkpoint = try await transcribeTrack(
+                audioURL: entry.url, sessionID: sessionID, session: session,
+                cliURL: cliURL, modelURL: modelURL, initialPrompt: initialPrompt,
+                startedAt: startedAt, speaker: entry.speaker, checkpoint: checkpoint
             )
         }
-
-        let merged = TranscriptMerger.merge(
-            local: bySpeaker[.local] ?? [],
-            remote: bySpeaker[.remote] ?? []
+        return (
+            TranscriptMerger.merge(local: checkpoint.local?.segments ?? [], remote: checkpoint.remote?.segments ?? []),
+            checkpoint.totalChunks, longestDuration
         )
-        Diagnostics.audio.notice(
-            "合并结果：\(merged.count) 段，其中带说话人 \(merged.filter { $0.speaker != nil }.count) 段"
-        )
-        return merged
     }
 
-    /// 这一路有没有声音。
-    ///
-    /// 探针**读不动时按"有声音"处理**：一个文件读不出来，不该被当成"对方没说话"，
-    /// 那会把整整一半的发言静默丢掉。宁可让 whisper 去转一段静音。
-    private func isAudible(_ url: URL, probe: AudioLevelProbe, threshold: Float = AudioLevelProbe.silenceThreshold) async throws -> Bool {
-        do {
-            // 扫一遍整段音频是纯计算、可能几百毫秒，扔到主线程外。
-            return try await Task.detached(priority: .utility) {
-                try probe.hasAudibleSignal(at: url, threshold: threshold)
-            }.value
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            return true
-        }
+    private func isAudible(_ url: URL, threshold: Float = AudioLevelProbe.silenceThreshold) async throws -> Bool {
+        try await audioWorker.isAudible(url, threshold: threshold)
     }
 
-    /// 把**一路**音频从头转完。
-    ///
-    /// 不支持"续跑"：双声道只出现在刚录完的会话上，中途失败就整场重来
-    /// （`retryProcessing` 也是从头跑），而两路的续跑计数混在一起没法解释。
-    ///
-    /// 分块窗口与"哪一段归谁"用的是与单路循环**同一份**实现（`chunkWindow` /
-    /// `ownedSegments`）—— 两处各写一遍，就会出现"两路的分块边界差 2 秒"这种
-    /// 没人看得出来的不一致。
+    /// Each source resumes only its committed raw chunks. A changed source, engine,
+    /// model, prompt or chunk format starts a new checkpoint for the affected source.
     private func transcribeTrack(
         audioURL: URL,
         sessionID: UUID,
@@ -1802,75 +1827,60 @@ final class MeetingStore: ObservableObject {
         modelURL: URL,
         initialPrompt: String,
         startedAt: Date,
-        label: String,
         speaker: TranscriptSpeaker,
-        previousSegments: [TranscriptSegment],
-        trackIndex: Int,
-        trackCount: Int
-    ) async throws -> [TranscriptSegment] {
-        let duration = try durationReader.duration(for: audioURL)
-        let totalChunks = Self.chunkCount(for: duration)
-        // 进度按"两路合起来算一段"报：总段数是两路之和，所以进度条从头到尾单调 ——
-        // 第二路接着第一路走，不会退回去。
-        let overallTotal = totalChunks * trackCount
-        var segments: [TranscriptSegment] = []
-
-        for index in 0..<totalChunks {
+        checkpoint initialCheckpoint: DualTrackCheckpoint
+    ) async throws -> DualTrackCheckpoint {
+        var checkpoint = initialCheckpoint
+        guard var track = checkpoint[speaker] else { return checkpoint }
+        let overallTotal = checkpoint.totalChunks
+        for index in track.completedChunks..<track.totalChunks {
             try Task.checkCancellation()
-
-            let window = Self.chunkWindow(index: index, duration: duration)
+            let window = Self.chunkWindow(index: index, duration: track.duration)
             let prefix = storage.folderURL(for: session)
                 .appendingPathComponent("chunks", isDirectory: true)
-                .appendingPathComponent(
-                    String(
-                        format: "chunk-%@-%04d",
-                        speaker == .local ? "local" : "remote",
-                        index + 1
-                    )
-                )
-
-            let completed = trackIndex * totalChunks + index
+                .appendingPathComponent(String(format: "chunk-%@-%04d", speaker == .local ? "local" : "remote", index + 1))
+            let completed = checkpoint.completedChunks
             let progress = Double(completed) / Double(overallTotal)
-            let stage = "正在转写\(label)第 \(index + 1)/\(totalChunks) 段"
+            let stage = "正在转写\(speaker.displayName)第 \(index + 1)/\(track.totalChunks) 段"
             processingProgress = progress
             processingStage = stage
             statusText = "\(stage) · \(progress.percentLabel)"
-            try updateProcessingState(
-                sessionID: sessionID,
-                progress: progress,
-                stage: stage,
-                completedChunks: completed,
-                totalChunks: overallTotal,
-                nextOffset: window.coreEnd,
-                startedAt: startedAt
+            try await updateProcessingState(
+                sessionID: sessionID, progress: progress, stage: stage,
+                completedChunks: completed, totalChunks: overallTotal,
+                nextOffset: window.coreStart, startedAt: startedAt
             )
-
             let chunkTranscript = try await transcribeChunkWithTimeout(
-                audioURL: audioURL,
-                cliURL: cliURL,
-                modelURL: modelURL,
-                outputPrefix: prefix,
-                offset: window.start,
-                duration: window.length,
+                audioURL: audioURL, cliURL: cliURL, modelURL: modelURL,
+                outputPrefix: prefix, offset: window.start, duration: window.length,
                 initialPrompt: initialPrompt
             )
             try Task.checkCancellation()
             let tagged = Self.ownedSegments(chunkTranscript.segments, index: index, in: window).map { segment in
                 var copy = segment; copy.speaker = speaker; return copy
             }
-            segments = Self.mergeSegments(existing: segments, incoming: tagged)
-
-            var saved = try storage.session(with: sessionID)
-            if saved.processingRetainsPreviousResults != true {
-                saved.transcriptSegments = (previousSegments + segments).sorted { $0.start < $1.start }
-                saved.transcriptText = saved.transcriptSegments.map(\.text).joined(separator: "\n")
+            track.segments = Self.mergeSegments(existing: track.segments, incoming: tagged)
+            track.completedChunks = index + 1
+            checkpoint[speaker] = track
+            let committedCheckpoint = checkpoint
+            let trackDuration = track.duration
+            let saved = try await repository.update(sessionID) { saved in
+                saved.dualTrackCheckpoint = committedCheckpoint
+                if saved.processingRetainsPreviousResults != true {
+                    saved.transcriptSegments = committedCheckpoint.segments
+                    saved.transcriptText = saved.transcriptSegments.map(\.text).joined(separator: "\n")
+                }
+                saved.duration = max(saved.duration ?? 0, trackDuration)
+                saved.processingCompletedChunks = committedCheckpoint.completedChunks
+                saved.processingTotalChunks = overallTotal
+                saved.processingProgress = Double(committedCheckpoint.completedChunks) / Double(overallTotal)
+                saved.processingNextOffset = window.coreEnd
+                saved.processingChunkStartedAt = Date()
             }
-            saved.duration = max(saved.duration ?? 0, duration)
-            saved.processingChunkStartedAt = Date()
-            try storage.save(saved)
             replaceSession(saved)
+            processingProgress = saved.processingProgress ?? 0
         }
-        return segments
+        return checkpoint
     }
 
     // MARK: - 分块
@@ -2094,6 +2104,7 @@ final class MeetingStore: ObservableObject {
 
 enum MeetingAnalysisBuilder {
     static func title(for session: MeetingSession, segments: [TranscriptSegment]) -> String {
+        if session.titleManuallyEdited == true { return session.title }
         if session.captureMode == .imported {
             let fileTitle = URL(fileURLWithPath: session.sourceFileName)
                 .deletingPathExtension()

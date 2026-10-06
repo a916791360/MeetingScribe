@@ -166,6 +166,208 @@ final class AuditRecordingPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks() async throws {
+        try await exerciseDualTrackRecovery(retainPrevious: false, changeSource: false)
+    }
+
+    @MainActor
+    func testDualTrackRetryRecoveryPreservesOldEditsUntilSuccess() async throws {
+        try await exerciseDualTrackRecovery(retainPrevious: true, changeSource: false)
+    }
+
+    @MainActor
+    func testDualTrackRecoveryInvalidatesOnlyChangedSource() async throws {
+        try await exerciseDualTrackRecovery(retainPrevious: false, changeSource: true)
+    }
+
+    @MainActor
+    private func exerciseDualTrackRecovery(retainPrevious: Bool, changeSource: Bool) async throws {
+        let temp = try root()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let storage = SessionStorage(rootURL: temp.appendingPathComponent("data"))
+        var session = try storage.createDraftSession(captureMode: .mixed)
+        let folder = storage.folderURL(for: session)
+        try wave(at: folder.appendingPathComponent("input.wav"))
+        try wave(at: folder.appendingPathComponent("local.wav"), seconds: 601)
+        try wave(at: folder.appendingPathComponent("remote.wav"), seconds: 601)
+        session.status = .failed
+        session.inputAudioFileName = "input.wav"
+        session.localAudioFileName = "local.wav"
+        session.remoteAudioFileName = "remote.wav"
+        if retainPrevious {
+            session.transcriptText = "人工校正必须保留直到新版转写完成。"
+            session.analysis.minutesText = "已有纪要不可因恢复失败而丢失。"
+        }
+        try storage.save(session)
+        let calls = temp.appendingPathComponent("calls.txt")
+        let failedOnce = temp.appendingPathComponent("failed-once")
+        let cli = try executable(at: temp, body: """
+        import sys, json
+        from pathlib import Path
+        args = sys.argv[1:]
+        prefix = args[args.index('-of') + 1]
+        name = Path(prefix).name
+        with Path('\(calls.path)').open('a') as f: f.write(name + '\\n')
+        if 'remote-0002' in name and not Path('\(failedOnce.path)').exists():
+            sys.exit(42)
+        start = 600000 if name.endswith('0002') else 0
+        text = '我方合成内容。' if 'local-' in name else '对方合成内容。'
+        data = {'transcription':[{'timestamps':{'from':'00:00:00.000','to':'00:00:01.000'},'offsets':{'from':start,'to':start+1000},'text':text,'tokens':[]}]}
+        Path(prefix + '.json').write_text(json.dumps(data))
+        """)
+        let model = temp.appendingPathComponent("model.bin")
+        try Data("fixture".utf8).write(to: model)
+        let (first, snapshot) = prepareStore(storage)
+        defer { restore(snapshot) }
+        first.whisperCLIPath = cli.path
+        first.whisperModelPath = model.path
+        if retainPrevious { first.renameSession(session, to: "用户指定的会议名称") }
+        first.retryProcessing(session)
+        try await waitFor { !first.isProcessing }
+        var interrupted = try storage.session(with: session.id)
+        XCTAssertEqual(interrupted.status, .failed)
+        XCTAssertEqual(interrupted.dualTrackCheckpoint?.local?.completedChunks, 2)
+        XCTAssertEqual(interrupted.dualTrackCheckpoint?.remote?.completedChunks, 1)
+        if retainPrevious {
+            XCTAssertEqual(interrupted.transcriptText, session.transcriptText)
+            XCTAssertEqual(interrupted.analysis.minutesText, session.analysis.minutesText)
+        }
+        // Simulate persisted processing state left by a process exit, using only fixtures.
+        interrupted.status = .processing
+        try storage.save(interrupted)
+        try Data().write(to: failedOnce)
+        if changeSource {
+            let handle = try FileHandle(forUpdating: folder.appendingPathComponent("local.wav"))
+            let length = try handle.seekToEnd()
+            try handle.seek(toOffset: length - 1)
+            try handle.write(contentsOf: Data([1]))
+            try handle.close()
+        }
+        UserDefaults.standard.set(cli.path, forKey: "meetingScribe.whisperCLIPath")
+        UserDefaults.standard.set(model.path, forKey: "meetingScribe.whisperModelPath")
+        let recovered = MeetingStore(storage: storage)
+        try await waitFor { recovered.sessions.first?.status == .ready }
+        let names = try String(contentsOf: calls, encoding: .utf8).split(separator: "\n")
+        XCTAssertEqual(names.filter { $0 == "chunk-local-0001" }.count, changeSource ? 2 : 1)
+        XCTAssertEqual(names.filter { $0 == "chunk-local-0002" }.count, changeSource ? 2 : 1)
+        XCTAssertEqual(names.filter { $0 == "chunk-remote-0001" }.count, 1)
+        XCTAssertEqual(names.filter { $0 == "chunk-remote-0002" }.count, 3)
+        let saved = try storage.session(with: session.id)
+        if retainPrevious { XCTAssertEqual(saved.title, "用户指定的会议名称") }
+        XCTAssertTrue(saved.transcriptSegments.contains { $0.speaker == .local })
+        XCTAssertTrue(saved.transcriptSegments.contains { $0.speaker == .remote })
+    }
+
+    @MainActor
+    func testSingleTrackRecoveryRetainsEditsAndSkipsCompletedChunk() async throws {
+        try await exerciseSingleTrackRecovery(changeModel: false)
+    }
+
+    @MainActor
+    func testSingleTrackRecoveryInvalidatesChangedModel() async throws {
+        try await exerciseSingleTrackRecovery(changeModel: true)
+    }
+
+    @MainActor
+    private func exerciseSingleTrackRecovery(changeModel: Bool) async throws {
+        let temp = try root()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let storage = SessionStorage(rootURL: temp.appendingPathComponent("data"))
+        var session = try storage.createDraftSession(captureMode: .imported)
+        try wave(at: storage.folderURL(for: session).appendingPathComponent("input.wav"), seconds: 601)
+        session.status = .failed
+        session.sourceFileName = "input.wav"
+        session.inputAudioFileName = "input.wav"
+        session.transcriptText = "人工校正应在失败后继续保留。"
+        session.analysis.minutesText = "已有纪要。"
+        try storage.save(session)
+        let calls = temp.appendingPathComponent("calls.txt")
+        let release = temp.appendingPathComponent("release")
+        let cli = try executable(at: temp, body: """
+        import sys, json
+        from pathlib import Path
+        args = sys.argv[1:]
+        prefix = args[args.index('-of') + 1]
+        name = Path(prefix).name
+        with Path('\(calls.path)').open('a') as f: f.write(name + '\\n')
+        if name.endswith('0002') and not Path('\(release.path)').exists(): sys.exit(42)
+        start = 600000 if name.endswith('0002') else 0
+        data = {'transcription':[{'timestamps':{'from':'00:00:00.000','to':'00:00:01.000'},'offsets':{'from':start,'to':start+1000},'text':'合成恢复结果。','tokens':[]}]}
+        Path(prefix + '.json').write_text(json.dumps(data))
+        """)
+        let model = temp.appendingPathComponent("model.bin")
+        try Data("fixture".utf8).write(to: model)
+        let (first, snapshot) = prepareStore(storage)
+        defer { restore(snapshot) }
+        first.whisperCLIPath = cli.path
+        first.whisperModelPath = model.path
+        first.retryProcessing(session)
+        try await waitFor { !first.isProcessing }
+        var interrupted = try storage.session(with: session.id)
+        XCTAssertEqual(interrupted.status, .failed)
+        XCTAssertEqual(interrupted.transcriptText, session.transcriptText)
+        XCTAssertEqual(interrupted.analysis.minutesText, session.analysis.minutesText)
+        XCTAssertEqual(interrupted.singleTrackCheckpoint?.track.completedChunks, 1)
+        XCTAssertEqual(interrupted.singleTrackCheckpoint?.track.segments.count, 1)
+        interrupted.status = .processing
+        try storage.save(interrupted)
+        try Data().write(to: release)
+        if changeModel { try Data("updated".utf8).write(to: model) }
+        UserDefaults.standard.set(cli.path, forKey: "meetingScribe.whisperCLIPath")
+        UserDefaults.standard.set(model.path, forKey: "meetingScribe.whisperModelPath")
+        let recovered = MeetingStore(storage: storage)
+        try await waitFor { recovered.sessions.first?.status == .ready }
+        let names = try String(contentsOf: calls, encoding: .utf8).split(separator: "\n")
+        XCTAssertEqual(names.filter { $0 == "chunk-0001" }.count, changeModel ? 2 : 1)
+        XCTAssertEqual(names.filter { $0 == "chunk-0002" }.count, 3)
+        let saved = try storage.session(with: session.id)
+        XCTAssertNil(saved.singleTrackCheckpoint)
+        XCTAssertNil(saved.processingRetainsPreviousResults)
+        XCTAssertTrue(saved.transcriptText.contains("合成恢复结果"))
+    }
+
+    @MainActor
+    func testUnequalTrackDurationsCountActualCompletedChunks() async throws {
+        let temp = try root()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let storage = SessionStorage(rootURL: temp.appendingPathComponent("data"))
+        var session = try storage.createDraftSession(captureMode: .mixed)
+        let folder = storage.folderURL(for: session)
+        try wave(at: folder.appendingPathComponent("input.wav"))
+        try wave(at: folder.appendingPathComponent("local.wav"), seconds: 601)
+        try wave(at: folder.appendingPathComponent("remote.wav"))
+        session.status = .failed
+        session.inputAudioFileName = "input.wav"
+        session.localAudioFileName = "local.wav"
+        session.remoteAudioFileName = "remote.wav"
+        try storage.save(session)
+        let cli = try executable(at: temp, body: """
+        import sys, json
+        from pathlib import Path
+        args = sys.argv[1:]
+        prefix = args[args.index('-of') + 1]
+        if 'remote-' in prefix: sys.exit(42)
+        start = 600000 if prefix.endswith('0002') else 0
+        data = {'transcription':[{'timestamps':{'from':'00:00:00.000','to':'00:00:01.000'},'offsets':{'from':start,'to':start+1000},'text':'我方合成内容。','tokens':[]}]}
+        Path(prefix + '.json').write_text(json.dumps(data))
+        """)
+        let model = temp.appendingPathComponent("model.bin")
+        try Data("fixture".utf8).write(to: model)
+        let (store, snapshot) = prepareStore(storage)
+        defer { restore(snapshot) }
+        store.whisperCLIPath = cli.path
+        store.whisperModelPath = model.path
+        store.retryProcessing(session)
+        try await waitFor { !store.isProcessing }
+        let saved = try storage.session(with: session.id)
+        XCTAssertEqual(saved.processingCompletedChunks, 2)
+        XCTAssertEqual(saved.processingTotalChunks, 3)
+        XCTAssertEqual(try XCTUnwrap(saved.processingProgress), 2.0 / 3.0, accuracy: 0.0001)
+        XCTAssertEqual(saved.dualTrackCheckpoint?.local?.completedChunks, 2)
+        XCTAssertEqual(saved.dualTrackCheckpoint?.remote?.completedChunks, 0)
+    }
+
+    @MainActor
     func testDeletionWaitsForOldTaskBeforeStartingAnother() async throws {
         let temp = try root()
         defer { try? FileManager.default.removeItem(at: temp) }

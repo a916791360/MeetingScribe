@@ -1,0 +1,29 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module MeetingScribeTests
+[4/5] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.75s)
+Test Suite 'Selected tests' started at 2026-10-06 13:29:32.906.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 13:29:32.907.
+Test Suite 'AuditRecordingPipelineTests' started at 2026-10-06 13:29:32.907.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:209: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("ready") is not equal to ("failed")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:218: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:219: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:220: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:221: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("3") is not equal to ("2")
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' failed (2.218 seconds).
+Test Suite 'AuditRecordingPipelineTests' failed at 2026-10-06 13:29:35.125.
+	 Executed 1 test, with 5 failures (0 unexpected) in 2.218 (2.218) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 13:29:35.125.
+	 Executed 1 test, with 5 failures (0 unexpected) in 2.218 (2.218) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 13:29:35.125.
+	 Executed 1 test, with 5 failures (0 unexpected) in 2.218 (2.220) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

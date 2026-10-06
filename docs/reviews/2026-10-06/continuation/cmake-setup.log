@@ -1,0 +1,6 @@
+Collecting cmake==3.31.6
+  Downloading cmake-3.31.6-py3-none-macosx_10_10_universal2.whl (47.2 MB)
+Installing collected packages: cmake
+Successfully installed cmake-3.31.6
+WARNING: You are using pip version 21.2.4; however, version 26.0.1 is available.
+You should consider upgrading via the '/Applications/Xcode.app/Contents/Developer/usr/bin/python3 -m pip install --upgrade pip' command.

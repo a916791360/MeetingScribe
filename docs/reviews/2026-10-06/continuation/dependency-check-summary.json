@@ -1,0 +1,25 @@
+{
+  "osv_commit": {
+    "completed": true,
+    "vulnerability_ids": []
+  },
+  "upstream_advisories": {
+    "completed": true,
+    "advisory_count": 0
+  },
+  "model_repository": {
+    "completed": true,
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "small_model": {
+      "rfilename": "ggml-small.bin",
+      "blobId": "bc4c4d96b528654fb067e2b243bdc438cfaf0072",
+      "size": 487601967,
+      "lfs": {
+        "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+        "size": 487601967,
+        "pointerSize": 134
+      }
+    }
+  },
+  "queried_at_utc": "2026-10-06T05:34:32.561948+00:00"
+}

@@ -1,0 +1,133 @@
+libggml-base.0.23.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-base.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-base.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-blas.0.23.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-blas.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-blas.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-cpu.0.23.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-cpu.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-cpu.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-metal.0.23.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-metal.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml-metal.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml.0.23.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml.0.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libggml.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libwhisper.1.9.4.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libwhisper.1.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+libwhisper.dylib arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1
+whisper-cli arm64
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 15.0
+      sdk 26.5
+   ntools 1

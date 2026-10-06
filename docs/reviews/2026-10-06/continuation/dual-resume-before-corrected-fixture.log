@@ -1,0 +1,76 @@
+[0/1] Planning build
+Building for debugging...
+[0/8] Write sources
+[2/8] Write swift-version--58304C5D6DBC2206.txt
+[4/12] Compiling MeetingScribe MeetingModels.swift
+[5/12] Emitting module MeetingScribe
+[6/12] Compiling MeetingScribe MeetingStore.swift
+[7/12] Compiling MeetingScribe TranscriptionCheckpoint.swift
+[8/18] Compiling MeetingScribe MeetingScribeApp.swift
+[9/18] Compiling MeetingScribe MeetingSessionLoader.swift
+[10/18] Compiling MeetingScribe MeetingExport.swift
+[11/18] Compiling MeetingScribe SafeDiagnostics.swift
+[12/18] Compiling MeetingScribe SessionStorage.swift
+[13/18] Compiling MeetingScribe WorkbenchView.swift
+[13/18] Write Objects.LinkFileList
+[14/18] Linking MeetingScribe
+[15/18] Applying MeetingScribe
+[17/53] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[18/53] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[19/53] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[20/56] Compiling MeetingScribeTests LayoutTokenTests.swift
+[21/56] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[22/56] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[23/56] Compiling MeetingScribeTests MeetingExportTests.swift
+[24/56] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[25/56] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[26/56] Compiling MeetingScribeTests OverviewBulletTests.swift
+[27/56] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[28/56] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[29/56] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[30/56] Compiling MeetingScribeTests ExportWiringTests.swift
+[31/56] Compiling MeetingScribeTests GlossaryTests.swift
+[32/56] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[33/56] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[34/56] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[35/56] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[36/56] Compiling MeetingScribeTests QualityEvalTests.swift
+[37/56] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[38/56] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[39/56] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[40/56] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[41/56] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[42/56] Compiling MeetingScribeTests AppAppearanceTests.swift
+[43/56] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[44/56] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[45/56] Compiling MeetingScribeTests AuditClosureTests.swift
+[46/56] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[47/56] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[48/56] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[49/56] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[50/56] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[51/56] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[52/56] Compiling MeetingScribeTests AuditNetworkTests.swift
+[53/56] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[54/56] Emitting module MeetingScribeTests
+[54/56] Write Objects.LinkFileList
+[55/56] Linking MeetingScribePackageTests
+Build complete! (7.09s)
+Test Suite 'Selected tests' started at 2026-10-06 13:31:42.229.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 13:31:42.230.
+Test Suite 'AuditRecordingPipelineTests' started at 2026-10-06 13:31:42.230.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:218: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:219: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:220: error: -[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks] : XCTAssertEqual failed: ("2") is not equal to ("1")
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDualTrackCrashRecoveryDoesNotRepeatFinishedChunks]' failed (2.091 seconds).
+Test Suite 'AuditRecordingPipelineTests' failed at 2026-10-06 13:31:44.321.
+	 Executed 1 test, with 3 failures (0 unexpected) in 2.091 (2.091) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 13:31:44.321.
+	 Executed 1 test, with 3 failures (0 unexpected) in 2.091 (2.091) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 13:31:44.321.
+	 Executed 1 test, with 3 failures (0 unexpected) in 2.091 (2.092) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

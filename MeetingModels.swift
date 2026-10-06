@@ -1161,6 +1161,7 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var id: UUID
     var folderName: String
     var title: String
+    var titleManuallyEdited: Bool?
     var createdAt: Date
     var updatedAt: Date
     var captureMode: CaptureMode
@@ -1207,6 +1208,8 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     var transcriptEditedAt: Date?
     /// Persisted across crashes; a retry must never treat old results as new checkpoints.
     var processingRetainsPreviousResults: Bool?
+    var dualTrackCheckpoint: DualTrackCheckpoint?
+    var singleTrackCheckpoint: SingleTrackCheckpoint?
     var analysisStale: Bool?
     var captureWarning: String?
     var lastRegenerationError: String?

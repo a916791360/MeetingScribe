@@ -1,14 +1,14 @@
-# MeetingScribe 完整审查与0.11.4升级报告
+# MeetingScribe 完整审查与0.11.5升级报告
 
-日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已安全更新到0.11.4，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
+日期：2026-10-06。审查与代码修改以GitHub提交 `bd80e302b88622bb435eb73b47b34b847fb3f86f`（0.11.1/build21）为基线，在独立分支 `codex/audit-hardening` 实施。原项目工作目录保留；本地App已安全更新到0.11.5，真实会议仅用于无内容输出的数据完整性核对，故障测试使用合成夹具，未使用真实凭据或云端接口。
 
 ## 执行摘要
 
 项目是Swift 6/SwiftUI的macOS 15+、Apple Silicon原生会议工具：ScreenCaptureKit录系统/麦克风，AVFoundation落盘与播放，afconvert归一化，whisper.cpp本机转写，可选本地规则/Ollama/OpenAI兼容接口整理，JSON会话与Markdown导出。单SwiftPM应用模块，无Web后端或数据库服务。
 
-完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项与后续4项，共46项：**P0 1 / P1 30 / P2 15**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
+完成了架构、功能、UX/可访问性、安全、性能、可维护性、AI典型错误七个维度，五批42项与后续5项，共47项：**P0 1 / P1 30 / P2 16**，另1项原生读屏观察仍需VoiceOver验证。数量不是线上事故数：例如本地文件篡改、服务回显、异常CLI都有触发前提。没有使用人为分数评估健康度。
 
-最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.4/build24**；本轮完成历史诊断清理与后台首次加载/导入，仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
+最大风险原为重试覆盖旧校正/纪要，以及时间轴、说话人、否定意见与双路检查点的静默损坏。本轮已用保留旧结果、任务归属检查、保守后处理和故障回归降低这些风险。网络目的地、错误信息、文件边界和发行产物也已加固。代码已升到**0.11.5/build25**；后续完成独立单路/双路恢复检查点、后台原子保存、自定义名称保留和官方运行时来源锁定，前轮已完成历史诊断清理与后台首次加载/导入，仍有架构渐进改进与真实设备验收，不能把本地全绿当作公开发行完成。
 
 ## Top 10 高优先级问题
 
@@ -23,13 +23,13 @@
 | 5 | BUG-006 / P1 | 写盘丢失音频时间位置 | 合成验证 / 需实机；testSampleTimestampGapIsPreserved、testSharedEpochPreservesFirstPacketOffsetsAndActualLevels；MOV首包/设备偏移需实测 |
 | 6 | BUG-008 / P1 | 后处理无视说话人边界 | 已修复 / 回归；testCleaningPreservesDifferentSpeakers、testIndependentRepeatsBySameSpeakerArePreserved |
 | 7 | BUG-009 / P1 | 相反意见被误判为串音 | 已修复 / 回归；testCrosstalkPreservesOppositeDecisions及合并测试；近似串音可能多保留一句，是避免误删的取舍 |
-| 8 | BUG-010 / P1 | 双路检查点覆盖完整的一路 | 已修复 / 故障回归；testSecondTrackFailurePreservesFirstTrackCheckpoint |
+| 8 | BUG-010 / P1 | 双路检查点覆盖完整的一路 | 已修复 / 故障回归；testSecondTrackFailurePreservesFirstTrackCheckpoint；0.11.5再验证双路/单路中断只重跑未完成分块、源/模型变化失效 |
 | 9 | BUG-011 / P1 | 旧任务收尾破坏新任务状态 | 已修复 / 竞态回归；testDeletionWaitsForOldTaskBeforeStartingAnother |
 | 10 | BUG-012 / P1 | 超时和取消没有进程退出上限 | 已修复 / 故障回归；testCancellationFinishesEvenIfCLIRejectsSIGTERM；真实长超时未等待 |
 
 ## 完整问题列表与修复状态
 
-“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
+“已修复”指当前实现与注明的验证范围；“需实机”并不表示已完成真实采集验收。ARCH-001为部分改善；SEC-004现含历史清理，真实库在启动新版时处理，旧导出与其他备份不自动清除。最新修复和验收见[0.11.5报告](continuation/review-and-upgrade.md)，前轮原生验收与安装见[0.11.4报告](ui-final-review-and-install.md)，历史闭环见[0.11.3追加报告](closure-review-and-upgrade.md)。原始第一至四批表中的行号属于固定基线，详情中已转换为GitHub基线链接；当前修复位置另列本地链接。
 
 | ID | 原严重级别 | 类型 | 问题 | 当前状态 | 当前修复位置 |
 |---|---|---|---|---|---|
@@ -66,6 +66,7 @@
 | UX-007 | P1 | UX / Bug | 准备期误称已采集且提前计时 | 已修复 / 原生合成UI与回归 | WorkbenchView.swift、MeetingStore.swift |
 | ARCH-001 | P2 | 架构 / 可维护性（附性能风险） | 编排与副作用集中，隔离不足 | 部分改善 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
 | BUG-018 | P2 | Bug | 字符长度限制不保证合法文件名字节数 | 已修复 / 写盘回归 | [MeetingExport.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingExport.swift) |
+| BUG-028 | P2 | Bug / UX | 重新处理覆盖自定义会议名 | 已修复 / 恢复回归 | MeetingStore.swift、MeetingModels.swift；详情见0.11.5追加报告 |
 | BUG-019 | P2 | Bug / 性能 | 播放器计时器没有覆盖离开与失败生命周期 | 已修复 / 生命周期回归 | [AudioPlayback.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioPlayback.swift) |
 | BUG-021 | P2 | Bug / 性能 | 网关正常返回普通 JSON 却被重复调用 | 已修复 / 请求计数 | [SummaryEngine.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SummaryEngine.swift) |
 | DOC-001 | P2 | UX / 可维护性 | README宣称不联云，与可选云端整理不一致 | 已修复 / 文档核对 | [README.md](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/README.md) |
@@ -73,7 +74,7 @@
 | PERF-002 | P2 | 性能 / 可访问性 | 长逐字稿一次创建全部行 | 代码与AX改善 / 需测性能 | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
 | PERF-003 | P2 | 性能 / 可维护性 | 子进程日志无界写入、结束后整文件读入 | 已修复 / 故障回归 | [WhisperPipeline.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WhisperPipeline.swift) |
 | SEC-001 | P2 | 安全 / 可维护性 | 审计通过与实际 Mach-O 路径不一致 | 已修复 / 产物验证 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
-| SEC-006 | P2 | 可维护性 / 许可证风险 | 发行包没有保留内置运行时和模型的第三方许可 | 声明已补 / 来源仍需锁定 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
+| SEC-006 | P2 | 可维护性 / 许可证风险 | 发行包没有保留内置运行时和模型的第三方许可 | 许可与官方来源锁定 / 产物验证 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
 | UX-001 | P2 | UX / AI生成代码 | 装饰动画被放在真实音源状态位置 | 合成验证 / 需实机 | [AudioTrackRecorder.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/AudioTrackRecorder.swift) |
 | UX-003 | P2 | UX / Bug | 切页静默丢弃未保存草稿 | 已修复 / UI | [MeetingStore.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/MeetingStore.swift) |
 | UX-005 | P2 | UX / 可访问性 | 编辑输入框没有可访问性名称 | 已修复 / AX | [WorkbenchView.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/WorkbenchView.swift) |
@@ -114,14 +115,14 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 | 验证 | 结果 | 证据 |
 |---|---|---|
-| Swift全量 | 333项，1项云端E2E跳过，0失败；warnings-as-errors | ui-final-full-tests.log |
+| Swift全量 | 343项，1项云端E2E跳过，0失败；warnings-as-errors | continuation/full-tests-final.log |
 | Python指标 | 28项通过 | upgrade-python-quality.log |
 | Python凭据 | 5项mock通过 | upgrade-python-credentials.log |
-| Python安装 | 5项临时假App故障测试通过 | upgrade-python-install.log |
+| Python安装与来源 | 5项安装故障、7项来源验证；与指标/凭据共45项通过 | continuation/python-tests-final.log |
 | 合成质量门禁 | 7个case与预期一致，含已知退化反例 | upgrade-synthetic-quality.log |
 | 合成原生界面 | 0.11.2：草稿、owner、双页过期提示、旧全文、1000段首尾AX、工具栏、浅深色；0.11.4补验准备、取消、再次开始、重开恢复；加载页截图未捕获 | upgrade-ui-observations.md与ui-final/证据 |
-| 内置真实引擎 | 动态库/模型可加载，退出0，JSON可解析 | upgrade-runtime-smoke.log |
-| 发行产物 | 构建、逐个Mach-O签名检查、RPATH/依赖/许可审计、注入绝对RPATH反例拒绝、复制后验签、zip通过 | upgrade-package.log / upgrade-signature.log / upgrade-zip.log |
+| 内置真实引擎 | 官方锁定引擎GPU/CPU加载退出0；JSON可解析，599秒offset保持绝对时间 | continuation/runtime-smoke-final.log |
+| 发行产物 | 构建、签名、RPATH/依赖/许可、官方来源/打包哈希、复制/解压后验签通过 | continuation/package-final.log / zip-final.log / extracted-audit-final.log |
 | 基线对照 | 原290测试与前四批故障取证 | baseline-swift-test.log / batch-01至04-repro.log |
 
 引擎烟测还检出了静音幻觉：直接调用small模型会把全零音频转成虚构文字。App单路/双路数字静音门禁现已补齐，低于原-40dB阈值的有效信号保留；这是App入口防护，不是模型准确率证明。复杂噪声、轻声真实会议、方言/重叠讲话需要另做VAD与质量评测。
@@ -147,7 +148,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 3 | 历史诊断清理已实施；验收失败提示与旧导出/外部备份边界 | SEC-004 | 安全+全栈；合成旧回显字段在UI/导出/存储均无假Key，业务正文不改 |
 | 4 | 首次加载/修补和导入已后台执行；后续按测量迁移小文件保存，扩展磁盘满回归 | ARCH-001 | 架构+全栈；UI可取消、事务顺序可证、旧结果不可被并发写覆盖 |
 | 5 | macOS15、Apple Silicon第二台机器、真实云端兼容矩阵与弱网 | 网络/版本验收 | QA；使用专门合成资料与测试凭据，验证redirect/超时/partial/请求次数 |
-| 6 | 发布版本锁定引擎/模型来源和哈希，补依赖漏洞评估与Developer ID/公证门禁 | SEC-001/006 | 发布+安全；重复构建来源一致，每个二进制签名有效，REQUIRE_NOTARIZATION=1通过 |
+| 6 | 引擎/模型来源与哈希已锁定，公开漏洞查询已留证；继续维护漏洞评估并完成Developer ID/公证门禁 | SEC-001/006 | 发布+安全；重复构建来源一致，每个二进制签名有效，REQUIRE_NOTARIZATION=1通过 |
 
 时间窗口为排期建议，不是工作量承诺。具体设备/证书与云端测试资源由实际发行条件决定。
 
@@ -157,7 +158,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 
 建立可回放的合成端到端录音、恢复和导出场景，与macOS15/最新版本CI一起运行。用Instruments测100/1000/10000段及历史库增长，按测量决定增量载入/分页，避免凭感觉引入数据库。真实语音质量先采专用非敏感样本评测VAD，再决定降噪/分段/模型升级；不得把“更多文字”自动等同于更准确。
 
-正式发行需锁定运行时源码revision、构建参数和模型哈希并保留许可、产物审计与公证记录。本轮未升级whisper引擎来源，复用了现有安装包的引擎/模型副本，只修正打包路径和签名；源码App版本升为0.11.4。
+0.11.5已从官方whisper.cpp v1.9.4固定提交构建，配置和官方small模型SHA已锁定，来源资源受App签名保护。公开漏洞查询未返回匹配记录，不能证明不存在漏洞；正式发行仍需Developer ID与Apple公证。0.11.4沿用旧引擎的记录保留在前轮报告。
 
 ## 回归验收清单
 
@@ -173,13 +174,17 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 - [ ] 真实音源与权限/设备故障、MOV与双轨绝对偏移、长录音GPU与精度。
 - [ ] VoiceOver完整朗读/焦点路径、macOS15、真实云端弱网与HTTPS来源矩阵。
 - [x] 历史诊断迁移、幂等、清理写入失败安全展示；业务正文不改。
-- [ ] 依赖源码锁定/CVE评估、公开发行Apple公证。
+- [x] 官方引擎源码、配置、模型哈希锁定；OSV与公开advisory查询成功并保留结果。
+- [ ] 公开发行Developer ID与Apple公证；持续依赖漏洞跟踪。
+- [x] 单路/双路各自恢复；源或模型改变不混用检查点；手动名称保留。
 
 ## 交付与安装状态
 
 源码位于当前独立工作树，分支codex/audit-hardening；本地提交与源码快照可回滚，GitHub未推送、未发布。升级包是本机PM Studio Signing证书签名的审查候选构建，不是Developer ID公证发行包。
 
-本机已从0.11.1/build21安全升级到0.11.4/build24并启动成功；旧App和约278MiB完整数据备份保留在/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-131922。安装前正常退出，备份逐文件验证，候选复制后验签，再替换。启动后3场会议ID、正文和其他非诊断JSON字段与升级前一致，音频及其他文件逐字节一致，本次清单也未发生重写。安装摘要见ui-final-install.json；未以真实会议或云端做故障测试。
+本轮已从0.11.4/build24升级到0.11.5/build25，备份位于/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-135256；启动后全部JSON字段与24个数据文件逐字节一致，详情见continuation/install-final.json。新交付目录路径见工作树.review-dist/continuation-delivery-location.txt，SHA在交付目录内delivery-manifest.json记录。
+
+前轮本机从0.11.1/build21安全升级到0.11.4/build24并启动成功；旧App和约278MiB完整数据备份保留在/Users/qingmeng/Documents/Codex/MeetingScribe-backups/20261006-131922。安装前正常退出，备份逐文件验证，候选复制后验签，再替换。启动后3场会议ID、正文和其他非诊断JSON字段与升级前一致，音频及其他文件逐字节一致，本次清单也未发生重写。安装摘要见ui-final-install.json；未以真实会议或云端做故障测试。
 
 0.11.4升级包、源码快照和完整补丁及SHA在新交付目录delivery-manifest.json记录，路径见.review-dist/ui-final-delivery-location.txt。0.11.3旧交付目录保持不可变。备份含私有会议，仅留本机，不在源码包或证据包中；备份可能保留旧敏感诊断。具体回滚方法和未完成的设备/VoiceOver验收见[0.11.4报告](ui-final-review-and-install.md)。
 
@@ -765,7 +770,7 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 是否 AI 生成典型问题 | 不确定；集中式实现也可能来自正常迭代。 |
 | 本轮实施 | 拆存储模块、索引查询、更新会议不反复排序；新增数据/编排/网络故障测试 |
 | 当前修复位置 | [SessionStorage.swift](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/SessionStorage.swift) |
-| 当前状态与验收 | 部分改善；首次加载/修补与大音频复制后台执行，录音器可注入；短小写盘/手动reload仍在MainActor，未完成全面服务分层 |
+| 当前状态与验收 | 部分改善；首次加载/修补与大音频复制后台执行，录音器可注入；手动reload、转写检查点读改写、音频时长/内容哈希/探针/清洗已后台化，原子事务防止与重命名互相覆盖；手动小文件编辑、删除和故障收尾仍有同步I/O，未完成全面服务分层 |
 
 ### BUG-018：字符长度限制不保证合法文件名字节数
 
@@ -941,11 +946,11 @@ AI专项确认的典型模式包括吞掉落盘错误、貌似合理却跨speake
 | 影响 | 缺少再分发声明；本轮不作法律意见或确切二进制源码来源的认证。 |
 | 复现步骤 | 1. 检查基线打包脚本和安装包资源目录。2. 检查新App Resources/Licenses。3. 运行发行审计。 |
 | 建议修复 | 已加入本项目及三套第三方许可并设审计缺失门禁；自定义运行时需要其发布者补充其他组件声明。 |
-| 验证方式 | 新包审核检查四份非空许可。运行时版本/模型来源仍需正式发行建立可复现锁定。 |
+| 验证方式 | 新包审核检查四份非空许可。0.11.5已锁定官方引擎提交和模型SHA，并验证输入/打包文件哈希；正式Developer ID公证仍待完成。 |
 | 是否 AI 生成典型问题 | 不确定 |
 | 本轮实施 | 打包4份许可并设缺失门禁 |
 | 当前修复位置 | [Scripts/package_app.sh](/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Scripts/package_app.sh) |
-| 当前状态与验收 | 声明已补 / 来源仍需锁定；官方固定提交的许可；不证明现有二进制精确源码revision |
+| 当前状态与验收 | 许可与官方来源锁定 / 产物验证；0.11.5从官方固定提交构建，签名资源保存来源、构建配置与输入/打包哈希；见追加报告 |
 
 ### UX-001：装饰动画被放在真实音源状态位置
 

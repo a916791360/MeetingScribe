@@ -23,6 +23,13 @@ print "产物：$APP"
 
 fail=0
 
+if [[ -f "$APP/Contents/Resources/RuntimeProvenance.plist" || "${REQUIRE_PINNED_RUNTIME:-0}" == "1" ]]; then
+    if ! python3 "$ROOT_DIR/Scripts/runtime_provenance.py" --audit-bundle "$APP"; then
+        print -u2 "✗ 运行时来源或打包后的哈希不匹配"
+        fail=1
+    fi
+fi
+
 # Bundled runtime/model redistribution must retain upstream license notices.
 for notice in MeetingScribe-LICENSE.txt whisper.cpp-LICENSE.txt ggml-LICENSE.txt openai-whisper-LICENSE.txt; do
     if [[ ! -s "$APP/Contents/Resources/Licenses/$notice" ]]; then
@@ -47,15 +54,11 @@ scan_binary() {
     fi
 }
 
-scan_binary "$APP/Contents/MacOS/$(
-    plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist" 2>/dev/null || print MeetingScribe
-)"
-scan_binary "$APP/Contents/Resources/whisper/bin/whisper-cli"
-
 # ② 包内不应出现配置文件（Info.plist 是包自己的元数据，属预期）
 stray=$(find "$APP" -type f \
     \( -name '*.json' -o -name '*.plist' -o -name '*.env' -o -name '*.yaml' -o -name '*.yml' \) \
-    ! -name 'Info.plist' 2>/dev/null || true)
+    ! -path "$APP/Contents/Info.plist" \
+    ! -path "$APP/Contents/Resources/RuntimeProvenance.plist" 2>/dev/null || true)
 if [[ -n "${stray}" ]]; then
     print -u2 "✗ 包内含预期外的配置文件："
     print -u2 -- "${stray}"
@@ -77,6 +80,7 @@ done <<< "$(find "$APP" -name '*.dylib' -type f 2>/dev/null || true)"
 # Check every Mach-O load command, including LC_RPATH (not present in strings).
 while IFS= read -r binary; do
     [[ -f "$binary" ]] || continue
+    scan_binary "$binary"
     if ! codesign --verify --strict "$binary" >/dev/null 2>&1; then
         print -u2 "✗ 运行时签名无效：$(basename "$binary")"
         fail=1

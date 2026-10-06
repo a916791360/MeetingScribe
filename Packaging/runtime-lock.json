@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "whisper": {
+    "repository": "https://github.com/ggml-org/whisper.cpp.git",
+    "tag": "v1.9.4",
+    "commit": "927cfce34f31707e17f2bff35c349632fb9e2c3a"
+  },
+  "model": {
+    "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "filename": "ggml-small.bin",
+    "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
+  },
+  "cmake_options": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+    "CMAKE_OSX_ARCHITECTURES": "arm64",
+    "GGML_NATIVE": "OFF",
+    "GGML_METAL": "ON",
+    "GGML_METAL_EMBED_LIBRARY": "ON",
+    "GGML_METAL_MACOSX_VERSION_MIN": "15.0",
+    "WHISPER_BUILD_IS_DEV": "OFF",
+    "WHISPER_BUILD_TESTS": "OFF"
+  }
+}
