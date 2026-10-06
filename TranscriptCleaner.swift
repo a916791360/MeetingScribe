@@ -130,6 +130,8 @@ enum TranscriptCleaner {
             guard !trimmed.isEmpty else { continue }
 
             if var last = result.last,
+               last.speaker == segment.speaker,
+               segment.start <= last.end + 1,
                isRepeat(last.text, trimmed, minimumLength: options.minimumRepeatLength) {
                 // 时间范围并起来，界面上这一段仍然从第一次说的时候开始。
                 last.end = max(last.end, segment.end)
@@ -248,7 +250,7 @@ enum TranscriptCleaner {
             }
             let alreadyEnded = current.text.last.map { sentenceEnders.contains($0) } ?? true
             let candidate = current.text + segment.text
-            if !alreadyEnded, candidate.count <= limit {
+            if !alreadyEnded, current.speaker == segment.speaker, segment.start <= current.end + 1, candidate.count <= limit {
                 current.text = candidate
                 current.end = max(current.end, segment.end)
                 current.confidence = min(current.confidence, segment.confidence)

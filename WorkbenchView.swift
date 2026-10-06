@@ -78,6 +78,7 @@ struct ContentView: View {
                 .environmentObject(store)
         }
         .alert("发生问题", isPresented: errorBinding) {
+            if store.storageIssueCount > 0 { Button("打开会议数据目录") { store.openMeetingDataFolder() } }
             Button("好", role: .cancel) {
                 store.errorMessage = nil
             }
@@ -139,7 +140,7 @@ struct WorkbenchSidebarView: View {
                         subtitle: "",
                         count: store.sessions.count
                     ) {
-                        VStack(spacing: AppTheme.space1) {
+                        LazyVStack(spacing: AppTheme.space1) {
                             // 失败 / 中断的会话也留在列表里（原来被 filter 掉了）。
                             // 它们的录音还在磁盘上，藏起来用户就既看不到、也没法重新处理。
                             ForEach(store.sessions) { session in
@@ -499,6 +500,8 @@ struct WorkbenchDetailView: View {
                     // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
                     .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
                     .help(primaryTitle(for: session))
+                    .accessibilityLabel(primaryTitle(for: session))
+                    .disabled(store.isPreparingRecording)
 
                     Button {
                         store.importAudioPresented = true
@@ -509,7 +512,8 @@ struct WorkbenchDetailView: View {
                     // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
                     .buttonStyle(WorkbenchToolbarButtonStyle())
                     .help("导入一段已有音频")
-                    .disabled(store.isRecording || store.isProcessing)
+                    .accessibilityLabel("导入音频")
+                    .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                     Button {
                         store.showSettings = true
@@ -520,6 +524,7 @@ struct WorkbenchDetailView: View {
                     .help("设置")
                     .accessibilityLabel("设置")
                 }
+                .accessibilityElement(children: .contain)
             }
         }
     }
@@ -530,6 +535,7 @@ struct WorkbenchDetailView: View {
     /// 失败会议的「重新处理 / 重新整理」是这条记录自己的上下文动作，留在内容区。
     /// 否则当软件里只有一条失败会议时，用户会找不到最重要的全局入口「开始录音」。
     private func primaryTitle(for session: MeetingSession) -> String {
+        if store.isPreparingRecording { return "正在准备录音…" }
         if store.isProcessing { return "停止处理" }
         if store.isRecording { return "结束并转写" }
         return "开始录音"
@@ -677,6 +683,7 @@ struct WorkbenchSessionWorkspace: View {
         .onAppear {
             audioPlayer.load(url: store.audioURL(for: session))
         }
+        .onDisappear { audioPlayer.stop() }
         .onChange(of: session.id) { _, _ in
             selectedTab = .overview
             playheadSegmentID = nil
@@ -1017,10 +1024,10 @@ struct WorkbenchOverviewDocument: View {
             // 它那句话是「下面仅显示本地保守结果」——下面空着的时候，这句话就是在
             // 替空态重复一遍「没生成出东西」：同一屏里两处说同一件事，而空态那个
             // 说得更完整（还带原因和出路）。所以让空态独家承担，横幅撤走。
-            if let notice = session.analysis.noticeMessage, hasVisibleContent {
+            if let notice = session.analysisNotice, hasVisibleContent {
                 WorkbenchSummaryFallbackNotice(
                     message: notice,
-                    headline: session.analysis.isLocalFallback
+                    headline: session.analysisStale == true ? "原文已更新，整理结果待更新。" : session.analysis.isLocalFallback
                         ? "整理模型未返回，已保留逐字稿；下面仅显示本地保守结果。"
                         : "整理模型这次的结果不完整，下面可能缺少部分内容。",
                     retry: store.canRegenerateSummaryNow
@@ -1212,7 +1219,7 @@ struct WorkbenchOverviewDocument: View {
     /// 如果 API Key 只存在钥匙串、还没被用户在设置页授权读入内存，给「重试」就是假入口：
     /// 点了只会闪一下再回到同样的空态。这里直接不给重试，只给「打开设置授权模型」。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.noticeMessage != nil,
+        guard session.analysisNotice != nil,
               store.canRegenerateSummaryNow
         else { return nil }
         return { store.regenerateSummary(for: session) }
@@ -1406,6 +1413,12 @@ struct WorkbenchMinutesDocument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.space6) {
+            if let notice = session.analysisNotice {
+                Text(notice).font(.callout).foregroundStyle(AppTheme.muted)
+                    .padding(AppTheme.space3).background(AppTheme.paperSoft)
+                    .accessibilityLabel("整理结果提示：" + notice)
+            }
+
             // 「纪要」页只讲过程，不做任何自我说明。
             //
             // 这里先后撤掉过两样东西：先是失败提醒横幅（"下面仅显示本地保守结果"），
@@ -1522,7 +1535,7 @@ struct WorkbenchMinutesDocument: View {
     /// 如果 API Key 只存在钥匙串、还没被用户在设置页授权读入内存，给「重试」就是假入口：
     /// 点了只会闪一下再回到同样的空态。这里直接不给重试，只给「打开设置授权模型」。
     private var retryAction: (() -> Void)? {
-        guard session.analysis.noticeMessage != nil,
+        guard session.analysisNotice != nil,
               store.canRegenerateSummaryNow
         else { return nil }
         return { store.regenerateSummary(for: session) }
@@ -1565,23 +1578,33 @@ struct WorkbenchOriginalDocument: View {
     /// 正在编辑哪一段。**同一时刻只允许一段**：两段同时编辑时「保存」的语义是模糊的
     /// （谁先落盘？后落盘的那份会不会把前一段的改动覆盖掉？），而这种模糊不会报错，
     /// 只会让某一处的修改静默消失。
-    @State private var editingSegmentID: UUID?
+    private var editingSegmentID: UUID? {
+        get { store.editingSegments[session.id] }
+        nonmutating set { store.editingSegments[session.id] = newValue }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.space4) {
             header
 
             if session.transcriptSegments.isEmpty {
-                WorkbenchEmptyHint(text: "转写还没有内容。")
+                if session.transcriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    WorkbenchEmptyHint(text: "转写还没有内容。")
+                } else {
+                    Text("历史全文没有分段时间锚，可阅读、复制和导出。")
+                        .font(.caption).foregroundStyle(AppTheme.muted)
+                    Text(session.transcriptText).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             } else {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(session.transcriptSegments.enumerated()), id: \.element.id) { index, segment in
                         WorkbenchTranscriptDocumentRow(
                             segment: segment,
                             isEditing: editingSegmentID == segment.id,
                             canEdit: canEdit,
                             onBeginEditing: { editingSegmentID = segment.id },
-                            onCancel: { editingSegmentID = nil },
+                            onCancel: { store.transcriptDrafts.removeValue(forKey: segment.id); editingSegmentID = nil },
                             onCommit: { text in commit(text, for: segment) },
                             onJump: onJump.map { jump in { jump(segment.start) } },
                             isPlayhead: playheadSegmentID == segment.id
@@ -1661,6 +1684,7 @@ struct WorkbenchOriginalDocument: View {
             text: text
         ) {
         case .saved, .unchanged:
+            store.transcriptDrafts.removeValue(forKey: segment.id)
             editingSegmentID = nil
             return nil
         case let .rejected(reason):
@@ -1925,6 +1949,11 @@ struct WorkbenchActionDocumentRow: View {
                 // 截止日期并进这一簇：它和「高优先」是同一层的判断依据。
                 // 原来它和「时间戳」并排挤在主句下面那一行，而那个时间戳又和左轨
                 // 说的是同一件事 —— 一条待办里同一个信息出现两遍。
+                if let owner = item.owner?.trimmingCharacters(in: .whitespacesAndNewlines), !owner.isEmpty {
+                    Text("负责人：" + owner).font(.caption).foregroundStyle(AppTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("负责人：" + owner)
+                }
                 if let dueText = item.dueText {
                     WorkbenchSessionMeta(text: "截止 \(dueText)", systemImage: "calendar")
                 }
@@ -1961,7 +1990,11 @@ struct WorkbenchTranscriptDocumentRow: View {
     /// 这一句正被播放到（播放头落在这一段上）。
     var isPlayhead: Bool = false
 
-    @State private var draft = ""
+    @EnvironmentObject private var store: MeetingStore
+    private var draft: String {
+        get { store.transcriptDrafts[segment.id] ?? segment.text }
+        nonmutating set { store.transcriptDrafts[segment.id] = newValue }
+    }
     /// 就地拒绝的理由（比如"不能改成空"）。它必须显示在**这一行**上 ——
     /// 只往底栏状态里塞一句的话，用户的眼睛在段落这里，等于没告诉他。
     @State private var rejection: String?
@@ -2001,9 +2034,9 @@ struct WorkbenchTranscriptDocumentRow: View {
                     .offset(x: -AppTheme.space2)
             }
         }
-        .onChange(of: isEditing) { _, editing in
+        .onChange(of: isEditing, initial: true) { _, editing in
             guard editing else { return }
-            draft = segment.text
+            if store.transcriptDrafts[segment.id] == nil { draft = segment.text }
             rejection = nil
             // 让输入框立刻拿到键盘。同一次更新里设 `isFocused` 通常是白设的
             // （那时输入框还没进视图层级），下一次 runloop 才是稳的。
@@ -2107,7 +2140,8 @@ struct WorkbenchTranscriptDocumentRow: View {
                     .monospacedDigit()
                     .lineLimit(1)
 
-                TextField("", text: $draft, axis: .vertical)
+                TextField("校正逐字稿", text: Binding(get: { draft }, set: { draft = $0 }), axis: .vertical)
+                    .accessibilityLabel("校正逐字稿，\(segment.speaker?.displayName ?? "未标注说话人")，\(segment.start.clockLabel)")
                     .textFieldStyle(.plain)
                     .font(.system(size: 14.5, weight: .regular, design: .default))
                     .foregroundStyle(AppTheme.ink)
@@ -2636,6 +2670,7 @@ struct WorkbenchFailureState: View {
 /// - **录音中**：大号计时器当主角 + 两路音源在采集
 /// - **转写中**：实时逐字稿当主角 + 段进度与预计剩余
 struct WorkbenchProcessingState: View {
+    @EnvironmentObject private var store: MeetingStore
     let session: MeetingSession
 
     private var isRecordingPhase: Bool { session.status == .recording }
@@ -2773,12 +2808,14 @@ struct WorkbenchProcessingState: View {
                 WorkbenchCaptureSourceCard(
                     title: "麦克风",
                     systemImage: "mic.fill",
-                    detail: "这台 Mac 的输入设备"
+                    detail: "这台 Mac 的输入设备",
+                    level: store.microphoneLevel
                 )
                 WorkbenchCaptureSourceCard(
                     title: "系统声音",
                     systemImage: "speaker.wave.2.fill",
-                    detail: "应用里播放的声音"
+                    detail: "应用里播放的声音",
+                    level: store.systemAudioLevel
                 )
             }
             .frame(maxWidth: 560)
@@ -3023,6 +3060,7 @@ struct WorkbenchCaptureSourceCard: View {
     let title: String
     let systemImage: String
     let detail: String
+    var level: Double = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.space3) {
@@ -3036,7 +3074,7 @@ struct WorkbenchCaptureSourceCard: View {
                     .foregroundStyle(AppTheme.ink)
             }
 
-            WorkbenchLevelBars()
+            WorkbenchLevelBars(level: level)
 
             Text(detail)
                 .font(.caption)
@@ -3055,30 +3093,20 @@ struct WorkbenchCaptureSourceCard: View {
     }
 }
 
-/// 采集电平柱。**这是装饰性的活动指示，不是真实电平表**——
-/// 真正的电平需要从录音引擎拉 tap，本轮没动引擎，所以这里不谎报数值，
-/// 只表达"有信号在进来"。
+/// 采样缓冲区的实际音频电平；没有样本时归零。
 struct WorkbenchLevelBars: View {
-    private let barCount = 22
-
+    var level: Double = 0
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
-            HStack(alignment: .center, spacing: AppTheme.space1) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    Capsule()
-                        .fill(AppTheme.accent.opacity(0.78))
-                        .frame(width: 3, height: barHeight(for: index, at: context.date))
-                }
+        HStack(alignment: .center, spacing: AppTheme.space1) {
+            ForEach(0..<22, id: \.self) { index in
+                Capsule().fill(AppTheme.accent.opacity(0.78))
+                    .frame(width: 3, height: 2 + 24 * min(1, max(0, level)) * (1 - Double(abs(index - 11)) / 22))
             }
-            .frame(height: 26, alignment: .center)
         }
-    }
-
-    private func barHeight(for index: Int, at date: Date) -> CGFloat {
-        let t = date.timeIntervalSinceReferenceDate
-        let slow = sin(t * 1.7 + Double(index) * 0.9) * 0.5 + 0.5
-        let fast = sin(t * 3.1 + Double(index) * 0.55) * 0.5 + 0.5
-        return 5 + (slow * 0.4 + fast * 0.6) * 21
+        .frame(height: 26)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("音频输入电平")
+        .accessibilityValue(level > 0 ? "检测到声音" : "没有检测到声音")
     }
 }
 
@@ -3233,7 +3261,7 @@ struct WorkbenchEmptyState: View {
                     Label("开始录音", systemImage: "record.circle")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle(emphasized: true))
-                .disabled(store.isRecording || store.isProcessing)
+                .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
 
                 Button {
                     store.importAudioPresented = true
@@ -3244,7 +3272,7 @@ struct WorkbenchEmptyState: View {
                     Label("导入音频", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(WorkbenchLightButtonStyle())
-                .disabled(store.isRecording || store.isProcessing)
+                .disabled(store.isRecording || store.isPreparingRecording || store.isProcessing)
             }
 
             // 点了「开始录音」却被权限拦下时的那条说明。

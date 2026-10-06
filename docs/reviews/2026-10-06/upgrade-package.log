@@ -1,0 +1,9 @@
+[0/1] Planning build
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.14s)
+Packaged: /Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/.build/MeetingScribe.app
+Signed with: -
+=== 分发前审计 ===
+产物：/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/.build/MeetingScribe.app
+✓ 通过：无私人路径、无预期外配置文件、无凭据字样、依赖均为相对路径

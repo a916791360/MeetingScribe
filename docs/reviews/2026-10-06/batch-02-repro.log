@@ -1,0 +1,76 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[1/6] Write swift-version--58304C5D6DBC2206.txt
+[3/35] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[4/35] Compiling MeetingScribeTests ExportWiringTests.swift
+[5/35] Compiling MeetingScribeTests GlossaryTests.swift
+[6/35] Compiling MeetingScribeTests LayoutTokenTests.swift
+[7/35] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[8/35] Compiling MeetingScribeTests OverviewBulletTests.swift
+[9/35] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[10/35] Emitting module MeetingScribeTests
+[11/38] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[12/38] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[13/38] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[14/38] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[15/38] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[16/38] Compiling MeetingScribeTests MeetingExportTests.swift
+[17/38] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[18/38] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[19/38] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[20/38] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[21/38] Compiling MeetingScribeTests AppAppearanceTests.swift
+[22/38] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[23/38] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[24/38] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[25/38] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[26/38] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[27/38] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[28/38] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[29/38] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[30/38] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[31/38] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[32/38] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[33/38] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[34/38] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[35/38] Compiling MeetingScribeTests QualityEvalTests.swift
+[36/38] Compiling MeetingScribeTests ReviewBatch2ReproTests.swift
+[36/38] Write Objects.LinkFileList
+[37/38] Linking MeetingScribePackageTests
+Build complete! (1.91s)
+Test Suite 'Selected tests' started at 2026-10-06 10:56:18.541.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 10:56:18.542.
+Test Suite 'ReviewBatch2ReproTests' started at 2026-10-06 10:56:18.542.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCancellationDoesNotFinishIfCLIRejectsSIGTERM]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCancellationDoesNotFinishIfCLIRejectsSIGTERM]' passed (1.816 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCleaningMergesDifferentSpeakersIntoOneLocalSegment]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCleaningMergesDifferentSpeakersIntoOneLocalSegment]' passed (0.007 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCrosstalkDeduplicationDeletesTheOppositeDecision]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testCrosstalkDeduplicationDeletesTheOppositeDecision]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testDeletedOldTaskClearsNewTaskBusyState]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testDeletedOldTaskClearsNewTaskBusyState]' passed (0.556 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testFailedTrackStillLooksUsableToResultSelection]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testFailedTrackStillLooksUsableToResultSelection]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testSampleTimestampGapIsRemovedFromRecordedFile]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testSampleTimestampGapIsRemovedFromRecordedFile]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testSecondTrackCheckpointOverwritesTheCompletedFirstTrack]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testSecondTrackCheckpointOverwritesTheCompletedFirstTrack]' passed (1.849 seconds).
+Test Suite 'ReviewBatch2ReproTests' passed at 2026-10-06 10:56:22.776.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 4.234 (4.235) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 10:56:22.776.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 4.234 (4.235) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 10:56:22.776.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 4.234 (4.235) seconds
+REPRO BUG-012: task cancellation plus runner.cancel leaves a SIGTERM-ignoring CLI alive and the task waiting
+REPRO BUG-008: local + remote merged into one local segment, remote ownership lost
+REPRO BUG-008: separate speakers repeating a confirmation 20 seconds apart collapsed into one
+REPRO BUG-009: overlapping '可以上线' and '不可以上线' reduced to the affirmative sentence
+REPRO BUG-011: old deleted task completion set isProcessing=false while new task and new session were still processing
+REPRO BUG-007: partial track has failureReason but didWriteAudio=true, the only flag makeResult tests
+REPRO BUG-006: PTS 10.0 and 12.0, each 0.1 seconds, recorded as 0.2 seconds instead of a 2.1-second timeline
+REPRO BUG-010: remote chunk 2 failure left only remote chunk 1, completed local transcript absent and no speaker tags
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

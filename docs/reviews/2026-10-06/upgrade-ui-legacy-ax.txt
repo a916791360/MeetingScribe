@@ -1,0 +1,51 @@
+Window: "审查夹具：旧版全文", App: MeetingScribeReview.
+0 standard window 审查夹具：旧版全文 – 2026/9/21 22:12  ·  00:12  ·  已完成, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1
+	1 split group SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1, SidebarNavigationSplitView
+		2 container
+			3 text MeetingScribe 把会议录下来，结束后直接得到可读的结果。
+			4 scroll area
+				5 text 最近会议 4
+				6 list Secondary Actions: AXScrollToTop, AXScrollToBottom
+					7 button 审查夹具：编辑与待办, 9月21日 22:13, 00:52, ·, 已完成
+					8 button (selected) 审查夹具：旧版全文, 9月21日 22:12, 00:12, ·, 已完成
+					9 button 审查夹具：空结果, 9月21日 22:11, 00:12, ·, 已完成
+					10 button 审查夹具：1000段长逐字稿, 9月21日 22:10, 01:00:00, ·, 已完成
+		11 splitter (disabled, settable, float) 282
+		12 container
+			13 button (selected) 原文
+			14 button 速览
+			15 button 纪要
+			16 button Description: 导出为 Markdown 文件, ID: arrow.down.document
+			17 button Description: 复制全文, ID: doc.on.doc
+			18 button Description: 重新整理纪要, ID: arrow.clockwise
+			19 button Description: 打开录音文件夹, ID: folder
+			20 scroll area
+				21 text 2026/9/21 22:12 原汁原味保留转写 历史全文没有分段时间锚，可阅读、复制和导出。 旧版正文仍保存在 transcriptText，这是一段完整的审查合成文本。
+			22 text 暂无可播放音频
+			23 button 打开文件夹
+			24 button (disabled) Description: 后退 15 秒, ID: gobackward.15
+			25 button (disabled) Description: 播放, ID: play.fill
+			26 button (disabled) Description: 前进 15 秒, ID: goforward.15
+			27 button (disabled) 播放速度
+			28 text 00:00 / 00:00
+			29 slider (disabled) Description: 录音进度, Value: 0, Secondary Actions: Increment, Decrement
+				30 value indicator 0
+	31 toolbar
+		32 button Description: Hide Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel
+		33 container Secondary Actions: Move previous, Remove from toolbar
+			34 button 开始录音
+			35 button Description: 开始录音, Help: 导入一段已有音频
+			36 button Description: 开始录音, Help: 设置, ID: gearshape
+	37 close button
+	38 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	39 minimize button
+	40 text 审查夹具：旧版全文 2026/9/21 22:12  ·  00:12  ·  已完成
+41 menu bar
+	42 MeetingScribeReview
+	43 File
+	44 Edit
+	45 View
+	46 Window
+	47 Help
+
+The focused UI element is 0 standard window 审查夹具：旧版全文 – 2026/9/21 22:12  ·  00:12  ·  已完成, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1

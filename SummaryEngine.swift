@@ -1,5 +1,30 @@
 import Foundation
 
+/// Sensitive requests may redirect only within the configured origin.
+private final class SummaryRedirectPolicy: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        guard let origin = task.originalRequest?.url, let target = request.url,
+              origin.scheme?.lowercased() == target.scheme?.lowercased(),
+              origin.host?.lowercased() == target.host?.lowercased(),
+              Self.port(origin) == Self.port(target) else { completionHandler(nil); return }
+        completionHandler(request)
+    }
+    private static func port(_ url: URL) -> Int { url.port ?? (url.scheme == "https" ? 443 : 80) }
+}
+
+private enum SummaryTransport {
+    static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
+        config.timeoutIntervalForResource = 10 * 60
+        return URLSession(configuration: config, delegate: SummaryRedirectPolicy(), delegateQueue: nil)
+    }()
+}
+
+
 enum SummaryEngineError: LocalizedError {
     case missingAPIKey
     case invalidEndpoint
@@ -27,21 +52,22 @@ enum SummaryEngineError: LocalizedError {
                 return "找不到模型“\(requested)”。请填写服务商提供的真实模型 ID。"
             }
             return "找不到模型“\(requested)”。可用模型：\(preview)。请在设置中改成其中一个真实模型 ID。"
-        case .requestFailed(let status, let message):
+        case .requestFailed(let status, _):
+            if (300..<400).contains(status) { return "接口跳转已停止。请核对服务商的最终地址，并在设置里重新配置。" }
             if status == 401 || status == 403 {
                 return "总结模型认证失败（\(status)）。请确认 API Key 有效，并重新获取可用模型。"
             }
             if status == 404 {
                 return "总结模型接口不存在（404）。请填写服务商 API 根地址，例如 https://example.com/v1；应用会自动补全 /chat/completions。"
             }
-            return "总结模型请求失败（\(status)）：\(message)"
+            return "总结模型请求失败（\(status)）。请检查接口配置、额度或服务状态后重试。"
         case .networkFailed(let message):
             return "总结模型连接失败：\(message)"
         case .emptyResponse(let detail):
-            // 只说「没有返回内容」用户没法排查——服务商可能 200 回了一个错误信封、
-            // 或者回了别家格式。把原样回包截一段带出来，问题一眼可见。
-            if let detail, !detail.isEmpty {
-                return "总结模型没有返回可用内容。服务商回包：\(detail)"
+            // Only locally generated diagnostic categories are safe to persist.
+            let safeDetails: Set<String> = ["响应体为空。", "服务商响应格式不可用。", "响应超过安全大小限制。", "（模型只输出了思考过程，没有正文）"]
+            if let detail, safeDetails.contains(detail) {
+                return "总结模型没有返回可用内容。\(detail)"
             }
             return "总结模型没有返回内容。"
         case .budgetExhausted(let tokens):
@@ -229,7 +255,9 @@ struct MeetingSummaryEngine: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            let fetched = try await SummaryTransport.session.bytes(for: request)
+            data = try await limitedBody(fetched.0)
+            response = fetched.1
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError {
@@ -495,10 +523,14 @@ struct MeetingSummaryEngine: Sendable {
 
         // 「不完整」要说人话，而且必须真的显示出来（见执行计划 §2 工程细节 ②）。
         var incompleteReasons: [String] = []
+        if facts.finishReason == "unconfirmed_eof" {
+            incompleteReasons.append("速览响应未正常结束")
+        }
         if facts.truncated {
             incompleteReasons.append("速览部分在模型输出上限处被截断")
         }
         if let minutes {
+            if minutes.finishReason == "unconfirmed_eof" { incompleteReasons.append("纪要响应未正常结束") }
             if minutes.truncated {
                 incompleteReasons.append("纪要正文在模型输出上限处被截断")
             }
@@ -929,6 +961,9 @@ struct MeetingSummaryEngine: Sendable {
                     makeRequest(streaming: true, maxTokens: budget),
                     maxTokens: budget
                 )
+                if result.finishReason == "unconfirmed_eof" {
+                    return result.recording(escalations: escalations)
+                }
                 if result.isComplete {
                     return result.recording(escalations: escalations)
                 }
@@ -960,7 +995,7 @@ struct MeetingSummaryEngine: Sendable {
             } catch let error as SummaryEngineError {
                 // 认证 / 地址 / 模型名这类确定性错误，重试没有意义。
                 if case .requestFailed(let status, _) = error,
-                   (400..<500).contains(status), status != 429 {
+                   (300..<500).contains(status), status != 429 {
                     throw error
                 }
                 lastError = error
@@ -1035,7 +1070,7 @@ struct MeetingSummaryEngine: Sendable {
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
-            (bytes, response) = try await URLSession.shared.bytes(for: request)
+            (bytes, response) = try await SummaryTransport.session.bytes(for: request)
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError {
@@ -1048,6 +1083,7 @@ struct MeetingSummaryEngine: Sendable {
             throw SummaryEngineError.emptyResponse(nil)
         }
 
+        defer { bytes.task.cancel() }
         // 非 2xx 时错误体通常不是 SSE，按普通 body 收一点拿服务商的错误文案。
         guard (200..<300).contains(httpResponse.statusCode) else {
             var buffer = Data()
@@ -1065,20 +1101,47 @@ struct MeetingSummaryEngine: Sendable {
             )
         }
 
+        // A non-SSE success is usable without issuing another generation request.
+        if httpResponse.mimeType == "application/json" {
+            let data = try await limitedBody(bytes)
+            return try decodeBuffered(data, maxTokens: maxTokens)
+        }
         var accumulated = ""
         var rawTap = ""
         var finishReason: String?
         var sawReasoning = false
-        for try await line in bytes.lines {
+        var sawDone = false
+        var malformedEvent = false
+        let boundedLines = AsyncThrowingStream<String, Error> { continuation in
+            let reader = Task {
+                do {
+                    var line = Data()
+                    var count = 0
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+                        count += 1
+                        guard count <= 2 * 1024 * 1024 else { throw SummaryEngineError.emptyResponse("响应超过安全大小限制。") }
+                        if byte == 10 {
+                            continuation.yield(String(decoding: line, as: UTF8.self)); line.removeAll(keepingCapacity: true)
+                        } else { line.append(byte) }
+                    }
+                    if !line.isEmpty { continuation.yield(String(decoding: line, as: UTF8.self)) }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+            continuation.onTermination = { @Sendable _ in reader.cancel() }
+        }
+        for try await line in boundedLines {
             try Task.checkCancellation()
             guard line.hasPrefix("data:") else { continue }
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             if payload.isEmpty { continue }
-            if payload == "[DONE]" { break }
+            if payload == "[DONE]" { sawDone = true; break }
             // 留一份原样回包（最多 300 字符），内容为空时用来还原现场。
             if rawTap.count < 300 { rawTap += payload + " " }
             guard let data = payload.data(using: .utf8),
                   let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data) else {
+                malformedEvent = true
                 continue
             }
             let choice = chunk.choices.first
@@ -1106,9 +1169,11 @@ struct MeetingSummaryEngine: Sendable {
             // 其余情况：服务商忽略 stream 回了普通 JSON，或回的是错误信封。
             // 带出原样回包，外层还有非流式兜底。
             let hint = sawReasoning ? "（模型只输出了思考过程，没有正文）" : ""
-            let detail = rawTap.isEmpty ? nil : hint + String(rawTap.prefix(300))
+            let detail = rawTap.isEmpty ? nil : hint + "响应格式不可用。"
             throw SummaryEngineError.emptyResponse(detail)
         }
+        let confirmed = finishReason == "stop" || finishReason == "length" || (sawDone && finishReason == nil)
+        if !confirmed || malformedEvent { finishReason = "unconfirmed_eof" }
         // **正文非空也要看 finish_reason**：模型写完一半被砍是最常见的那种截断，
         // 旧代码在这里直接 return，于是半截内容被当成完整结果收下。
         return SummaryTextResult(
@@ -1124,6 +1189,43 @@ struct MeetingSummaryEngine: Sendable {
         _ request: URLRequest,
         maxTokens: Int?
     ) async throws -> SummaryTextResult {
+        let data: Data
+        let response: URLResponse
+        do {
+            let fetched = try await SummaryTransport.session.bytes(for: request)
+            data = try await limitedBody(fetched.0)
+            response = fetched.1
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            throw SummaryEngineError.networkFailed(networkMessage(for: error))
+        } catch {
+            throw SummaryEngineError.networkFailed(error.localizedDescription)
+        }
+        try Task.checkCancellation()
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SummaryEngineError.emptyResponse(nil)
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw SummaryEngineError.requestFailed(
+                httpResponse.statusCode,
+                responseMessage(from: data)
+            )
+        }
+        return try decodeBuffered(data, maxTokens: maxTokens)
+    }
+
+    private func limitedBody(_ bytes: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            guard data.count < 2 * 1024 * 1024 else { throw SummaryEngineError.emptyResponse("响应超过安全大小限制。") }
+            data.append(byte)
+        }
+        return data
+    }
+
+    private func decodeBuffered(_ data: Data, maxTokens: Int?) throws -> SummaryTextResult {
         struct ResponseBody: Decodable {
             struct Choice: Decodable {
                 struct Message: Decodable {
@@ -1143,27 +1245,6 @@ struct MeetingSummaryEngine: Sendable {
             let choices: [Choice]
         }
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as URLError {
-            throw SummaryEngineError.networkFailed(networkMessage(for: error))
-        } catch {
-            throw SummaryEngineError.networkFailed(error.localizedDescription)
-        }
-        try Task.checkCancellation()
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SummaryEngineError.emptyResponse(nil)
-        }
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            throw SummaryEngineError.requestFailed(
-                httpResponse.statusCode,
-                responseMessage(from: data)
-            )
-        }
         // 用 try? 而不是 try：服务商 200 回错误信封（没有 choices 键）时，
         // 抛 DecodingError 对用户毫无意义，不如把原样回包带出去。
         guard let decoded = try? JSONDecoder().decode(ResponseBody.self, from: data) else {
@@ -1195,47 +1276,13 @@ struct MeetingSummaryEngine: Sendable {
         throw SummaryEngineError.emptyResponse(rawSnippet(from: data))
     }
 
-    /// 服务商 200 但正文不可用时，把原样回包截一小段带出去。
-    /// 「没有返回内容」这句话本身没法排查，用户需要看到服务商到底回了什么。
-    private func rawSnippet(from data: Data, limit: Int = 300) -> String? {
-        guard !data.isEmpty else { return "（响应体为空）" }
-        guard let text = String(data: data, encoding: .utf8) else {
-            return "（非 UTF-8 响应体，\(data.count) 字节）"
-        }
-        let collapsed = text
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !collapsed.isEmpty else { return "（响应体为空）" }
-        return collapsed.count <= limit ? collapsed : String(collapsed.prefix(limit)) + "…"
+    /// Classify unusable responses without exposing provider-controlled text.
+    private func rawSnippet(from data: Data) -> String? {
+        data.isEmpty ? "响应体为空。" : "服务商响应格式不可用。"
     }
 
     private func responseMessage(from data: Data) -> String {
-        struct ErrorEnvelope: Decodable {
-            struct APIError: Decodable {
-                let message: String?
-                let code: String?
-                let type: String?
-            }
-
-            let error: APIError?
-        }
-
-        if let envelope = try? JSONDecoder().decode(ErrorEnvelope.self, from: data),
-           let apiError = envelope.error {
-            let parts: [String] = [apiError.message, apiError.code, apiError.type]
-                .compactMap { value in
-                    guard let value else { return nil }
-                    let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return clean.isEmpty ? nil : clean
-                }
-            if !parts.isEmpty {
-                return String(parts.joined(separator: " · ").prefix(500))
-            }
-        }
-
-        let raw = String(decoding: data, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return raw.isEmpty ? "服务端没有提供错误信息。" : String(raw.prefix(500))
+        "服务商未能完成请求。请检查接口配置、额度或服务状态后重试。"
     }
 
     private func networkMessage(for error: URLError) -> String {

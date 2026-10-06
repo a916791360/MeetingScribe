@@ -1,0 +1,7 @@
+=== 分发前审计 ===
+产物：/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-rpath-gate-olc0sfwv/AuditFixture.app
+✗ Mach-O 含开发机绝对 RPATH：whisper-cli
+
+审计未通过 —— 先清理，别分发。
+
+Injected absolute RPATH: expected nonzero; exit=1

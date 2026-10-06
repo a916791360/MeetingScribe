@@ -1,0 +1,789 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/10] Compiling MeetingScribe SummaryEngine.swift
+[5/10] Emitting module MeetingScribe
+[6/10] Compiling MeetingScribe SessionStorage.swift
+[7/10] Compiling MeetingScribe MeetingStore.swift
+[8/12] Compiling MeetingScribe WorkbenchView.swift
+[9/12] Compiling MeetingScribe MeetingScribeApp.swift
+[9/14] Write Objects.LinkFileList
+[10/14] Linking MeetingScribe
+[11/14] Applying MeetingScribe
+[13/30] Emitting module MeetingScribeTests
+[14/30] Compiling MeetingScribeTests AuditNetworkTests.swift
+[15/30] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[16/30] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[17/30] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[18/30] Compiling MeetingScribeTests QualityEvalTests.swift
+[19/30] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[20/30] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[21/30] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[22/30] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[23/30] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[24/30] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[25/30] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[26/30] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[27/30] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[28/30] Compiling MeetingScribeTests ExportWiringTests.swift
+[29/31] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[29/31] Write Objects.LinkFileList
+[30/31] Linking MeetingScribePackageTests
+Build complete! (5.86s)
+Test Suite 'All tests' started at 2026-10-06 12:09:12.904.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 12:09:12.905.
+Test Suite 'AppAppearanceTests' started at 2026-10-06 12:09:12.905.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' passed (0.000 seconds).
+Test Suite 'AppAppearanceTests' passed at 2026-10-06 12:09:12.908.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'AudioTrackPipelineTests' started at 2026-10-06 12:09:12.908.
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testProbeTreatsAllSilenceAsSilent]' started.
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testProbeTreatsAllSilenceAsSilent]' passed (0.013 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testProbeTreatsQuietButRealSpeechAsAudible]' started.
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testProbeTreatsQuietButRealSpeechAsAudible]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testRecordedTrackConvertsIntoAWhisperReadyWav]' started.
+Test Case '-[MeetingScribeTests.AudioTrackPipelineTests testRecordedTrackConvertsIntoAWhisperReadyWav]' passed (0.020 seconds).
+Test Suite 'AudioTrackPipelineTests' passed at 2026-10-06 12:09:12.944.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.036 (0.036) seconds
+Test Suite 'AudioTrackRecorderTests' started at 2026-10-06 12:09:12.944.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testAppendingAfterFinishIsIgnored]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testAppendingAfterFinishIsIgnored]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testFinishWithoutAnyAudioRemovesTheEmptyFile]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testFinishWithoutAnyAudioRemovesTheEmptyFile]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testFormatChangeMidStreamStopsInsteadOfMixingFormats]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testFormatChangeMidStreamStopsInsteadOfMixingFormats]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testInterleavedFloat32SamplesAreAccepted]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testInterleavedFloat32SamplesAreAccepted]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testSamplesRoundTripAtTheRightAmplitude]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testSamplesRoundTripAtTheRightAmplitude]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testWrittenFileHoldsTheSameSamplesThatWereFed]' started.
+Test Case '-[MeetingScribeTests.AudioTrackRecorderTests testWrittenFileHoldsTheSameSamplesThatWereFed]' passed (0.001 seconds).
+Test Suite 'AudioTrackRecorderTests' passed at 2026-10-06 12:09:12.948.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'AuditDataSafetyTests' started at 2026-10-06 12:09:12.948.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' passed (0.059 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportedInputWAVPreservesOriginalAndManifest]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testImportedInputWAVPreservesOriginalAndManifest]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' passed (0.905 seconds).
+Test Suite 'AuditDataSafetyTests' passed at 2026-10-06 12:09:13.917.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.968 (0.968) seconds
+Test Suite 'AuditDeliveryTests' started at 2026-10-06 12:09:13.917.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEditedTranscriptMarksOldMinutesStale]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEditedTranscriptMarksOldMinutesStale]' passed (0.005 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEmojiTitleFitsFilesystemByteLimit]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testEmojiTitleFitsFilesystemByteLimit]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testExtremeTimestampDoesNotOverflowDuringDisplay]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testExtremeTimestampDoesNotOverflowDuringDisplay]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testLegacyTextRemainsReadableMaterial]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testLegacyTextRemainsReadableMaterial]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testPlaybackTimerDoesNotRetainOwner]' started.
+Test Case '-[MeetingScribeTests.AuditDeliveryTests testPlaybackTimerDoesNotRetainOwner]' passed (0.175 seconds).
+Test Suite 'AuditDeliveryTests' passed at 2026-10-06 12:09:14.100.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.183 (0.183) seconds
+Test Suite 'AuditNetworkTests' started at 2026-10-06 12:09:14.100.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testCrossOrigin307DoesNotForwardMeetingOrCredentials]' passed (0.148 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testEchoedCredentialIsExcludedFromPersistenceAndExport]' passed (3.759 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testJSONReplyToStreamRequestUsesOneGeneration]' passed (0.046 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testManifestPathTraversalCannotDeleteOutsideDataRoot]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testOversizedProviderResponseIsRejected]' passed (4.250 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testPrematureSSEEOFIsMarkedPartial]' passed (0.112 seconds).
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.AuditNetworkTests testSymlinkCannotWriteOutsideDataRoot]' passed (0.001 seconds).
+Test Suite 'AuditNetworkTests' passed at 2026-10-06 12:09:22.417.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 8.317 (8.317) seconds
+Test Suite 'AuditRecordingPipelineTests' started at 2026-10-06 12:09:22.417.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCancellationFinishesEvenIfCLIRejectsSIGTERM]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCancellationFinishesEvenIfCLIRejectsSIGTERM]' passed (2.417 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testChunkOwnershipPreservesTheCompleteBoundarySentence]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testChunkOwnershipPreservesTheCompleteBoundarySentence]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCleaningPreservesDifferentSpeakers]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCleaningPreservesDifferentSpeakers]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCrosstalkPreservesOppositeDecisions]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testCrosstalkPreservesOppositeDecisions]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDeletionWaitsForOldTaskBeforeStartingAnother]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testDeletionWaitsForOldTaskBeforeStartingAnother]' passed (1.501 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testFailedTrackIsRejectedForDualTranscription]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testFailedTrackIsRejectedForDualTranscription]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testIndependentRepeatsBySameSpeakerArePreserved]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testIndependentRepeatsBySameSpeakerArePreserved]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testRunawayCLILogIsTerminatedAndDiagnosticIsBounded]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/AuditRecordingPipelineTests.swift:300: error: -[MeetingScribeTests.AuditRecordingPipelineTests testRunawayCLILogIsTerminatedAndDiagnosticIsBounded] : XCTAssertLessThan failed: ("168.6341599225998") is not less than ("10.0")
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testRunawayCLILogIsTerminatedAndDiagnosticIsBounded]' failed (168.769 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSampleTimestampGapIsPreserved]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSampleTimestampGapIsPreserved]' passed (0.004 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSecondTrackFailurePreservesFirstTrackCheckpoint]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSecondTrackFailurePreservesFirstTrackCheckpoint]' passed (2.250 seconds).
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSharedEpochPreservesFirstPacketOffsetsAndActualLevels]' started.
+Test Case '-[MeetingScribeTests.AuditRecordingPipelineTests testSharedEpochPreservesFirstPacketOffsetsAndActualLevels]' passed (0.002 seconds).
+Test Suite 'AuditRecordingPipelineTests' failed at 2026-10-06 12:12:17.364.
+	 Executed 11 tests, with 1 failure (0 unexpected) in 174.946 (174.947) seconds
+Test Suite 'CaptureReadinessTests' started at 2026-10-06 12:12:17.364.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testBothGrantedIsReadyAndSaysNothing]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testBothGrantedIsReadyAndSaysNothing]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingBothFallsIntoTheSystemAudioBranch]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingBothFallsIntoTheSystemAudioBranch]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingMicrophoneOnlyStillAllowsRecordingButWarns]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingMicrophoneOnlyStillAllowsRecordingButWarns]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingSystemAudioBlocksAndExplainsTheRestart]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testMissingSystemAudioBlocksAndExplainsTheRestart]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testPermissionLabelsAreDistinct]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testPermissionLabelsAreDistinct]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testStoreReadinessFollowsTheTwoPermissions]' started.
+Test Case '-[MeetingScribeTests.CaptureReadinessTests testStoreReadinessFollowsTheTwoPermissions]' passed (0.001 seconds).
+Test Suite 'CaptureReadinessTests' passed at 2026-10-06 12:12:17.367.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'DualTrackPathsTests' started at 2026-10-06 12:12:17.367.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureAndNormalizedTargetsNeverCollideInOneFolder]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureAndNormalizedTargetsNeverCollideInOneFolder]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureFileTypesMatchWhatTheRecorderWrites]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureFileTypesMatchWhatTheRecorderWrites]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureNamesAreNotNormalizedNames]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureNamesAreNotNormalizedNames]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureURLsLandInTheGivenFolderWithTheCaptureNames]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testCaptureURLsLandInTheGivenFolderWithTheCaptureNames]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testNamesArePinnedToTheirValues]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testNamesArePinnedToTheirValues]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testTheFourNamesAreAllDistinct]' started.
+Test Case '-[MeetingScribeTests.DualTrackPathsTests testTheFourNamesAreAllDistinct]' passed (0.000 seconds).
+Test Suite 'DualTrackPathsTests' passed at 2026-10-06 12:12:17.367.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ExportWiringTests' started at 2026-10-06 12:12:17.367.
+Test Case '-[MeetingScribeTests.ExportWiringTests testCopyReportsFailureAndLeavesThePasteboardUntouchedWhenThereIsNoSession]' started.
+Test Case '-[MeetingScribeTests.ExportWiringTests testCopyReportsFailureAndLeavesThePasteboardUntouchedWhenThereIsNoSession]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.ExportWiringTests testCopyWritesExactlyTheExportedMarkdownToThePasteboard]' started.
+Test Case '-[MeetingScribeTests.ExportWiringTests testCopyWritesExactlyTheExportedMarkdownToThePasteboard]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.ExportWiringTests testExportedFileReadsBackByteForByte]' started.
+Test Case '-[MeetingScribeTests.ExportWiringTests testExportedFileReadsBackByteForByte]' passed (0.002 seconds).
+Test Suite 'ExportWiringTests' passed at 2026-10-06 12:12:17.374.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'GlossaryTests' started at 2026-10-06 12:12:17.374.
+Test Case '-[MeetingScribeTests.GlossaryTests testAcceptsEveryCommaLikeSeparator]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testAcceptsEveryCommaLikeSeparator]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testAliasConflictIsResolvedByFirstComeFirstServed]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testAliasConflictIsResolvedByFirstComeFirstServed]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testAppliesTerminologyToExistingTranscriptWithoutTouchingStructure]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testAppliesTerminologyToExistingTranscriptWithoutTouchingStructure]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testApplyingEmptyTableReturnsInputUntouched]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testApplyingEmptyTableReturnsInputUntouched]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testCountsDuplicatedAliasAsIgnored]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testCountsDuplicatedAliasAsIgnored]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testDropsAliasEqualToItsOwnCanonical]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testDropsAliasEqualToItsOwnCanonical]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testDropsSingleCharacterAlias]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testDropsSingleCharacterAlias]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testEmptyTextYieldsEmptyGlossary]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testEmptyTextYieldsEmptyGlossary]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testFactoryDefaultStillMatchesTheOldHardcodedTable]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testFactoryDefaultStillMatchesTheOldHardcodedTable]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testFactoryDefaultTermsMatchTheHistoricalPrompt]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testFactoryDefaultTermsMatchTheHistoricalPrompt]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testMergesRepeatedCanonicalInsteadOfCreatingTwoEntries]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testMergesRepeatedCanonicalInsteadOfCreatingTwoEntries]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testParsesFirstTokenAsCanonicalAndRestAsAliases]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testParsesFirstTokenAsCanonicalAndRestAsAliases]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testPromptTermsNotTruncatedWhenWithinBudget]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testPromptTermsNotTruncatedWhenWithinBudget]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testPromptTermsStayWithinBudgetAndCutOnEntryBoundaries]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testPromptTermsStayWithinBudgetAndCutOnEntryBoundaries]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testReplacementTableKeysAreAlwaysAliases]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testReplacementTableKeysAreAlwaysAliases]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testReplacementTableOnlyMapsAliasToCanonical]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testReplacementTableOnlyMapsAliasToCanonical]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testStripsListMarkersAndSkipsBlankLines]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testStripsListMarkersAndSkipsBlankLines]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionCarriesBothHalvesOfTheRule]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionCarriesBothHalvesOfTheRule]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionIsNilWhenEmpty]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionIsNilWhenEmpty]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionIsSingleLine]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testSummaryInstructionIsSingleLine]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testWhisperInitialPromptContainsSceneSentenceAndTerms]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testWhisperInitialPromptContainsSceneSentenceAndTerms]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.GlossaryTests testWhisperInitialPromptOmitsTermLineWhenEmpty]' started.
+Test Case '-[MeetingScribeTests.GlossaryTests testWhisperInitialPromptOmitsTermLineWhenEmpty]' passed (0.000 seconds).
+Test Suite 'GlossaryTests' passed at 2026-10-06 12:12:17.377.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'LayoutTokenTests' started at 2026-10-06 12:12:17.377.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' passed (0.000 seconds).
+Test Suite 'LayoutTokenTests' passed at 2026-10-06 12:12:17.377.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'MeetingAnalysisModelLabelTests' started at 2026-10-06 12:12:17.377.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testBlankValuesBecomeNil]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testBlankValuesBecomeNil]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testFallsBackWhenModelPartIsEmpty]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testFallsBackWhenModelPartIsEmpty]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testKeepsNameWithoutSeparator]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testKeepsNameWithoutSeparator]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testMetaLineDropsProviderButKeepsModel]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testMetaLineDropsProviderButKeepsModel]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testStripsProviderPrefix]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testStripsProviderPrefix]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testTrimsSurroundingWhitespace]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisModelLabelTests testTrimsSurroundingWhitespace]' passed (0.000 seconds).
+Test Suite 'MeetingAnalysisModelLabelTests' passed at 2026-10-06 12:12:17.378.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'MeetingAnalysisV2Tests' started at 2026-10-06 12:12:17.378.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testActionItemDecodesWithoutOwner]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testActionItemDecodesWithoutOwner]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testDecodesLegacyAnalysisWithoutNewKeys]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testDecodesLegacyAnalysisWithoutNewKeys]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testEmptyArraysSurviveAsEmptyArrays]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testEmptyArraysSurviveAsEmptyArrays]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testNilNewFieldsAreOmittedFromJSON]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testNilNewFieldsAreOmittedFromJSON]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testRealSessionFilesStillDecode]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testRealSessionFilesStillDecode]' passed (0.005 seconds).
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testRoundTripsNewFields]' started.
+Test Case '-[MeetingScribeTests.MeetingAnalysisV2Tests testRoundTripsNewFields]' passed (0.000 seconds).
+Test Suite 'MeetingAnalysisV2Tests' passed at 2026-10-06 12:12:17.384.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'MeetingExportTests' started at 2026-10-06 12:12:17.384.
+Test Case '-[MeetingScribeTests.MeetingExportTests testActionItemsRenderAsCheckboxesWithTags]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testActionItemsRenderAsCheckboxesWithTags]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testBlankMinutesProduceNoSection]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testBlankMinutesProduceNoSection]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletKeepsTimeAnchorAsText]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletKeepsTimeAnchorAsText]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletsInMinutesStayInOneList]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletsInMinutesStayInOneList]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletWithOnlyAnchorIsDropped]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletWithOnlyAnchorIsDropped]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletWithoutAnchorRendersAsPlainText]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testBulletWithoutAnchorRendersAsPlainText]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testDecisionKeepsEvidenceOnNestedLine]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testDecisionKeepsEvidenceOnNestedLine]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testEmptyFieldsProduceNoEmptyLines]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testEmptyFieldsProduceNoEmptyLines]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testExportSucceedsWhenSummaryNeverRan]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testExportSucceedsWhenSummaryNeverRan]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameDateIsLocaleIndependent]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameDateIsLocaleIndependent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameFallsBackWhenTitleIsBlank]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameFallsBackWhenTitleIsBlank]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameFallsBackWhenTitleIsOnlyDots]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameFallsBackWhenTitleIsOnlyDots]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameReplacesIllegalCharacters]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameReplacesIllegalCharacters]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameStripsNewlinesAndTabs]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameStripsNewlinesAndTabs]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameTruncatesVeryLongTitle]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameTruncatesVeryLongTitle]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameUsesZeroPaddedDatePrefixAndTitle]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFileNameUsesZeroPaddedDatePrefixAndTitle]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testFooterAndMetaArePresent]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testFooterAndMetaArePresent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testMarkdownEndsWithSingleNewline]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testMarkdownEndsWithSingleNewline]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesBodyIsExportedAsADocument]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesBodyIsExportedAsADocument]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesComeBeforeTheChecklists]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesComeBeforeTheChecklists]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesHeadingsAreDemotedBelowTheSectionHeading]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testMinutesHeadingsAreDemotedBelowTheSectionHeading]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoRisksSectionWhenEmpty]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoRisksSectionWhenEmpty]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoticeIsQuotedAtTop]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoticeIsQuotedAtTop]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoTranscriptSectionWhenNothingToShow]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testNoTranscriptSectionWhenNothingToShow]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testOldStyleOrdinalHeadingsBecomeRealHeadingsInExport]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testOldStyleOrdinalHeadingsBecomeRealHeadingsInExport]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testOpenQuestionsBecomeBullets]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testOpenQuestionsBecomeBullets]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testOverviewIsDroppedWhenMinutesArePresent]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testOverviewIsDroppedWhenMinutesArePresent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testOverviewIsStillExportedWhenMinutesAreMissing]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testOverviewIsStillExportedWhenMinutesAreMissing]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testRisksSectionSitsRightAfterActions]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testRisksSectionSitsRightAfterActions]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testSectionsAppearInFunnelOrder]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testSectionsAppearInFunnelOrder]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testSingleDashInTitleIsPreserved]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testSingleDashInTitleIsPreserved]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testTimelineUsesCompactRangeLabel]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testTimelineUsesCompactRangeLabel]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixFallsBackToPlainTextWhenNoSegments]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixFallsBackToPlainTextWhenNoSegments]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixOmitsSpeakerParenthesesWhenAbsent]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixOmitsSpeakerParenthesesWhenAbsent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixPrefersSegmentsOverPlainText]' started.
+Test Case '-[MeetingScribeTests.MeetingExportTests testTranscriptAppendixPrefersSegmentsOverPlainText]' passed (0.000 seconds).
+Test Suite 'MeetingExportTests' passed at 2026-10-06 12:12:17.389.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'MinutesMarkupTests' started at 2026-10-06 12:12:17.389.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testBlocksSplitOnBlankLinesAndRecognizeBullets]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testBlocksSplitOnBlankLinesAndRecognizeBullets]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testEmptyOrWhitespaceOnlyTextProducesNoBlocks]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testEmptyOrWhitespaceOnlyTextProducesNoBlocks]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testHeadingTextStripsEveryMarkerForm]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testHeadingTextStripsEveryMarkerForm]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testInlineBoldIsLeftForTheRendererInsteadOfBeingSplitOut]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testInlineBoldIsLeftForTheRendererInsteadOfBeingSplitOut]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testMinutesPromptAsksForALeadParagraphBeforeAnyHeading]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testMinutesPromptAsksForALeadParagraphBeforeAnyHeading]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testNarrativeLinesAreNotMistakenForHeadings]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testNarrativeLinesAreNotMistakenForHeadings]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testStoredMinutesNeverExposeMarkdownMarkers]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testStoredMinutesNeverExposeMarkdownMarkers]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testTheLeadParagraphStaysAParagraph]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testTheLeadParagraphStaysAParagraph]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testWrappedLinesAreJoinedForChineseAndSpacedForEnglish]' started.
+Test Case '-[MeetingScribeTests.MinutesMarkupTests testWrappedLinesAreJoinedForChineseAndSpacedForEnglish]' passed (0.000 seconds).
+Test Suite 'MinutesMarkupTests' passed at 2026-10-06 12:12:17.392.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'MixedRecordingSessionConcurrencyTests' started at 2026-10-06 12:12:17.392.
+Test Case '-[MeetingScribeTests.MixedRecordingSessionConcurrencyTests testRecordingStartCallbackMayArriveOffMainActor]' started.
+Test Case '-[MeetingScribeTests.MixedRecordingSessionConcurrencyTests testRecordingStartCallbackMayArriveOffMainActor]' passed (0.001 seconds).
+Test Suite 'MixedRecordingSessionConcurrencyTests' passed at 2026-10-06 12:12:17.394.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'OverviewBulletTests' started at 2026-10-06 12:12:17.394.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testAcceptsFullWidthBrackets]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testAcceptsFullWidthBrackets]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testAnalysisParsesAllBulletsInOrder]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testAnalysisParsesAllBulletsInOrder]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testDoesNotCrashOnLargeNumbers]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testDoesNotCrashOnLargeNumbers]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testDoesNotTreatMidSentenceBracketAsAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testDoesNotTreatMidSentenceBracketAsAnchor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testEmptyTextWhenOnlyAnchorPresent]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testEmptyTextWhenOnlyAnchorPresent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testIdentifiersAreStableAcrossParses]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testIdentifiersAreStableAcrossParses]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testKeepsPlainTextWithoutAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testKeepsPlainTextWithoutAnchor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testMissingBulletsYieldEmptyArray]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testMissingBulletsYieldEmptyArray]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesHourMinuteSecondAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesHourMinuteSecondAnchor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesLongMinuteAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesLongMinuteAnchor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesMinuteSecondAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testParsesMinuteSecondAnchor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testRejectsNonTimeBracket]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testRejectsNonTimeBracket]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.OverviewBulletTests testUnclosedBracketIsNotAnchor]' started.
+Test Case '-[MeetingScribeTests.OverviewBulletTests testUnclosedBracketIsNotAnchor]' passed (0.000 seconds).
+Test Suite 'OverviewBulletTests' passed at 2026-10-06 12:12:17.395.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ProcessingChunkWindowTests' started at 2026-10-06 12:12:17.395.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testChunkCountMatchesTheInlineFormula]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testChunkCountMatchesTheInlineFormula]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testEverySegmentBelongsToExactlyOneChunkOnAFullTimeline]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testEverySegmentBelongsToExactlyOneChunkOnAFullTimeline]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testFirstChunkOwnsEverythingBeforeItsCoreEnd]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testFirstChunkOwnsEverythingBeforeItsCoreEnd]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testLaterChunksOwnTheirCoreRangeAndTheOverlapBeforeItBelongsToThePreviousChunk]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testLaterChunksOwnTheirCoreRangeAndTheOverlapBeforeItBelongsToThePreviousChunk]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testSingleChunkExactlyOneWindowHasNoOverlapAtAll]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testSingleChunkExactlyOneWindowHasNoOverlapAtAll]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testVeryShortAudioStillGetsAUsableLength]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testVeryShortAudioStillGetsAUsableLength]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testWindowsForTwentyFiveMinutes]' started.
+Test Case '-[MeetingScribeTests.ProcessingChunkWindowTests testWindowsForTwentyFiveMinutes]' passed (0.000 seconds).
+Test Suite 'ProcessingChunkWindowTests' passed at 2026-10-06 12:12:17.396.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'ProcessingProgressEstimatorTests' started at 2026-10-06 12:12:17.396.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testAdvancesSmoothlyInsideChunk]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testAdvancesSmoothlyInsideChunk]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testDoesNotPullBackAnAlreadyAheadRealProgress]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testDoesNotPullBackAnAlreadyAheadRealProgress]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testFirstChunkIsNotEstimated]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testFirstChunkIsNotEstimated]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testIgnoresDegenerateAverageChunkDuration]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testIgnoresDegenerateAverageChunkDuration]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testNeverCrossesNextChunkBoundary]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testNeverCrossesNextChunkBoundary]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testNeverRetractsWhileTimeAdvances]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testNeverRetractsWhileTimeAdvances]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testRealProgressIsAlwaysTheFloor]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testRealProgressIsAlwaysTheFloor]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testStaysOutOfTheWayWhenNothingIsLeftToEstimate]' started.
+Test Case '-[MeetingScribeTests.ProcessingProgressEstimatorTests testStaysOutOfTheWayWhenNothingIsLeftToEstimate]' passed (0.000 seconds).
+Test Suite 'ProcessingProgressEstimatorTests' passed at 2026-10-06 12:12:17.397.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'QualityEvalTests' started at 2026-10-06 12:12:17.397.
+Test Case '-[MeetingScribeTests.QualityEvalTests testRunQualityEvalSet]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/QualityEvalTests.swift:93: -[MeetingScribeTests.QualityEvalTests testRunQualityEvalSet] : Test skipped - 未提供 MS_E2E_KEY，跳过需要联网的质量评测。
+Test Case '-[MeetingScribeTests.QualityEvalTests testRunQualityEvalSet]' skipped (0.001 seconds).
+Test Suite 'QualityEvalTests' passed at 2026-10-06 12:12:17.397.
+	 Executed 1 test, with 1 test skipped and 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SummaryDirectiveParityTests' started at 2026-10-06 12:12:17.397.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testAnalysisDirectivesAreEmptyWithoutSpeakersAndGlossary]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testAnalysisDirectivesAreEmptyWithoutSpeakersAndGlossary]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testAttributionReachesTheStageThatProducesVisibleOutput]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testAttributionReachesTheStageThatProducesVisibleOutput]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesCarryTheSameDirectiveBlockExactlyOnce]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesCarryTheSameDirectiveBlockExactlyOnce]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesReceiveTheSourceMaterialVerbatim]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesReceiveTheSourceMaterialVerbatim]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesSayNothingAboutSpeakersWhenTheMeetingHasNone]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testBothStagesSayNothingAboutSpeakersWhenTheMeetingHasNone]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testChapterStageGetsTheWholeLegendOnlyWhenSpeakersExist]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testChapterStageGetsTheWholeLegendOnlyWhenSpeakersExist]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testChapterSummariesAndRawTranscriptGetDifferentSourceHints]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testChapterSummariesAndRawTranscriptGetDifferentSourceHints]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testDirectivesDropsBlankBlocksInsteadOfLeavingGaps]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testDirectivesDropsBlankBlocksInsteadOfLeavingGaps]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testHasSpeakerLabelsIsTrueIfAnySegmentCarriesOne]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testHasSpeakerLabelsIsTrueIfAnySegmentCarriesOne]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testLegendIsExactlyTheTwoPartsJoined]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testLegendIsExactlyTheTwoPartsJoined]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testMarkersAreExplainedOnlyWhereMarkersActuallyAppear]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testMarkersAreExplainedOnlyWhereMarkersActuallyAppear]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testPromptsHaveNoUnresolvedPlaceholders]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testPromptsHaveNoUnresolvedPlaceholders]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testPromptsStartAtColumnZeroAfterBeingMovedIntoFunctions]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testPromptsStartAtColumnZeroAfterBeingMovedIntoFunctions]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testTerminologyComesFirstAndLegendLast]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testTerminologyComesFirstAndLegendLast]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testTheTwoPartsAreTwoDifferentThings]' started.
+Test Case '-[MeetingScribeTests.SummaryDirectiveParityTests testTheTwoPartsAreTwoDifferentThings]' passed (0.000 seconds).
+Test Suite 'SummaryDirectiveParityTests' passed at 2026-10-06 12:12:17.400.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'SummaryEngineAdmissionTests' started at 2026-10-06 12:12:17.400.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testActionAdmitsSuggestionAsARealTodo]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testActionAdmitsSuggestionAsARealTodo]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testActionStillRejectsGenuinelyUndecidedItems]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testActionStillRejectsGenuinelyUndecidedItems]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testBothRejectLowConfidence]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testBothRejectLowConfidence]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testBothRejectTooShortLabelsAndEvidence]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testBothRejectTooShortLabelsAndEvidence]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testDecisionStillRejectsSuggestions]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineAdmissionTests testDecisionStillRejectsSuggestions]' passed (0.000 seconds).
+Test Suite 'SummaryEngineAdmissionTests' passed at 2026-10-06 12:12:17.400.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'SummaryEngineBudgetTests' started at 2026-10-06 12:12:17.400.
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testBudgetExhaustedErrorExplainsItselfAndSuggestsANextStep]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testBudgetExhaustedErrorExplainsItselfAndSuggestsANextStep]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testEmptyResponseDoesNotExposeProviderPayload]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testEmptyResponseDoesNotExposeProviderPayload]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testTokenBudgetsLeaveRoomForReasoningChains]' started.
+Test Case '-[MeetingScribeTests.SummaryEngineBudgetTests testTokenBudgetsLeaveRoomForReasoningChains]' passed (0.000 seconds).
+Test Suite 'SummaryEngineBudgetTests' passed at 2026-10-06 12:12:17.401.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'SummaryModelDiscoveryTests' started at 2026-10-06 12:12:17.401.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testCurrentManualModelTakesPriorityOverPendingModel]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testCurrentManualModelTakesPriorityOverPendingModel]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testDiscoveryNeverPicksTheFirstModelForTheUser]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testDiscoveryNeverPicksTheFirstModelForTheUser]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testEmptyModelListIsDifferentFromMalformedPayload]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testEmptyModelListIsDifferentFromMalformedPayload]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testEndpointNormalizationKeepsProviderBasePath]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testEndpointNormalizationKeepsProviderBasePath]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testModelListPayloadSupportsCommonNestedModelArrays]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testModelListPayloadSupportsCommonNestedModelArrays]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testModelListPayloadSupportsOpenAIObjectsAndStringEntries]' started.
+Test Case '-[MeetingScribeTests.SummaryModelDiscoveryTests testModelListPayloadSupportsOpenAIObjectsAndStringEntries]' passed (0.000 seconds).
+Test Suite 'SummaryModelDiscoveryTests' passed at 2026-10-06 12:12:17.402.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SummaryModelStateTests' started at 2026-10-06 12:12:17.402.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testAvailableNamesTheModel]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testAvailableNamesTheModel]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testConnectingIsNeutralAndBusy]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testConnectingIsNeutralAndBusy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testEveryFailureReasonHasTitleAndNextStep]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testEveryFailureReasonHasTitleAndNextStep]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailedStateCarriesReasonAndStaysActionable]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailedStateCarriesReasonAndStaysActionable]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailureClassificationMapsEngineErrors]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailureClassificationMapsEngineErrors]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailureMessageNeverLeaksRawErrorText]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testFailureMessageNeverLeaksRawErrorText]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testIdleSaysNothing]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testIdleSaysNothing]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testKeySaveFailedIsDangerAndNotBusy]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testKeySaveFailedIsDangerAndNotBusy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testLoadedDistinguishesSelectedFromUnselected]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testLoadedDistinguishesSelectedFromUnselected]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testNoListTellsUserToFillManually]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testNoListTellsUserToFillManually]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testSelectedSaysItWillBeUsed]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testSelectedSaysItWillBeUsed]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testTestingNamesTheModelAndIsBusy]' started.
+Test Case '-[MeetingScribeTests.SummaryModelStateTests testTestingNamesTheModelAndIsBusy]' passed (0.000 seconds).
+Test Suite 'SummaryModelStateTests' passed at 2026-10-06 12:12:17.403.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SummaryPageSplitTests' started at 2026-10-06 12:12:17.403.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testBulletsAreToldNotToRepeatTheChecklists]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testBulletsAreToldNotToRepeatTheChecklists]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testOverviewIsToldNotToRestateTheHeadline]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testOverviewIsToldNotToRestateTheHeadline]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRiskAdmissionKeepsHedgedWordingThatDecisionsWouldDrop]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRiskAdmissionKeepsHedgedWordingThatDecisionsWouldDrop]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRiskAdmissionStillRequiresEvidenceAndConfidence]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRiskAdmissionStillRequiresEvidenceAndConfidence]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksAloneCountAsStructuredFindings]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksAloneCountAsStructuredFindings]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksAreRequiredInTheOutputSchema]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksAreRequiredInTheOutputSchema]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksRoundTripAndOldSessionsStillDecode]' started.
+Test Case '-[MeetingScribeTests.SummaryPageSplitTests testRisksRoundTripAndOldSessionsStillDecode]' passed (0.000 seconds).
+Test Suite 'SummaryPageSplitTests' passed at 2026-10-06 12:12:17.404.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'TranscriptCleanerTests' started at 2026-10-06 12:12:17.404.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testAppliesTerminologyTable]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testAppliesTerminologyTable]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testCollapsesInnerImmediateRepeats]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testCollapsesInnerImmediateRepeats]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testCollapsesLongRunOfIdenticalSegments]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testCollapsesLongRunOfIdenticalSegments]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDoesNotCollapseNaturalDoubleWords]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDoesNotCollapseNaturalDoubleWords]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDoesNotEatDigitsInsideNumbers]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDoesNotEatDigitsInsideNumbers]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDropsShortLowConfidenceJunk]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testDropsShortLowConfidenceJunk]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testHandlesEmptyInput]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testHandlesEmptyInput]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testIsIdempotentSoStoredTranscriptsDoNotShrinkAgain]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testIsIdempotentSoStoredTranscriptsDoNotShrinkAgain]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsHeavyMajorityOfUniqueContent]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsHeavyMajorityOfUniqueContent]' passed (0.053 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsShortRepeatedInterjections]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsShortRepeatedInterjections]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsShortTextWhenConfidenceIsFine]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testKeepsShortTextWhenConfidenceIsFine]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testMergesFragmentsIntoSentenceLevelSegments]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testMergesFragmentsIntoSentenceLevelSegments]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testStopsMergingAtCharacterLimit]' started.
+Test Case '-[MeetingScribeTests.TranscriptCleanerTests testStopsMergingAtCharacterLimit]' passed (0.002 seconds).
+Test Suite 'TranscriptCleanerTests' passed at 2026-10-06 12:12:17.464.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.059 (0.060) seconds
+Test Suite 'TranscriptEditPersistenceTests' started at 2026-10-06 12:12:17.464.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testCloudSummaryRegenerationIsBlockedUntilKeyIsLoadedIntoMemory]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testEditedSegmentSurvivesTheTerminologyPassThatRegenerationRuns]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testLocalRulesCanRegenerateWithoutAPIKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessConfiguredWhenProviderModelAndKeyAreAllPresent]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessLocalRulesIsAlwaysReady]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsKeyWhenCloudProviderHasNoLoadedKey]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testReadinessNeedsModelWhenKeyPresentButModelEmpty]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testRejectedEditWritesNothingAtAll]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingWithoutChangingAnythingDoesNotTouchTheFile]' passed (0.002 seconds).
+Test Suite 'TranscriptEditPersistenceTests' passed at 2026-10-06 12:12:17.485.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.020 (0.021) seconds
+Test Suite 'TranscriptEditorTests' started at 2026-10-06 12:12:17.485.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testApplyRewritesOnlyThatSegment]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testApplyRewritesOnlyThatSegment]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testApplyTrimsTheInputBeforeWriting]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testApplyTrimsTheInputBeforeWriting]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testEditedCountCountsOnlyEditedSegments]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testEditedCountCountsOnlyEditedSegments]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testEditThenRegenerateFeedsTheCorrectedText]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testEditThenRegenerateFeedsTheCorrectedText]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testNormalizeTrimsAndFoldsNewlinesIntoSpaces]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testNormalizeTrimsAndFoldsNewlinesIntoSpaces]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testOldSegmentWithoutTheNewKeyStillDecodes]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testOldSegmentWithoutTheNewKeyStillDecodes]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testRejectsEmptyTextAndKeepsTheOriginal]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testRejectsEmptyTextAndKeepsTheOriginal]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testTerminologyCanStillTouchEditedSegmentsWhenExplicitlyAsked]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testTerminologyCanStillTouchEditedSegmentsWhenExplicitlyAsked]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testTerminologySkipsManuallyEditedSegments]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testTerminologySkipsManuallyEditedSegments]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUnchangedWhenTextIsIdenticalAfterNormalizing]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUnchangedWhenTextIsIdenticalAfterNormalizing]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUneditedSegmentDoesNotGainANewKey]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUneditedSegmentDoesNotGainANewKey]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUnknownSegmentIDIsNoOp]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testUnknownSegmentIDIsNoOp]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testVerdictAndApplyNeverDisagree]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testVerdictAndApplyNeverDisagree]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testVerdictReportsTheThreeCases]' started.
+Test Case '-[MeetingScribeTests.TranscriptEditorTests testVerdictReportsTheThreeCases]' passed (0.000 seconds).
+Test Suite 'TranscriptEditorTests' passed at 2026-10-06 12:12:17.486.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'TranscriptMaterialTests' started at 2026-10-06 12:12:17.486.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testAnalyzeNeverReachesTheNetworkWhenMaterialIsThin]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testAnalyzeNeverReachesTheNetworkWhenMaterialIsThin]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testCountsOnlyContentCharacters]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testCountsOnlyContentCharacters]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testExactThresholdIsAccepted]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testExactThresholdIsAccepted]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testFewSegmentsTripsEvenWhenTheTextIsLong]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testFewSegmentsTripsEvenWhenTheTextIsLong]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testInsufficientAnalysisDoesNotPretendToBeAFailure]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testInsufficientAnalysisDoesNotPretendToBeAFailure]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testMessageCarriesTheActualNumbers]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testMessageCarriesTheActualNumbers]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testNoContentHasItsOwnWording]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testNoContentHasItsOwnWording]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testNormalAnalysisOmitsTheKeyEntirely]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testNormalAnalysisOmitsTheKeyEntirely]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testOneCharacterBelowTheLineTrips]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testOneCharacterBelowTheLineTrips]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testPunctuationAndWhitespaceOnlyTranscriptIsNoContent]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testPunctuationAndWhitespaceOnlyTranscriptIsNoContent]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRealisticMeetingPassesTheGate]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRealisticMeetingPassesTheGate]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairCatchesTheLegacyMetaCommentary]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairCatchesTheLegacyMetaCommentary]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairIsNotRepeatedOnceApplied]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairIsNotRepeatedOnceApplied]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLeavesAnythingWithStructuredFindingsAlone]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLeavesAnythingWithStructuredFindingsAlone]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLeavesSufficientMaterialAlone]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLeavesSufficientMaterialAlone]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLoopSeesAStableResult]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairLoopSeesAStableResult]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairSkipsUnfinishedSessions]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testRepairSkipsUnfinishedSessions]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testSessionSavedBeforeThisFeatureStillDecodes]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testSessionSavedBeforeThisFeatureStillDecodes]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testShortfallSurvivesARoundTrip]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testShortfallSurvivesARoundTrip]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testSingleCharacterSegmentsAreNotCountedAsSpeech]' started.
+Test Case '-[MeetingScribeTests.TranscriptMaterialTests testSingleCharacterSegmentsAreNotCountedAsSpeech]' passed (0.000 seconds).
+Test Suite 'TranscriptMaterialTests' passed at 2026-10-06 12:12:17.489.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'TranscriptMergerTests' started at 2026-10-06 12:12:17.489.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testBlankSegmentsAreDropped]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testBlankSegmentsAreDropped]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testBothEmptyReturnsEmpty]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testBothEmptyReturnsEmpty]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testCrosstalkDuplicateKeepsTheHigherConfidenceCopy]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testCrosstalkDuplicateKeepsTheHigherConfidenceCopy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testCrosstalkWithPunctuationAndSpacingDifferencesStillDeduplicates]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testCrosstalkWithPunctuationAndSpacingDifferencesStillDeduplicates]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testHasSpeechIgnoresBlankSegments]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testHasSpeechIgnoresBlankSegments]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testInputSpeakerIsOverwrittenByTrackOrigin]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testInputSpeakerIsOverwrittenByTrackOrigin]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testInterleavedTracksKeepChronologicalOrderAndSpeaker]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testInterleavedTracksKeepChronologicalOrderAndSpeaker]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testMergeIsIdempotentOnItsOwnOutputShape]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testMergeIsIdempotentOnItsOwnOutputShape]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testNearIdenticalTranscriptionsArePreservedWhenMeaningIsUncertain]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testNearIdenticalTranscriptionsArePreservedWhenMeaningIsUncertain]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testNormalizedStripsSpacingAndTrailingPunctuation]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testNormalizedStripsSpacingAndTrailingPunctuation]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testOverlappingSpeechWithDifferentTextKeepsBothSides]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testOverlappingSpeechWithDifferentTextKeepsBothSides]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testRemoteOnlyPassesThroughWithRemoteSpeaker]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testRemoteOnlyPassesThroughWithRemoteSpeaker]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSameSpeakerOverlapIsLeftToTheSingleTrackCleaner]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSameSpeakerOverlapIsLeftToTheSingleTrackCleaner]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSameTimestampIsResolvedDeterministically]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSameTimestampIsResolvedDeterministically]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSingleTrackPassesThroughWithItsOwnSpeaker]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testSingleTrackPassesThroughWithItsOwnSpeaker]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testTinyOverlapIsNotTreatedAsCrosstalk]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testTinyOverlapIsNotTreatedAsCrosstalk]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testVeryShortSegmentsOnlyDeduplicateWhenExactlyEqual]' started.
+Test Case '-[MeetingScribeTests.TranscriptMergerTests testVeryShortSegmentsOnlyDeduplicateWhenExactlyEqual]' passed (0.000 seconds).
+Test Suite 'TranscriptMergerTests' passed at 2026-10-06 12:12:17.491.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'TranscriptPlayheadTests' started at 2026-10-06 12:12:17.491.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testBinarySearchMatchesLinearScanOnEveryBoundary]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testBinarySearchMatchesLinearScanOnEveryBoundary]' passed (0.027 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testEmptyArrayHasNoPlayhead]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testEmptyArrayHasNoPlayhead]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testGapKeepsThePreviousSegment]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testGapKeepsThePreviousSegment]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testSegmentIdentityIsReturned]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testSegmentIdentityIsReturned]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeAfterLastSegmentKeepsLastSegment]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeAfterLastSegmentKeepsLastSegment]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeBeforeFirstSegmentReturnsNothing]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeBeforeFirstSegmentReturnsNothing]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeExactlyAtStartSelectsThatSegment]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeExactlyAtStartSelectsThatSegment]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeInsideSegmentSelectsThatSegment]' started.
+Test Case '-[MeetingScribeTests.TranscriptPlayheadTests testTimeInsideSegmentSelectsThatSegment]' passed (0.000 seconds).
+Test Suite 'TranscriptPlayheadTests' passed at 2026-10-06 12:12:17.519.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.028 (0.028) seconds
+Test Suite 'TranscriptSpeakerTests' started at 2026-10-06 12:12:17.519.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testDisplayNamesAreTheOnesTheUIAndPromptPromise]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testDisplayNamesAreTheOnesTheUIAndPromptPromise]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testLegacySegmentWithoutSpeakerStillDecodes]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testLegacySegmentWithoutSpeakerStillDecodes]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineCarriesSpeakerPrefix]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineCarriesSpeakerPrefix]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineUsesLocalNameForLocalSpeaker]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineUsesLocalNameForLocalSpeaker]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineWithoutSpeakerHasNoPlaceholder]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testMaterialLineWithoutSpeakerHasNoPlaceholder]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testNilSpeakerIsWrittenAsAnAbsentKeyNotNull]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testNilSpeakerIsWrittenAsAnAbsentKeyNotNull]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testRawValuesArePinned]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testRawValuesArePinned]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testSpeakerRoundTrips]' started.
+Test Case '-[MeetingScribeTests.TranscriptSpeakerTests testSpeakerRoundTrips]' passed (0.000 seconds).
+Test Suite 'TranscriptSpeakerTests' passed at 2026-10-06 12:12:17.520.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'WhisperJSONDecodingTests' started at 2026-10-06 12:12:17.520.
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testInvalidUTF8ByteInsideWhisperJSONIsReplacedInsteadOfFailingWholeTranscript]' started.
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testInvalidUTF8ByteInsideWhisperJSONIsReplacedInsteadOfFailingWholeTranscript]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testStrictUTF8JSONDecodesNormally]' started.
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testStrictUTF8JSONDecodesNormally]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testValidUTF8ButInvalidJSONStillThrows]' started.
+Test Case '-[MeetingScribeTests.WhisperJSONDecodingTests testValidUTF8ButInvalidJSONStillThrows]' passed (0.000 seconds).
+Test Suite 'WhisperJSONDecodingTests' passed at 2026-10-06 12:12:17.521.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'WorkbenchContentPlanTests' started at 2026-10-06 12:12:17.521.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' passed (0.000 seconds).
+Test Suite 'WorkbenchContentPlanTests' passed at 2026-10-06 12:12:17.521.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 12:12:17.521.
+	 Executed 318 tests, with 1 test skipped and 1 failure (0 unexpected) in 184.605 (184.617) seconds
+Test Suite 'All tests' failed at 2026-10-06 12:12:17.521.
+	 Executed 318 tests, with 1 test skipped and 1 failure (0 unexpected) in 184.605 (184.617) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

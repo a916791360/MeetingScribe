@@ -1,0 +1,66 @@
+# 合成语料自测（docs/verification/quality/synthetic）
+
+| case | 指标 | 期望 | 实测 | 值 | 结果 |
+|---|---|---|---|---|---|
+| syn-clean-empty | （空态判定） | 达标（干净空态） | 达标（干净空态） | — | ✓ |
+| syn-clean-empty | metaCommentCount | eq 0 | 0 | — | ✓ |
+| syn-empty-talk-plain | segmentRatioJudged | 不可算 | 不可算 | — | ✓ |
+| syn-empty-talk-plain | uniqueCharRetention | 达标 | 达标 | 0.9868 | ✓ |
+| syn-empty-talk-plain | minutesChars | 达标 | 达标 | 1237 | ✓ |
+| syn-empty-talk-plain | minutesHeadings | 达标 | 达标 | 6 | ✓ |
+| syn-empty-talk-plain | emptyPhraseCount | 未达 | 未达 | 1 | ✓ |
+| syn-empty-talk-plain | overviewChars | 达标 | 达标 | 347 | ✓ |
+| syn-empty-talk-plain | overviewBulletsWithFacts | 达标 | 达标 | 6 | ✓ |
+| syn-empty-talk-plain | decisionCountJudged | 达标 | 达标 | 14 | ✓ |
+| syn-empty-talk-plain | actionCountJudged | 达标 | 达标 | 12 | ✓ |
+| syn-empty-talk-plain | actionsWithOwnerRatio | 达标 | 达标 | 0.4167 | ✓ |
+| syn-empty-talk-plain | emptyPhraseCount | eq 1 | 1 | — | ✓ |
+| syn-empty-talk-plain | metaCommentCount | eq 0 | 0 | — | ✓ |
+| syn-empty-talk-ritual | segmentRatioJudged | 不可算 | 不可算 | — | ✓ |
+| syn-empty-talk-ritual | uniqueCharRetention | 达标 | 达标 | 0.9868 | ✓ |
+| syn-empty-talk-ritual | minutesChars | 达标 | 达标 | 1240 | ✓ |
+| syn-empty-talk-ritual | minutesHeadings | 达标 | 达标 | 6 | ✓ |
+| syn-empty-talk-ritual | emptyPhraseCount | 未达 | 未达 | 1 | ✓ |
+| syn-empty-talk-ritual | overviewChars | 达标 | 达标 | 347 | ✓ |
+| syn-empty-talk-ritual | overviewBulletsWithFacts | 达标 | 达标 | 6 | ✓ |
+| syn-empty-talk-ritual | decisionCountJudged | 达标 | 达标 | 14 | ✓ |
+| syn-empty-talk-ritual | actionCountJudged | 达标 | 达标 | 12 | ✓ |
+| syn-empty-talk-ritual | actionsWithOwnerRatio | 达标 | 达标 | 0.4167 | ✓ |
+| syn-empty-talk-ritual | emptyPhraseCount | eq 1 | 1 | — | ✓ |
+| syn-empty-talk-ritual | metaCommentCount | eq 0 | 0 | — | ✓ |
+| syn-good | segmentRatioJudged | 不可算 | 不可算 | — | ✓ |
+| syn-good | uniqueCharRetention | 达标 | 达标 | 0.9868 | ✓ |
+| syn-good | minutesChars | 达标 | 达标 | 1223 | ✓ |
+| syn-good | minutesHeadings | 达标 | 达标 | 6 | ✓ |
+| syn-good | emptyPhraseCount | 达标 | 达标 | 0 | ✓ |
+| syn-good | overviewChars | 达标 | 达标 | 347 | ✓ |
+| syn-good | overviewBulletsWithFacts | 达标 | 达标 | 6 | ✓ |
+| syn-good | decisionCountJudged | 达标 | 达标 | 14 | ✓ |
+| syn-good | actionCountJudged | 达标 | 达标 | 12 | ✓ |
+| syn-good | actionsWithOwnerRatio | 达标 | 达标 | 0.4167 | ✓ |
+| syn-good | cleanedSegments | lt 200 | 118 | — | ✓ |
+| syn-meta-comment | （空态判定） | 未达（产出了元评论） | 未达（产出了元评论） | — | ✓ |
+| syn-meta-comment | metaCommentCount | gt 0 | 9 | — | ✓ |
+| syn-old-record | segmentRatioJudged | 不可算 | 不可算 | — | ✓ |
+| syn-old-record | uniqueCharRetention | 达标 | 达标 | 0.9866 | ✓ |
+| syn-old-record | minutesChars | 达标 | 达标 | 1223 | ✓ |
+| syn-old-record | minutesHeadings | 达标 | 达标 | 6 | ✓ |
+| syn-old-record | emptyPhraseCount | 达标 | 达标 | 0 | ✓ |
+| syn-old-record | overviewChars | 达标 | 达标 | 347 | ✓ |
+| syn-old-record | overviewBulletsWithFacts | 不可算 | 不可算 | — | ✓ |
+| syn-old-record | decisionCountJudged | 达标 | 达标 | 14 | ✓ |
+| syn-old-record | actionCountJudged | 达标 | 达标 | 12 | ✓ |
+| syn-old-record | actionsWithOwnerRatio | 不可算 | 不可算 | — | ✓ |
+| syn-repeat-storm | segmentRatioJudged | 未达 | 未达 | 0.9727 | ✓ |
+| syn-repeat-storm | uniqueCharRetention | 达标 | 达标 | 1.0 | ✓ |
+| syn-repeat-storm | minutesChars | 达标 | 达标 | 1223 | ✓ |
+| syn-repeat-storm | minutesHeadings | 达标 | 达标 | 6 | ✓ |
+| syn-repeat-storm | emptyPhraseCount | 达标 | 达标 | 0 | ✓ |
+| syn-repeat-storm | overviewChars | 达标 | 达标 | 347 | ✓ |
+| syn-repeat-storm | overviewBulletsWithFacts | 达标 | 达标 | 6 | ✓ |
+| syn-repeat-storm | decisionCountJudged | 不可算 | 不可算 | — | ✓ |
+| syn-repeat-storm | actionCountJudged | 不可算 | 不可算 | — | ✓ |
+| syn-repeat-storm | actionsWithOwnerRatio | 达标 | 达标 | 0.4167 | ✓ |
+| syn-repeat-storm | inputSegmentsPerMinute | ge 15 | 22.2 | — | ✓ |
+
+✓ 全部一致（7 个 case）

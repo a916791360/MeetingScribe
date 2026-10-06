@@ -7,6 +7,7 @@ APP_NAME="MeetingScribe"
 APP_DIR="${APP_DIR:-$ROOT_DIR/.build/$APP_NAME.app}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 ASSET_OUTPUT="$(mktemp -d /private/tmp/meetingscribe-assets.XXXXXX)"
+trap 'rm -rf "$ASSET_OUTPUT"' EXIT
 # whisper.cpp 的位置。三种给法，优先级从高到低：
 #   1. 环境变量：WHISPER_ROOT=/path/to/whisper.cpp ./Scripts/package_app.sh
 #   2. Scripts/local.env（本机私有，不进仓库）：WHISPER_ROOT="/path/to/whisper.cpp"
@@ -87,6 +88,9 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$BIN_DIR/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 cp "$ROOT_DIR/Packaging/Info.plist" "$APP_DIR/Contents/Info.plist"
+mkdir -p "$APP_DIR/Contents/Resources/Licenses"
+cp "$ROOT_DIR/LICENSE" "$APP_DIR/Contents/Resources/Licenses/MeetingScribe-LICENSE.txt"
+cp "$ROOT_DIR/Packaging/ThirdPartyLicenses/"* "$APP_DIR/Contents/Resources/Licenses/"
 
 RUNTIME_DIR="$APP_DIR/Contents/Resources/whisper"
 mkdir -p "$RUNTIME_DIR/bin" "$RUNTIME_DIR/models"
@@ -96,6 +100,8 @@ for library in "$WHISPER_BIN_DIR"/*.dylib; do
     ditto "$library" "$RUNTIME_DIR/bin/$(basename "$library")"
 done
 ditto "$WHISPER_MODEL" "$RUNTIME_DIR/models/ggml-small.bin"
+python3 "$ROOT_DIR/Scripts/relocate_runtime.py" "$RUNTIME_DIR/bin"
+python3 "$ROOT_DIR/Scripts/relocate_runtime.py" "$APP_DIR/Contents/MacOS"
 
 xcrun actool \
     --compile "$ASSET_OUTPUT" \
@@ -118,6 +124,12 @@ if [[ -z "$SIGNING_IDENTITY" ]]; then
         SIGNING_IDENTITY="-"
     fi
 fi
+# Resource-directory executables are not reliably signed by --deep.
+# Relocation changes their load commands, so sign each copied Mach-O explicitly.
+for binary in "$RUNTIME_DIR/bin/whisper-cli" "$RUNTIME_DIR/bin/"*.dylib; do
+    [[ -f "$binary" ]] || continue
+    codesign --force --sign "$SIGNING_IDENTITY" "$binary" >/dev/null
+done
 codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_DIR" >/dev/null
 
 print "Packaged: $APP_DIR"

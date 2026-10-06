@@ -34,7 +34,7 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     @MainActor
     private func makeReadySession() throws -> (SessionStorage, MeetingSession, MeetingStore) {
         let storage = SessionStorage(rootURL: root)
-        var session = storage.createDraftSession(captureMode: .mixed)
+        var session = try storage.createDraftSession(captureMode: .mixed)
         session.status = .ready
         session.transcriptSegments = [
             TranscriptSegment(start: 0, end: 4, text: "课考那边下周来验收", confidence: 0.9),
@@ -180,7 +180,7 @@ final class TranscriptEditPersistenceTests: XCTestCase {
     @MainActor
     func testImportedSessionPlaybackPrefersOriginalAudioOverWhisperInput() throws {
         let storage = SessionStorage(rootURL: root)
-        var session = storage.createDraftSession(captureMode: .imported)
+        var session = try storage.createDraftSession(captureMode: .imported)
         let folder = storage.folderURL(for: session)
         let original = folder.appendingPathComponent("customer-meeting.m4a")
         let whisperInput = folder.appendingPathComponent("input.wav")

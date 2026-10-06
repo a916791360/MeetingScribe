@@ -1,0 +1,34 @@
+Building for debugging...
+[0/4] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.07s)
+Test Suite 'Selected tests' started at 2026-10-06 11:41:53.073.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 11:41:53.074.
+Test Suite 'ReviewBatch4ReproTests' started at 2026-10-06 11:41:53.074.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testCrossOrigin307ForwardsSyntheticMeetingAndAuthorization]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testCrossOrigin307ForwardsSyntheticMeetingAndAuthorization]' passed (0.069 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testEchoedSyntheticCredentialIsPersistedAndExported]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testEchoedSyntheticCredentialIsPersistedAndExported]' passed (3.785 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testIgnoredStreamFlagCausesFourSuccessfulBillableRequests]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testIgnoredStreamFlagCausesFourSuccessfulBillableRequests]' passed (3.791 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testManifestPathTraversalDeletesOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testManifestPathTraversalDeletesOutsideDataRoot]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testPrematureSSEEOFIsAcceptedAsCompleteMinutes]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testPrematureSSEEOFIsAcceptedAsCompleteMinutes]' passed (0.119 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testSymlinkAllowsSessionWriteOutsideDataRoot]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch4ReproTests testSymlinkAllowsSessionWriteOutsideDataRoot]' passed (0.001 seconds).
+Test Suite 'ReviewBatch4ReproTests' passed at 2026-10-06 11:42:00.843.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 7.768 (7.769) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 11:42:00.843.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 7.768 (7.769) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 11:42:00.843.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 7.768 (7.770) seconds
+BATCH4 redirect: two POST bodies reached different origin port; authorization forwarded=false
+BATCH4 error echo: synthetic credential persisted in session.json and copied into Markdown
+BATCH4 buffered gateway: four HTTP 200 generations, stream flags=[true, true, true, false]
+BATCH4 traversal: delete of loaded manifest removed sibling sentinel directory, original meeting folder remains
+BATCH4 SSE EOF: partial minutes accepted, diagnostics.partial=false, no finish_reason or DONE
+BATCH4 symlink: session.save followed link and wrote outside meetings root
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

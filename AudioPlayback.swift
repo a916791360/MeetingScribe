@@ -101,13 +101,10 @@ final class MeetingAudioPlayer: NSObject, ObservableObject, @preconcurrency AVAu
 
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(
-            timeInterval: 0.25,
-            target: self,
-            selector: #selector(updatePlayback),
-            userInfo: nil,
-            repeats: true
-        )
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            MainActor.assumeIsolated { self.updatePlayback() }
+        }
     }
 
     private func stopTimer() {

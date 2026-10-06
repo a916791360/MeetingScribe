@@ -1,0 +1,34 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[2/7] Write swift-version--58304C5D6DBC2206.txt
+[4/13] Compiling MeetingScribe WhisperPipeline.swift
+[5/13] Compiling MeetingScribe WorkbenchView.swift
+[6/13] Compiling MeetingScribe MeetingStore.swift
+[7/13] Compiling MeetingScribe SummaryEngine.swift
+[8/13] Compiling MeetingScribe TranscriptMerger.swift
+[9/13] Emitting module MeetingScribe
+[9/14] Write Objects.LinkFileList
+[10/14] Linking MeetingScribe
+[11/14] Applying MeetingScribe
+[13/16] Emitting module MeetingScribeTests
+[14/16] Compiling MeetingScribeTests ReviewPerformanceProbe.swift
+[14/16] Write Objects.LinkFileList
+[15/16] Linking MeetingScribePackageTests
+Build complete! (4.41s)
+Test Suite 'Selected tests' started at 2026-10-06 12:01:49.941.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 12:01:49.941.
+Test Suite 'ReviewPerformanceProbe' started at 2026-10-06 12:01:49.941.
+Test Case '-[MeetingScribeTests.ReviewPerformanceProbe testLookupComparison]' started.
+Test Case '-[MeetingScribeTests.ReviewPerformanceProbe testLookupComparison]' passed (1.354 seconds).
+Test Suite 'ReviewPerformanceProbe' passed at 2026-10-06 12:01:51.295.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.354 (1.354) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 12:01:51.295.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.354 (1.354) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 12:01:51.295.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.354 (1.355) seconds
+PERFORMANCE audit: 100 meetings x 300 segments; 20 last-folder lookups; baseline=1.1977900266647339s, indexed=0.013592004776000977s, ratio=88.12460313283867
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -21,10 +21,10 @@
   python3 Scripts/llm_judge.py --dry-run              # 只打印提示词，不调模型
   python3 Scripts/llm_judge.py --check                # 任一维度低于阈值就非零退出
 
-Key 的取法（按顺序，找到就用）：
-  1. 环境变量 MS_JUDGE_KEY / MS_JUDGE_BASE_URL / MS_JUDGE_MODEL
-  2. ~/.workbuddy/models.json 里 id 与裁判模型同名的条目（本机已有 agnes-3.0-flash）
-  3. 钥匙串 service=MeetingScribe.judge-model account=custom
+凭据与接口地址必须来自同一配置：
+  1. MS_JUDGE_KEY + MS_JUDGE_BASE_URL 显式成对配置，模型由 MS_JUDGE_MODEL 指定
+  2. ~/.workbuddy/models.json 中模型匹配的完整条目；显式地址时也必须匹配地址
+  不使用没有接口绑定的旧钥匙串凭据。--dry-run 不读取凭据或发送请求。
 
 产物（全部 gitignore，因为里面含真实逐字稿片段）：
   <corpus>/judge/<caseId>.json    每场四维打分
@@ -153,25 +153,30 @@ def resolve_judge(args) -> tuple[str, str, str, str]:
     key = os.environ.get("MS_JUDGE_KEY")
     origin = []
     if base:
-        origin.append("环境变量 MS_JUDGE_BASE_URL")
+        origin.append("命令行地址" if args.base_url else "环境变量 MS_JUDGE_BASE_URL")
     if key:
         origin.append("环境变量 MS_JUDGE_KEY")
-    if not (base and key):
+    if base:
+        # An explicitly selected endpoint cannot borrow another provider's secret.
+        if not key:
+            matches = [entry for entry in workbuddy_models()
+                       if entry.get("id") == model and
+                       (entry.get("url") or "").rstrip("/") == base.rstrip("/")]
+            if matches:
+                key = matches[0].get("apiKey")
+                origin.append("匹配地址的 WorkBuddy 配置")
+        if not key:
+            raise ValueError("指定了裁判地址但没有匹配凭据，请显式设置 MS_JUDGE_KEY。")
+    elif key:
+        raise ValueError("指定了 MS_JUDGE_KEY 但没有地址，请同时设置 MS_JUDGE_BASE_URL。")
+    else:
         for entry in workbuddy_models():
-            if entry.get("id") == model:
-                base = base or entry.get("url")
-                key = key or entry.get("apiKey")
-                origin.append("~/.workbuddy/models.json")
-                break
-    if not (base and key):
-        k = keychain_lookup("MeetingScribe.judge-model")
-        if k:
-            key = k
-            origin.append("钥匙串 MeetingScribe.judge-model")
-    if not base:
-        base = DEFAULT_JUDGE_BASE_URL
-        origin.append("内置默认地址")
-    return base, model, key or "", "、".join(origin) or "无（缺 Key）"
+            if entry.get("id") == model and entry.get("url") and entry.get("apiKey"):
+                return entry["url"], model, entry["apiKey"], "完整 WorkBuddy 配置"
+        # Legacy Keychain has no endpoint binding; do not silently forward it.
+        raise ValueError("没有完整裁判配置，请同时设置 MS_JUDGE_BASE_URL 和 MS_JUDGE_KEY。")
+    return base, model, key, "、".join(origin)
+
 
 
 def vendor_of(model_id: str) -> str:
@@ -533,7 +538,14 @@ def main() -> int:
     if args.report_only:
         return report_only(corpus, rows)
 
-    base, model, key, origin = resolve_judge(args)
+    if args.dry_run:
+        base, model, key, origin = args.base_url or DEFAULT_JUDGE_BASE_URL, args.model or DEFAULT_JUDGE_MODEL, "", "离线预览（不读取凭据）"
+    else:
+        try:
+            base, model, key, origin = resolve_judge(args)
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 2
     print(f"# LLM 裁判\n")
     print(f"- 裁判模型：`{model}`（来源：{origin}）")
     print(f"- 待评产出模型：{summarizer_vendor_of(rows[0][2]) or '未知'}"
@@ -555,7 +567,7 @@ def main() -> int:
 
     if not key and not args.dry_run:
         print("\n✗ 没有拿到裁判的 Key。设 MS_JUDGE_KEY，"
-              "或把该模型写进 ~/.workbuddy/models.json，或存进钥匙串 "
+              "或把该模型写进 ~/.workbuddy/models.json，或提供完整匹配的配置；旧钥匙串不再跨地址自动补齐。原 service="
               "MeetingScribe.judge-model（account=custom）。", file=sys.stderr)
         return 2
 

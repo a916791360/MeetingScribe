@@ -1,0 +1,32 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Emitting module MeetingScribe
+[4/7] Compiling MeetingScribe SessionStorage.swift
+[4/9] Write Objects.LinkFileList
+[5/9] Linking MeetingScribe
+[6/9] Applying MeetingScribe
+[8/10] Emitting module MeetingScribeTests
+[8/10] Write Objects.LinkFileList
+[9/10] Linking MeetingScribePackageTests
+Build complete! (1.85s)
+Test Suite 'Selected tests' started at 2026-10-06 11:55:28.626.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 11:55:28.627.
+Test Suite 'TranscriptEditPersistenceTests' started at 2026-10-06 11:55:28.627.
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' started.
+/Users/qingmeng/.codex/worktrees/meetingscribe-review/luyinzhuanxie/Tests/MeetingScribeTests/TranscriptEditPersistenceTests.swift:51: error: -[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync] : XCTAssertEqual failed: ("0") is not equal to ("1") - 夹具只有一个会话，说明读的确实是这个临时目录
+Test Case '-[MeetingScribeTests.TranscriptEditPersistenceTests testSavingOneSegmentLandsOnDiskAndKeepsTheDerivedTextInSync]' failed (0.110 seconds).
+Test Suite 'TranscriptEditPersistenceTests' failed at 2026-10-06 11:55:28.737.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.110 (0.110) seconds
+Test Suite 'MeetingScribePackageTests.xctest' failed at 2026-10-06 11:55:28.737.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.110 (0.110) seconds
+Test Suite 'Selected tests' failed at 2026-10-06 11:55:28.737.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.110 (0.111) seconds
+TEMP-STORAGE-DIAGNOSTIC /private/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-transcript-edit-8256903E-99A9-4FCB-9EC6-FD8BB6DFBB38/2026-10-06_115528_77C8B097 invalidPath
+TEMP-FOLDER-DIAGNOSTIC 2026-10-06_115528_77C8B097 2026-10-06_115528_77C8B097 /var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-transcript-edit-8256903E-99A9-4FCB-9EC6-FD8BB6DFBB38/2026-10-06_115528_77C8B097 /var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-transcript-edit-8256903E-99A9-4FCB-9EC6-FD8BB6DFBB38/2026-10-06_115528_77C8B097
+TEMP-FOLDER-DIAGNOSTIC 2026-10-06_115528_77C8B097 2026-10-06_115528_77C8B097 /var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-transcript-edit-8256903E-99A9-4FCB-9EC6-FD8BB6DFBB38/2026-10-06_115528_77C8B097 /var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-transcript-edit-8256903E-99A9-4FCB-9EC6-FD8BB6DFBB38/2026-10-06_115528_77C8B097
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

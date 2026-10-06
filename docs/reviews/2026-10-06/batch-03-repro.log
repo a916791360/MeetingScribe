@@ -1,0 +1,35 @@
+Building for debugging...
+[0/6] Write sources
+[1/6] Write swift-version--58304C5D6DBC2206.txt
+[3/8] Emitting module MeetingScribeTests
+[4/8] Compiling MeetingScribeTests ReviewBatch3ReproTests.swift
+[5/8] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[6/8] Compiling MeetingScribeTests QualityEvalTests.swift
+[6/8] Write Objects.LinkFileList
+[7/8] Linking MeetingScribePackageTests
+Build complete! (1.51s)
+Test Suite 'Selected tests' started at 2026-10-06 11:11:12.518.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 11:11:12.520.
+Test Suite 'ReviewBatch3ReproTests' started at 2026-10-06 11:11:12.520.
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testEditedTranscriptExportStillPresentsContradictoryOldMinutesWithoutWarning]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testEditedTranscriptExportStillPresentsContradictoryOldMinutesWithoutWarning]' passed (0.050 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testEmojiTitleExceedsFilesystemByteLimitDespiteCharacterLimit]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testEmojiTitleExceedsFilesystemByteLimitDespiteCharacterLimit]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testLegacyTextSurvivesButMaterialGateTreatsItAsNoSpeech]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testLegacyTextSurvivesButMaterialGateTreatsItAsNoSpeech]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testPlaybackTimerRetainsOwnerUntilExplicitStop]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch3ReproTests testPlaybackTimerRetainsOwnerUntilExplicitStop]' passed (0.162 seconds).
+Test Suite 'ReviewBatch3ReproTests' passed at 2026-10-06 11:11:12.736.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.215 (0.215) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 11:11:12.736.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.215 (0.216) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 11:11:12.736.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.215 (0.217) seconds
+BATCH3 stale-export: old Monday minutes + edited Wednesday transcript, no stale notice
+BATCH3 filename bytes: 1514, Swift characters: 74, write rejected
+BATCH3 legacy: preserved 620 characters, no-speech summary state, exporter includes text
+BATCH3 playback: owner remains retained after releasing external reference; isPlaying=true
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

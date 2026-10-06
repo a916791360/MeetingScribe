@@ -1,0 +1,22 @@
+COMMAND: codesign --verify --deep --strict --verbose=2 /Applications/MeetingScribe.app
+EXIT: 0
+/Applications/MeetingScribe.app: valid on disk
+/Applications/MeetingScribe.app: satisfies its Designated Requirement
+
+COMMAND: codesign -dvv /Applications/MeetingScribe.app
+EXIT: 0
+Executable=/Applications/MeetingScribe.app/Contents/MacOS/MeetingScribe
+Identifier=com.qingmeng.meetingscribe
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20400 size=9683 flags=0x0(none) hashes=296+3 location=embedded
+Signature size=1620
+Authority=PM Studio Signing
+Signed Time=Sep 17, 2026 at 11:42:33
+Info.plist entries=17
+TeamIdentifier=not set
+Sealed Resources version=2 rules=13 files=25
+Internal requirements count=1 size=104
+
+COMMAND: spctl --assess --type execute --verbose=2 /Applications/MeetingScribe.app
+EXIT: 3
+/Applications/MeetingScribe.app: rejected

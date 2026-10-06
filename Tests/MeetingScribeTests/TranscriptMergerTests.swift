@@ -91,15 +91,15 @@ final class TranscriptMergerTests: XCTestCase {
         XCTAssertEqual(merged.first?.speaker, .remote)
     }
 
-    func testNearIdenticalTranscriptionsOfTheSameSpeechStillDeduplicate() {
-        // 同一句话在两路里被转得略有出入（多了个语气词）—— 逐字比较挡不住它。
+    func testNearIdenticalTranscriptionsArePreservedWhenMeaningIsUncertain() {
+        // 略有出入时无法可靠判断含义相同，保守保留两路内容。
         let local = [segment(0, 5, "这个方案我们下周给答复", confidence: 0.5)]
         let remote = [segment(0, 5, "这个方案我们下周给答复吧", confidence: 0.8)]
 
         let merged = TranscriptMerger.merge(local: local, remote: remote)
 
-        XCTAssertEqual(merged.count, 1)
-        XCTAssertEqual(merged.first?.text, "这个方案我们下周给答复吧")
+        XCTAssertEqual(merged.count, 2)
+        XCTAssertEqual(merged.last?.text, "这个方案我们下周给答复吧")
     }
 
     func testTinyOverlapIsNotTreatedAsCrosstalk() {

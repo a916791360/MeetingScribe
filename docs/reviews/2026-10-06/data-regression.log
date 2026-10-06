@@ -1,0 +1,30 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module MeetingScribeTests
+[4/5] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.56s)
+Test Suite 'Selected tests' started at 2026-10-06 12:00:28.239.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 12:00:28.240.
+Test Suite 'AuditDataSafetyTests' started at 2026-10-06 12:00:28.240.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testCorruptedSessionIsReportedAndFilePreserved]' passed (0.003 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testDraftCreationReportsDiskFailure]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testFailedRetryPreservesSavedManualEditsAndMinutes]' passed (0.065 seconds).
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' started.
+Test Case '-[MeetingScribeTests.AuditDataSafetyTests testRetryNormalizesM4ABeforeWhisper]' passed (0.852 seconds).
+Test Suite 'AuditDataSafetyTests' passed at 2026-10-06 12:00:29.161.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.921 (0.921) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 12:00:29.161.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.921 (0.921) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 12:00:29.161.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.921 (0.922) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

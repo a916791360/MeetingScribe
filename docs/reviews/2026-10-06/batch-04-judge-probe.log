@@ -1,0 +1,3 @@
+PASS: explicit provider B endpoint is paired with mocked provider A credential
+resolved model=synthetic-model; origin label=环境变量 MS_JUDGE_BASE_URL、~/.workbuddy/models.json
+PASS: call_judge constructs provider B request with provider A Bearer; no request sent

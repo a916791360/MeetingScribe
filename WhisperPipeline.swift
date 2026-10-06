@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import Darwin
 @preconcurrency import ScreenCaptureKit
 import CoreGraphics
 
@@ -246,6 +247,10 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     private var stopRequested = false
     private var stopContinuation: CheckedContinuation<MixedRecordingResult, Error>?
     private var stopError: Error?
+    var levels: (local: Double, remote: Double) { (localRecorder?.level ?? 0, remoteRecorder?.level ?? 0) }
+    var onFailure: ((String) -> Void)?
+    private var timelineOrigin: CMTime?
+    private var stopTimeoutTask: Task<Void, Never>?
 
     /// 两路音频**共用一个串行队列**：写文件的顺序就是采样顺序，两路之间也不会互相打架。
     private static let sampleQueue = DispatchQueue(
@@ -289,7 +294,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
                 """
                 麦克风授权：未拿到（请求前：\(microphoneStatusBefore, privacy: .public)）→ \
                 我方那一路不会有任何样本。去「系统设置 › 隐私与安全性 › 麦克风」允许 MeetingScribe \
-                后完全退出重开；本次录音继续，但原文不会有说话人标注。
+                后完全退出重开；本次只录系统声音，麦克风发言可能缺失，也不会有说话人标注。
                 """
             )
         }
@@ -307,7 +312,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
 
         let configuration = SCStreamConfiguration()
         configuration.capturesAudio = true
-        configuration.captureMicrophone = true
+        configuration.captureMicrophone = microphoneGranted
         configuration.excludesCurrentProcessAudio = true
         configuration.sampleRate = 16_000
         configuration.channelCount = 1
@@ -330,6 +335,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         // 这里不存在"两个独立采集源各自跑时钟、录到半小时就对不齐"的老问题。
         //
         // ⚠️ 加不上**不抛**：少一路就少一个说话人标注，录音本身照旧。
+        timelineOrigin = CMClockGetTime(CMClockGetHostTimeClock())
         localRecorder = attachTrack(
             to: stream,
             url: localTrackURL,
@@ -363,6 +369,12 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         return try await withCheckedThrowingContinuation { continuation in
             self.stopContinuation = continuation
             self.stopRequested = true
+            self.stopTimeoutTask = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                guard let self, self.stopRequested else { return }
+                self.stopError = PipelineError.failedToStopCapture
+                self.finishStopIfPossible()
+            }
 
             stream.stopCapture { [weak self] error in
                 if let error {
@@ -386,7 +398,7 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         type: SCStreamOutputType,
         label: String
     ) -> AudioTrackRecorder? {
-        let recorder = AudioTrackRecorder(url: url)
+        let recorder = AudioTrackRecorder(url: url, timelineOrigin: timelineOrigin)
         let output = TrackStreamOutput(recorder: recorder, outputType: type)
         do {
             try stream.addStreamOutput(output, type: type, sampleHandlerQueue: Self.sampleQueue)
@@ -427,8 +439,8 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
         return MixedRecordingResult(
             movieURL: movieURL,
             // 没写出内容的轨道当作"没有这一路"，别把一个 0 字节的文件交出去。
-            localTrackURL: (localRecorder?.didWriteAudio ?? false) ? localTrackURL : nil,
-            remoteTrackURL: (remoteRecorder?.didWriteAudio ?? false) ? remoteTrackURL : nil
+            localTrackURL: (localRecorder?.isUsable ?? false) ? localTrackURL : nil,
+            remoteTrackURL: (remoteRecorder?.isUsable ?? false) ? remoteTrackURL : nil
         )
     }
 
@@ -447,16 +459,20 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
 
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
         Task { @MainActor [weak self] in
-            self?.stopError = error
-            self?.finishStopIfPossible()
+            self?.reportCaptureFailure(error)
         }
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
         Task { @MainActor [weak self] in
-            self?.stopError = error
-            self?.finishStopIfPossible()
+            self?.reportCaptureFailure(error)
         }
+    }
+
+    private func reportCaptureFailure(_ error: Error) {
+        stopError = error
+        if !stopRequested { onFailure?(error.localizedDescription) }
+        finishStopIfPossible()
     }
 
     private func finishStopIfPossible() {
@@ -478,6 +494,10 @@ final class MixedRecordingSession: NSObject, SCRecordingOutputDelegate, SCStream
     }
 
     private func cleanup() {
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = nil
+        onFailure = nil
+        timelineOrigin = nil
         stream = nil
         recordingOutput = nil
         trackOutputs.removeAll()
@@ -559,15 +579,16 @@ struct AudioDurationReader {
 
 /// 读一段音频的峰值电平，用来判断某一路是不是**全程静音**（P2-2a）。
 struct AudioLevelProbe {
-    /// 低于它就算静音（约 -40 dBFS）。
-    static let silenceThreshold: Float = 0.01
+    /// Only digital silence is safe to discard without a speech detector.
+    /// An amplitude threshold alone cannot distinguish quiet speech from noise.
+    static let silenceThreshold: Float = 0
 
     /// 这一路有没有超过静音线的地方。
     ///
     /// 为什么值得单独做这一件事：一路全程静音的通道送进 whisper，不但白花一半时间，
     /// 还会在静音上**幻觉出一整段话**（whisper 的经典毛病）—— 那会把一整段虚构内容
     /// 写进逐字稿，比"不转这一路"糟得多。所以"跳过静音的一路"既是省时间，也是防幻觉。
-    func hasAudibleSignal(at url: URL) throws -> Bool {
+    func hasAudibleSignal(at url: URL, threshold: Float = Self.silenceThreshold) throws -> Bool {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16_384) else {
@@ -582,7 +603,7 @@ struct AudioLevelProbe {
             let frames = Int(buffer.frameLength)
             for channel in 0..<Int(format.channelCount) {
                 let samples = channels[channel]
-                for index in 0..<frames where abs(samples[index]) > Self.silenceThreshold {
+                for index in 0..<frames where abs(samples[index]) > threshold {
                     return true
                 }
             }
@@ -763,20 +784,41 @@ private struct LocalProcessResult: Sendable {
 
 private final class ProcessBox: @unchecked Sendable {
     let process: Process
+    private let lock = NSLock()
+    private var cancelled = false
 
-    init(_ process: Process) {
-        self.process = process
+    init(_ process: Process) { self.process = process }
+
+    func launch() throws {
+        try lock.withLock {
+            guard !cancelled else { throw CancellationError() }
+            try process.run()
+        }
+    }
+
+    func stop() {
+        lock.withLock {
+            cancelled = true
+            if process.isRunning { process.terminate() }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) { [self] in
+            lock.withLock {
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
+        }
     }
 }
 
 private actor LocalProcessRunner {
-    private var activeProcess: Process?
+    private var activeProcess: ProcessBox?
 
     func run(
         executableURL: URL,
         arguments: [String],
         environment: [String: String]?
     ) async throws -> LocalProcessResult {
+        guard activeProcess == nil else { throw PipelineError.transcriptionFailed("已有子进程正在收尾，请稍后重试。") }
+        try Task.checkCancellation()
         let runDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("MeetingScribeProcess-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
@@ -791,7 +833,7 @@ private actor LocalProcessRunner {
         let stderrHandle = try FileHandle(forWritingTo: stderrURL)
         defer {
             process.terminationHandler = nil
-            activeProcess = nil
+            if activeProcess?.process === process { activeProcess = nil }
             try? stdoutHandle.close()
             try? stderrHandle.close()
             try? FileManager.default.removeItem(at: runDirectory)
@@ -817,8 +859,23 @@ private actor LocalProcessRunner {
         }
         process.environment = mergedEnvironment
 
-        activeProcess = process
         let processBox = ProcessBox(process)
+        activeProcess = processBox
+        let watchdog = Task.detached {
+            let deadline = Date().addingTimeInterval(20 * 60)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                // URL resource values may cache the initial size; read fresh attributes each poll.
+                let sizes = [stdoutURL, stderrURL].compactMap { url -> Int? in
+                    (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue
+                }
+                if sizes.reduce(0, +) > 32 * 1024 * 1024 || Date() >= deadline {
+                    processBox.stop()
+                    return
+                }
+            }
+        }
+        defer { watchdog.cancel() }
 
         let terminationStatus: Int32 = try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
@@ -832,27 +889,26 @@ private actor LocalProcessRunner {
                 }
 
                 do {
-                    try process.run()
+                    try processBox.launch()
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }, onCancel: {
-            processBox.process.terminate()
+            processBox.stop()
         })
 
         process.terminationHandler = nil
         activeProcess = nil
         try Task.checkCancellation()
 
-        let standardOutput = String(
-            decoding: (try? Data(contentsOf: stdoutURL)) ?? Data(),
-            as: UTF8.self
-        )
-        let standardError = String(
-            decoding: (try? Data(contentsOf: stderrURL)) ?? Data(),
-            as: UTF8.self
-        )
+        func diagnosticText(_ url: URL) -> String {
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
+            defer { try? handle.close() }
+            return String(decoding: (try? handle.read(upToCount: 2 * 1024 * 1024)) ?? Data(), as: UTF8.self)
+        }
+        let standardOutput = diagnosticText(stdoutURL)
+        let standardError = diagnosticText(stderrURL)
 
         return LocalProcessResult(
             status: terminationStatus,
@@ -862,7 +918,7 @@ private actor LocalProcessRunner {
     }
 
     func cancel() {
-        activeProcess?.terminate()
+        activeProcess?.stop()
     }
 }
 

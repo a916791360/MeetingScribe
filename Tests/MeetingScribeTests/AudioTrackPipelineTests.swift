@@ -29,8 +29,8 @@ final class AudioTrackPipelineTests: XCTestCase {
         )
         let source = temporaryDirectory.appendingPathComponent("local.caf")
         let recorder = AudioTrackRecorder(url: source)
-        for _ in 0..<4 {
-            recorder.append(try XCTUnwrap(makeSampleBuffer(format: format, frames: 1_600, amplitude: 0.4)))
+        for index in 0..<4 {
+            recorder.append(try XCTUnwrap(makeSampleBuffer(format: format, frames: 1_600, amplitude: 0.4, presentationTime: Double(index) * 0.1)))
         }
         recorder.finish()
         XCTAssertTrue(recorder.didWriteAudio)
@@ -58,9 +58,8 @@ final class AudioTrackPipelineTests: XCTestCase {
     }
 
     func testProbeTreatsQuietButRealSpeechAsAudible() throws {
-        // 0.02 是"很轻但在说话"的量级（约 -34 dBFS），必须在静音线之上：
-        // 把安静的真实发言当成静音跳过，等于整段丢掉。
-        let url = try writeWav(amplitude: 0.02)
+        // A valid low-volume signal below the previous -40dB cutoff must survive.
+        let url = try writeWav(amplitude: 0.005)
 
         XCTAssertTrue(try AudioLevelProbe().hasAudibleSignal(at: url))
     }
@@ -87,7 +86,8 @@ final class AudioTrackPipelineTests: XCTestCase {
     private func makeSampleBuffer(
         format: AVAudioFormat,
         frames: AVAudioFrameCount,
-        amplitude: Float
+        amplitude: Float,
+        presentationTime: Double = 0
     ) throws -> CMSampleBuffer? {
         let pcm = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
         pcm.frameLength = frames
@@ -133,7 +133,7 @@ final class AudioTrackPipelineTests: XCTestCase {
 
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: CMTimeScale(format.sampleRate)),
-            presentationTimeStamp: .zero,
+            presentationTimeStamp: CMTime(seconds: presentationTime, preferredTimescale: 16000),
             decodeTimeStamp: .invalid
         )
         var sampleSize = MemoryLayout<Float>.size

@@ -47,7 +47,7 @@ final class ExportWiringTests: XCTestCase {
         let storage = SessionStorage(rootURL: root)
         var session: MeetingSession?
         if hasSession {
-            var draft = storage.createDraftSession(captureMode: .mixed)
+            var draft = try storage.createDraftSession(captureMode: .mixed)
             draft.title = "客户评审会"
             draft.status = .ready
             draft.duration = 1800

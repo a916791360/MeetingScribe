@@ -32,7 +32,7 @@ enum MeetingExporter {
         // 整理没成 / 结果不完整时，把原因写在最前面。
         // 不写的话，收件人会把「只有逐字稿」当成"这场会确实什么都没定"——
         // 那是**一个错误的结论**，比缺内容更糟。
-        if let notice = trimmed(session.analysis.noticeMessage) {
+        if let notice = trimmed(session.analysisNotice) {
             blocks.append("> ⚠️ \(notice)")
         }
 
@@ -189,7 +189,12 @@ enum MeetingExporter {
         let fallback = trimmedDots.isEmpty ? "未命名会议" : trimmedDots
         // 标题过长会撞上文件系统的 255 字节上限（中文一个字 3 字节，
         // 60 个字就到 180 字节，再挂上日期前缀就危险了）。
-        return String(fallback.prefix(60))
+        var result = ""
+        for character in fallback.prefix(60) {
+            guard result.utf8.count + String(character).utf8.count <= 180 else { break }
+            result.append(character)
+        }
+        return result.isEmpty ? "未命名会议" : result
     }
 
     /// 把连续两个以上的 `-` 压成一个 `-`（单个 `-` 原样保留）。

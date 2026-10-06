@@ -31,8 +31,12 @@ final class AudioTrackRecorder: @unchecked Sendable {
     private var isFinished = false
     /// 这一路第一次见到的样本格式（诊断用）。`nil` = 一个样本都没来过。
     private var sourceFormat: String?
+    private var timelineOrigin: CMTime?
+    private var measuredLevel: Double = 0
+    private var measuredAt = Date.distantPast
 
-    init(url: URL) {
+    init(url: URL, timelineOrigin: CMTime? = nil) {
+        self.timelineOrigin = timelineOrigin
         self.url = url
     }
 
@@ -69,6 +73,14 @@ final class AudioTrackRecorder: @unchecked Sendable {
         if let failure { return "失败：\(failure)\(format)" }
         if framesWritten == 0 { return "一个样本都没写出来（0 帧）\(format)" }
         return "已写入 \(framesWritten) 帧\(format)"
+    }
+
+    var level: Double {
+        lock.withLock { failure == nil && Date().timeIntervalSince(measuredAt) < 1 ? measuredLevel : 0 }
+    }
+
+    var isUsable: Bool {
+        lock.withLock { framesWritten > 0 && failure == nil }
     }
 
     var outputURL: URL { url }
@@ -111,9 +123,29 @@ final class AudioTrackRecorder: @unchecked Sendable {
             return
         }
 
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if timelineOrigin == nil { timelineOrigin = pts }
+        guard pts.isNumeric, let origin = timelineOrigin, origin.isNumeric else {
+            failure = "音频时间戳无效，已退回混合原件。"; return
+        }
+        let seconds = CMTimeGetSeconds(CMTimeSubtract(pts, origin))
+        guard seconds.isFinite, seconds >= -0.001, seconds <= 3 * 60 * 60 + 60 else {
+            failure = "音频时间戳超出录音范围，已退回混合原件。"; return
+        }
+        let position = AVAudioFramePosition((max(0, seconds) * format.sampleRate).rounded())
+        if position < framesWritten - 1 {
+            failure = "音频时间戳重叠或倒退，已退回混合原件。"; return
+        }
+        do {
+            try Self.writeSilence(frames: max(0, position - framesWritten), format: format, into: target)
+            framesWritten = max(framesWritten, position)
+        } catch { failure = "补齐音频间隔失败：\(error.localizedDescription)"; return }
+
         switch Self.write(sampleBuffer: sampleBuffer, format: format, into: target) {
-        case .success(let frames):
+        case .success(let frames, let level):
             framesWritten += frames
+            measuredLevel = level
+            measuredAt = Date()
         case .failure(let message):
             failure = message
         }
@@ -136,8 +168,24 @@ final class AudioTrackRecorder: @unchecked Sendable {
 
     // MARK: - 样本搬运
 
+    private static func writeSilence(frames: AVAudioFramePosition, format: AVAudioFormat, into file: AVAudioFile) throws {
+        guard frames > 0 else { return }
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8192) else {
+            throw PipelineError.transcriptionFailed("无法创建静音缓冲。")
+        }
+        var remaining = frames
+        while remaining > 0 {
+            buffer.frameLength = AVAudioFrameCount(min(8192, remaining))
+            for audio in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+                if let data = audio.mData { memset(data, 0, Int(audio.mDataByteSize)) }
+            }
+            try file.write(from: buffer)
+            remaining -= AVAudioFramePosition(buffer.frameLength)
+        }
+    }
+
     private enum WriteOutcome {
-        case success(AVAudioFramePosition)
+        case success(AVAudioFramePosition, Double)
         case failure(String)
     }
 
@@ -198,7 +246,23 @@ final class AudioTrackRecorder: @unchecked Sendable {
         } catch {
             return .failure("写入音频文件失败：\(error.localizedDescription)")
         }
-        return .success(AVAudioFramePosition(buffer.frameLength))
+        var squares = 0.0
+        var samples = 0
+        for audio in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+            guard let data = audio.mData else { continue }
+            if format.commonFormat == .pcmFormatFloat32 {
+                let count = Int(audio.mDataByteSize) / MemoryLayout<Float>.size
+                let values = data.assumingMemoryBound(to: Float.self)
+                for i in 0..<count { let value = Double(values[i]); if value.isFinite { squares += value * value }; samples += 1 }
+            } else if format.commonFormat == .pcmFormatInt16 {
+                let count = Int(audio.mDataByteSize) / MemoryLayout<Int16>.size
+                let values = data.assumingMemoryBound(to: Int16.self)
+                for i in 0..<count { let value = Double(values[i]) / 32768; squares += value * value; samples += 1 }
+            }
+        }
+        let rms = samples > 0 ? sqrt(squares / Double(samples)) : 0
+        let level = rms > 0 ? min(1, max(0, (20 * log10(rms) + 60) / 60)) : 0
+        return .success(AVAudioFramePosition(buffer.frameLength), level)
     }
 
     /// 从样本里读出格式。**只认线性 PCM，但不再要求 `AVAudioFormat.isStandard`。**

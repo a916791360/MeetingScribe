@@ -1,0 +1,98 @@
+Window: "审查夹具：1000段长逐字稿", App: MeetingScribeReview.
+0 standard window 审查夹具：1000段长逐字稿 – 2026/9/21 22:10  ·  01:00:00  ·  已完成  ·  审查模型, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1
+	1 split group SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1, SidebarNavigationSplitView
+		2 container
+			3 text MeetingScribe 把会议录下来，结束后直接得到可读的结果。
+			4 scroll area
+				5 text 最近会议 4
+				6 list Secondary Actions: AXScrollToTop, AXScrollToBottom
+					7 button 审查夹具：编辑与待办, 9月21日 22:13, 00:52, ·, 已完成
+					8 button 审查夹具：旧版全文, 9月21日 22:12, 00:12, ·, 已完成
+					9 button 审查夹具：空结果, 9月21日 22:11, 00:12, ·, 已完成
+					10 button (selected) 审查夹具：1000段长逐字稿, 9月21日 22:10, 01:00:00, ·, 已完成
+		11 splitter (disabled, settable, float) 282
+		12 container
+			13 button (selected) 原文
+			14 button 速览
+			15 button 纪要
+			16 button Description: 导出为 Markdown 文件, ID: arrow.down.document
+			17 button Description: 复制全文, ID: doc.on.doc
+			18 button Description: 重新整理纪要, ID: arrow.clockwise
+			19 button Description: 打开录音文件夹, ID: folder
+			20 scroll area Secondary Actions: Scroll Up, Scroll Down
+				21 text 2026/9/21 22:10 原汁原味保留转写
+				22 list Secondary Actions: AXScrollToTop, AXScrollToBottom
+					23 text 我方 58:48 合成第981句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					24 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					25 text 对方 58:52 合成第982句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					26 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					27 text 我方 58:55 合成第983句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					28 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					29 text 对方 58:59 合成第984句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					30 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					31 text 我方 59:02 合成第985句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					32 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					33 text 对方 59:06 合成第986句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					34 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					35 text 我方 59:10 合成第987句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					36 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					37 text 对方 59:13 合成第988句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					38 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					39 text 我方 59:17 合成第989句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					40 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					41 text 对方 59:20 合成第990句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					42 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					43 text 我方 59:24 合成第991句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					44 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					45 text 对方 59:28 合成第992句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					46 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					47 text 我方 59:31 合成第993句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					48 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					49 text 对方 59:35 合成第994句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					50 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					51 text 我方 59:38 合成第995句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					52 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					53 text 对方 59:42 合成第996句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					54 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					55 text 我方 59:46 合成第997句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					56 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					57 text 对方 59:49 合成第998句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					58 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					59 text 我方 59:53 合成第999句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					60 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+					61 text 对方 59:56 合成第1000句：审查甲说明报价安排，审查乙说明接口验证流程。 90%
+					62 button Description: 修改这一句, Help: 修改这一句（也可以双击这一段）, ID: pencil
+				63 scroll bar (settable, float) 0.998684846207526
+					64 value indicator (settable, float) 0.998684846207526
+					65 increment arrow button
+					66 decrement arrow button
+					67 increment page button
+					68 decrement page button
+			69 text 暂无可播放音频
+			70 button 打开文件夹
+			71 button (disabled) Description: 后退 15 秒, ID: gobackward.15
+			72 button (disabled) Description: 播放, ID: play.fill
+			73 button (disabled) Description: 前进 15 秒, ID: goforward.15
+			74 button (disabled) 播放速度
+			75 text 00:00 / 00:00
+			76 slider (disabled) Description: 录音进度, Value: 0, Secondary Actions: Increment, Decrement
+				77 value indicator 0
+	78 toolbar
+		79 button Description: Hide Sidebar, Secondary Actions: Increment, Decrement, Delete, Cancel
+		80 container Secondary Actions: Move previous, Remove from toolbar
+			81 button 开始录音
+			82 button Description: 开始录音, Help: 导入一段已有音频
+			83 button Description: 开始录音, Help: 设置, ID: gearshape
+	84 close button
+	85 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	86 minimize button
+	87 text 审查夹具：1000段长逐字稿 2026/9/21 22:10  ·  01:00:00  ·  已完成  ·  审查模型
+88 menu bar
+	89 MeetingScribeReview
+	90 File
+	91 Edit
+	92 View
+	93 Window
+	94 Help
+
+The focused UI element is 0 standard window 审查夹具：1000段长逐字稿 – 2026/9/21 22:10  ·  01:00:00  ·  已完成  ·  审查模型, Secondary Actions: Raise, ID: SwiftUI.ModifiedContent<MeetingScribeReview.ContentView, SwiftUI._EnvironmentKeyWritingModifier<Swift.Optional<MeetingScribeReview.MeetingStore>>>-1-AppWindow-1

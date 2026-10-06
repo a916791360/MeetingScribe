@@ -1,0 +1,5 @@
+Synthetic original input.wav converted in-place
+before=_wave_params(nchannels=2, sampwidth=2, framerate=48000, nframes=48000, comptype='NONE', compname='not compressed')
+after channels=1, rate=16000, bytes=36096
+original SHA256 preserved=False
+exit=0

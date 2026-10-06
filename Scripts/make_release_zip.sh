@@ -53,6 +53,12 @@ fi
 # 扫的就是最终要发出去的那一份（package_app.sh 验的是 .build 里的，不是这里）
 "$ROOT_DIR/Scripts/audit_release.sh" "$STAGE/MeetingScribe.app"
 
+# Local self-signed builds remain supported. Public notarized releases opt into this gate.
+if [[ "${REQUIRE_NOTARIZATION:-0}" == "1" ]]; then
+    xcrun stapler validate "$STAGE/MeetingScribe.app"
+    spctl --assess --type execute "$STAGE/MeetingScribe.app"
+fi
+
 rm -f "$ZIP"
 # 不加 --keepParent：让 App 与说明文件都躺在压缩包根目录，
 # 解压出来就是「一个 App + 一个说明」，不用再进一层目录找。

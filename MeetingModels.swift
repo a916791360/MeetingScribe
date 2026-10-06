@@ -372,7 +372,7 @@ enum CaptureReadiness: Equatable, Sendable {
     case ready
     /// 缺系统音频权限 —— **录不了**，必须先授权。
     case missingSystemAudio(microphone: MicrophonePermission)
-    /// 系统音频 OK、缺麦克风 —— **录得了**，只是不会有说话人标注。
+    /// 系统音频 OK、缺麦克风 —— **录得了**，但无法采集本机麦克风声音。
     case missingMicrophoneOnly
 
     var canStartRecording: Bool {
@@ -398,7 +398,7 @@ enum CaptureReadiness: Equatable, Sendable {
     var microphoneCaveat: String? {
         switch self {
         case .missingSystemAudio, .missingMicrophoneOnly:
-            return "没有麦克风权限：录音照常，但原文不会区分「我方 / 对方」。"
+            return "没有麦克风权限：本次只录系统声音，本机麦克风发言可能缺失，也无法区分「我方 / 对方」。请在系统设置中允许麦克风后重试。"
         case .ready:
             return nil
         }
@@ -1151,9 +1151,9 @@ struct OverviewBullet: Hashable, Identifiable, Sendable {
         }
         // 两位那档是 mm:ss，三位那档是 h:mm:ss —— 与 `clockLabel` 的输出一一对应。
         if values.count == 2 {
-            return TimeInterval(values[0] * 60 + values[1])
+            return Double(values[0]) * 60 + Double(values[1])
         }
-        return TimeInterval(values[0] * 3600 + values[1] * 60 + values[2])
+        return Double(values[0]) * 3600 + Double(values[1]) * 60 + Double(values[2])
     }
 }
 
@@ -1205,6 +1205,25 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
     /// 段级标记看 `TranscriptSegment.manuallyEditedAt`；本字段只回答
     /// 「这场会动过没有」，好让不用遍历几百段的界面（页眉、副标题）便宜地拿到结论。
     var transcriptEditedAt: Date?
+    /// Persisted across crashes; a retry must never treat old results as new checkpoints.
+    var processingRetainsPreviousResults: Bool?
+    var analysisStale: Bool?
+    var captureWarning: String?
+    var lastRegenerationError: String?
+
+    var analysisNotice: String? {
+        var notices: [String] = []
+        if analysisStale == true { notices.append("原文已更新，速览与纪要基于修改前的内容，请重新整理。") }
+        if let lastRegenerationError { notices.append("本次重新整理未成功，已保留上次结果。" + lastRegenerationError) }
+        notices.append(contentsOf: [captureWarning, analysis.noticeMessage].compactMap { $0 })
+        return notices.isEmpty ? nil : notices.joined(separator: "；")
+    }
+
+    var materialSegments: [TranscriptSegment] {
+        if !transcriptSegments.isEmpty { return transcriptSegments }
+        let text = transcriptText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? [] : [TranscriptSegment(start: 0, end: duration ?? 0, text: text, confidence: 0.5)]
+    }
 
     static func makeDraft(createdAt date: Date, captureMode: CaptureMode, folderName: String) -> MeetingSession {
         MeetingSession(
@@ -1237,7 +1256,7 @@ struct MeetingSession: Codable, Identifiable, Hashable, Sendable {
 
 extension TimeInterval {
     var clockLabel: String {
-        let totalSeconds = max(0, Int(self.rounded()))
+        let totalSeconds = isFinite ? Int(min(Double(Int.max / 2), max(0, self.rounded()))) : 0
         let hours = totalSeconds / 3600
         let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60

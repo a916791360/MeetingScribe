@@ -31,7 +31,7 @@ final class AudioTrackRecorderTests: XCTestCase {
         let recorder = AudioTrackRecorder(url: url)
 
         let first = try XCTUnwrap(makeSampleBuffer(format: format, frames: 1_600, amplitude: 0.5))
-        let second = try XCTUnwrap(makeSampleBuffer(format: format, frames: 1_600, amplitude: 0.25))
+        let second = try XCTUnwrap(makeSampleBuffer(format: format, frames: 1_600, amplitude: 0.25, presentationTime: 0.1))
         recorder.append(first)
         recorder.append(second)
         recorder.finish()
@@ -144,7 +144,8 @@ final class AudioTrackRecorderTests: XCTestCase {
     private func makeSampleBuffer(
         format: AVAudioFormat,
         frames: AVAudioFrameCount,
-        amplitude: Float
+        amplitude: Float,
+        presentationTime: Double = 0
     ) throws -> CMSampleBuffer? {
         let pcm = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
         pcm.frameLength = frames
@@ -205,7 +206,7 @@ final class AudioTrackRecorderTests: XCTestCase {
 
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: CMTimeScale(format.sampleRate)),
-            presentationTimeStamp: .zero,
+            presentationTimeStamp: CMTime(seconds: presentationTime, preferredTimescale: 16000),
             decodeTimeStamp: .invalid
         )
         var sampleSize = MemoryLayout<Float>.size

@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前版本：`0.11.1`
+当前开发版本：`0.11.2`（本轮审查升级，本地构建；尚未发布到 GitHub）
 
 ## 目标
 
@@ -15,7 +15,7 @@
 - 每条结论都带**依据**与**置信度**，可在原地展开核对
 - 点时间锚回放那一段（速览 / 纪要 / 原文三页都能跳）；播放时当前句高亮
 - 一键导出 Markdown / 复制全文，**带走之后还能回原文核对**
-- 结果只保留在 App 内：不联云、不自动上传；导出与复制都由你手动触发
+- 录音和逐字稿在本机保存；选择云端整理时，逐字稿会发送到你配置的服务商，选择本地整理则不发送。导出与复制由你手动触发
 
 ## 总结模型
 
@@ -43,7 +43,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-0.11.1-macOS.zip
+shasum -a 256 MeetingScribe-0.11.2-macOS.zip
 ```
 
 ## 运行
@@ -182,3 +182,21 @@ cmake -B build && cmake --build build -j --config Release
 ## 开源协议
 
 本项目使用 MIT License，见 [LICENSE](LICENSE)。
+
+内置运行时包含 whisper.cpp、ggml 与 OpenAI Whisper 模型，第三方许可随 App 放在
+`Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
+自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
+
+
+### 0.11.2 审查修复
+
+重新处理保留已有逐字稿、人工校正和纪要，失败或取消不会用空结果覆盖它们。
+双路录音按样本时间戳补齐静音间隔，失败轨道退回混合原件；清洗保留说话人、否定意见和分块尾句。
+原文修改后提示速览和纪要待更新，编辑草稿在切页期间保留；旧版全文可阅读和导出。
+云端请求限制跨来源跳转，错误体不进入可分享资料；流式中断明确标记部分结果，普通 JSON 回包不会重复生成。
+
+发行包会在签名前移除外部引擎的开发机 RPATH，并审计所有运行时 Mach-O 文件。
+正式公证分发可设置 `REQUIRE_NOTARIZATION=1` 运行 `Scripts/make_release_zip.sh`；本机自签包仍按上面的首次打开说明处理。
+评测工具更换地址时必须使用该地址匹配的凭据，不再从其他提供商自动补 key。
+
+完整修复验收与剩余实机验证见 `docs/reviews/2026-10-06/final-review-and-upgrade.md`。

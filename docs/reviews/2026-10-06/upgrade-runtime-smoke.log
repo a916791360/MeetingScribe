@@ -1,0 +1,7 @@
+read_audio_data: reading audio data from '/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-final-smoke-yqtdd3kq/synthetic-silence.wav' ...
+read_audio_data: trying to decode with miniaudio
+
+[00:00:00.000 --> 00:00:02.000]  我看你很想念你,我看你很想念你
+output_json: saving output to '/var/folders/1n/ljw_trbx7fj5svq4kfnm4b980000gn/T/ms-final-smoke-yqtdd3kq/result.json'
+
+CLI exit=0

@@ -29,6 +29,8 @@ jobs:
         run: python3 --version
       - name: 指标脚本单测（含反向证伪：把已知退化打进去，门禁必须变红）
         run: python3 Scripts/tests/test_quality_report.py
+      - name: 裁判凭据边界（只用模拟凭据）
+        run: python3 Scripts/tests/test_judge_credentials.py
       - name: 合成语料自测
         run: python3 Scripts/quality_report.py --corpus docs/verification/quality/synthetic --check
 
@@ -44,5 +46,7 @@ jobs:
           swift --version
       - name: 编译
         run: swift build --disable-sandbox -Xswiftc -warnings-as-errors
+      - name: 安装回滚与运行中保护（临时假应用）
+        run: python3 Scripts/tests/test_safe_install.py
       - name: 单测（无 MS_E2E_KEY 时真实管线那支自动跳过）
         run: swift test --disable-sandbox -Xswiftc -warnings-as-errors

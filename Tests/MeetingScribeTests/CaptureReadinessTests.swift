@@ -59,7 +59,7 @@ final class CaptureReadinessTests: XCTestCase {
 
         let caveat = readiness.microphoneCaveat ?? ""
         XCTAssertTrue(caveat.contains("我方"), "要说清后果是『不区分我方 / 对方』")
-        XCTAssertTrue(caveat.contains("照常"), "也要说清录音本身不受影响")
+        XCTAssertTrue(caveat.contains("麦克风发言可能缺失"), "必须说清麦克风声音可能缺失")
     }
 
     func testMissingBothFallsIntoTheSystemAudioBranch() {

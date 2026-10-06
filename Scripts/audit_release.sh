@@ -23,6 +23,14 @@ print "产物：$APP"
 
 fail=0
 
+# Bundled runtime/model redistribution must retain upstream license notices.
+for notice in MeetingScribe-LICENSE.txt whisper.cpp-LICENSE.txt ggml-LICENSE.txt openai-whisper-LICENSE.txt; do
+    if [[ ! -s "$APP/Contents/Resources/Licenses/$notice" ]]; then
+        print -u2 "✗ 缺少许可声明：$notice"
+        fail=1
+    fi
+done
+
 # ① 二进制里残留的开发机路径与凭据字样。
 #    一律用 grep -E：BSD grep 的 `\|` 交替会**静默返回 0 行**，用它等于漏报。
 scan_binary() {
@@ -66,6 +74,23 @@ while IFS= read -r lib; do
     esac
 done <<< "$(find "$APP" -name '*.dylib' -type f 2>/dev/null || true)"
 
+# Check every Mach-O load command, including LC_RPATH (not present in strings).
+while IFS= read -r binary; do
+    [[ -f "$binary" ]] || continue
+    if ! codesign --verify --strict "$binary" >/dev/null 2>&1; then
+        print -u2 "✗ 运行时签名无效：$(basename "$binary")"
+        fail=1
+    fi
+    if otool -l "$binary" 2>/dev/null | awk '/^[ \t]+path \// && $2 != "/usr/lib/swift" { bad = 1 } END { exit !bad }'; then
+        print -u2 "✗ Mach-O 含开发机绝对 RPATH：$(basename "$binary")"
+        fail=1
+    fi
+    if otool -L "$binary" 2>/dev/null | tail -n +2 | awk '$1 ~ /^\// && $1 !~ /^\/(usr\/lib|System\/Library)\// { bad = 1 } END { exit !bad }'; then
+        print -u2 "✗ Mach-O 含未打包的开发机依赖：$(basename "$binary")"
+        fail=1
+    fi
+done <<< "$(find "$APP" -type f \( -name '*.dylib' -o -name 'whisper-cli' -o -name 'MeetingScribe' \) 2>/dev/null)"
+
 # ④ 文本资源里的凭据特征
 cred=$(grep -rIl -E 'sk-[A-Za-z0-9]{20,}|apiKey|api_key' "$APP" 2>/dev/null || true)
 if [[ -n "${cred}" ]]; then
@@ -75,7 +100,7 @@ if [[ -n "${cred}" ]]; then
 fi
 
 if [[ ${fail} -eq 0 ]]; then
-    print "✓ 通过：无私人路径、无预期外配置文件、无凭据字样、依赖均为相对路径"
+print "✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过"
 else
     print -u2 ""
     print -u2 "审计未通过 —— 先清理，别分发。"

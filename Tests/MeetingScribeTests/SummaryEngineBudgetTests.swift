@@ -48,10 +48,10 @@ final class SummaryEngineBudgetTests: XCTestCase {
         )
     }
 
-    func testEmptyResponseStillCarriesTheProviderPayloadForDiagnosis() {
+    func testEmptyResponseDoesNotExposeProviderPayload() {
         let withPayload = SummaryEngineError.emptyResponse("{\"error\":\"quota\"}")
             .errorDescription ?? ""
-        XCTAssertTrue(withPayload.contains("quota"), "服务商回包要原样带出来")
+        XCTAssertFalse(withPayload.contains("quota"), "服务商控制的内容不能进入可持久化错误文案")
 
         let withoutPayload = SummaryEngineError.emptyResponse(nil).errorDescription ?? ""
         XCTAssertFalse(

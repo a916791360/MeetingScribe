@@ -1,0 +1,24 @@
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module MeetingScribeTests
+[4/5] Compiling MeetingScribeTests ReviewBatch2ReproTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (0.94s)
+Test Suite 'Selected tests' started at 2026-10-06 10:57:33.930.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 10:57:33.930.
+Test Suite 'ReviewBatch2ReproTests' started at 2026-10-06 10:57:33.930.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testChunkOwnershipDiscardsTheMoreCompleteBoundarySentence]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch2ReproTests testChunkOwnershipDiscardsTheMoreCompleteBoundarySentence]' passed (0.000 seconds).
+Test Suite 'ReviewBatch2ReproTests' passed at 2026-10-06 10:57:33.931.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 10:57:33.931.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 10:57:33.931.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+REPRO BUG-015: earlier chunk ends at 602; complete overlapping sentence ending at 606 is discarded because its start is 599 < 600
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

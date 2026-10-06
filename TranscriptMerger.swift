@@ -26,13 +26,6 @@ enum TranscriptMerger {
     /// 真正决定丢不丢的是下面的文本相似度。
     static let crosstalkOverlapRatio = 0.6
 
-    /// 走"相似"这条路的最短长度。太短的（"嗯"、"对"）只认**逐字相同**，
-    /// 否则「嗯」和「嗯嗯」会被判成同一句，白丢一次发言。
-    private static let minimumTextLengthForSimilarity = 4
-
-    /// 文本相似线：较短那句里有多大比例的字符能在另一句里找到。
-    private static let similarityThreshold = 0.6
-
     /// 合并两路转写。
     ///
     /// - Parameters:
@@ -141,25 +134,8 @@ enum TranscriptMerger {
     }
 
     private static func isSameSpeech(_ lhs: String, _ rhs: String) -> Bool {
-        let left = normalized(lhs)
-        let right = normalized(rhs)
-        if left == right { return true }
-        guard min(left.count, right.count) >= minimumTextLengthForSimilarity else { return false }
-        return containment(left, right) >= similarityThreshold
-    }
-
-    /// 较短那句里有多大比例的字符能在另一句里找到（按字数计，不是集合）。
-    private static func containment(_ lhs: String, _ rhs: String) -> Double {
-        var remaining: [Character: Int] = [:]
-        for character in lhs { remaining[character, default: 0] += 1 }
-
-        var shared = 0
-        for character in rhs {
-            guard let count = remaining[character], count > 0 else { continue }
-            remaining[character] = count - 1
-            shared += 1
-        }
-        return Double(shared) / Double(max(1, min(lhs.count, rhs.count)))
+        // Similarity cannot safely distinguish negation, numbers or reordered meaning.
+        normalized(lhs) == normalized(rhs)
     }
 
     /// 去掉空白与标点后的正文。`MeetingStore.mergeSegments` 判"同一句话"也用它 ——

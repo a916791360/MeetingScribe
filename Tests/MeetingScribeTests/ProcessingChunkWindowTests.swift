@@ -100,7 +100,7 @@ final class ProcessingChunkWindowTests: XCTestCase {
 
         XCTAssertEqual(
             MeetingStore.ownedSegments(segments, index: 1, in: window).map(\.text),
-            ["本块第一句", "本块最后一句"]
+            ["重叠区的段（归前一块）", "本块第一句", "本块最后一句"]
         )
     }
 

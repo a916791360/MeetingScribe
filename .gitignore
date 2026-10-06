@@ -36,3 +36,6 @@ docs/verification/quality/synthetic/judge/
 
 # 外部参考截图（竞品界面等）：本机留存即可，没有版本意义还会把仓库撑大
 docs/reference/
+
+# Local audit delivery bundles (generated, not source).
+.review-dist/

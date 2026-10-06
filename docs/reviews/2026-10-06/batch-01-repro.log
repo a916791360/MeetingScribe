@@ -1,0 +1,35 @@
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module MeetingScribeTests
+[4/5] Compiling MeetingScribeTests ReviewBatch1ReproTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking MeetingScribePackageTests
+Build complete! (1.00s)
+Test Suite 'Selected tests' started at 2026-10-06 10:45:47.286.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-06 10:45:47.286.
+Test Suite 'ReviewBatch1ReproTests' started at 2026-10-06 10:45:47.286.
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testCorruptedSessionDisappearsWithoutLoadError]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testCorruptedSessionDisappearsWithoutLoadError]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testDraftCreationReturnsSuccessWhenRootIsARegularFile]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testDraftCreationReturnsSuccessWhenRootIsARegularFile]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testRetryErasesSavedManualEditsBeforeAnyTranscriptionRuns]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testRetryErasesSavedManualEditsBeforeAnyTranscriptionRuns]' passed (0.068 seconds).
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testRetryPassesOriginalM4AToTheInstalledWhisperEngine]' started.
+Test Case '-[MeetingScribeTests.ReviewBatch1ReproTests testRetryPassesOriginalM4AToTheInstalledWhisperEngine]' passed (1.866 seconds).
+Test Suite 'ReviewBatch1ReproTests' passed at 2026-10-06 10:45:49.224.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 1.937 (1.937) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-06 10:45:49.224.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 1.937 (1.938) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 10:45:49.224.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 1.937 (1.938) seconds
+REPRO: corrupted session omitted; metadata still exists
+REPRO: draft returned recording status but no session.json exists
+REPRO: saved manual transcript and minutes erased synchronously before task runs
+REPRO: after CLI failure, old manual transcript is still absent
+REPRO: retry sent source.m4a without conversion; engine result: 找不到 whisper 的 JSON 输出。
+CONTROL: the same M4A converted to input.wav produces Whisper JSON successfully
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

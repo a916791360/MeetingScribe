@@ -22,6 +22,7 @@ struct ChunkWindow: Equatable {
 final class MeetingStore: ObservableObject {
     @Published var sessions: [MeetingSession] = []
     @Published var selectedSessionID: UUID?
+    @Published private(set) var storageIssueCount = 0
     @Published var appearance: AppAppearance {
         didSet {
             guard oldValue != appearance else { return }
@@ -104,6 +105,13 @@ final class MeetingStore: ObservableObject {
     private let keychain = KeychainStore.shared
     private var microphoneSession: MicrophoneRecordingSession?
     private var mixedSession: MixedRecordingSession?
+    @Published private(set) var isPreparingRecording = false
+    private var recordingStartTask: Task<Void, Never>?
+    private var recordingLevelTask: Task<Void, Never>?
+    @Published private(set) var microphoneLevel: Double = 0
+    @Published private(set) var systemAudioLevel: Double = 0
+    @Published var transcriptDrafts: [UUID: String] = [:]
+    @Published var editingSegments: [UUID: UUID] = [:]
     private var processingTask: Task<Void, Never>?
     private var recordingLimitTask: Task<Void, Never>?
     private var summaryModelDiscoveryTask: Task<Void, Never>?
@@ -212,7 +220,12 @@ final class MeetingStore: ObservableObject {
     }
 
     func reloadSessions() {
-        var loadedSessions = storage.loadSessions()
+        let load = storage.loadSessionsReport()
+        storageIssueCount = load.issues.count
+        var loadedSessions = load.sessions
+        if !load.issues.isEmpty {
+            errorMessage = "有 \(load.issues.count) 个会议目录无法读取，文件已保留。请打开会议数据目录检查：" + load.issues.joined(separator: "、")
+        }
         for index in loadedSessions.indices
             where loadedSessions[index].status == .ready &&
                 (
@@ -220,7 +233,7 @@ final class MeetingStore: ObservableObject {
                         loadedSessions[index].analysis.summaryModel == "本地整理" ||
                         loadedSessions[index].analysis.summaryModel == SummaryModelProvider.localRules.title
                 ) {
-            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].transcriptSegments)
+            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].materialSegments)
             if analysis != loadedSessions[index].analysis {
                 loadedSessions[index].analysis = analysis
                 loadedSessions[index].updatedAt = Date()
@@ -240,8 +253,8 @@ final class MeetingStore: ObservableObject {
         // （哪怕材料少，那也是用户真正拿到过的东西，不能替他清掉）。
         // **逐字稿任何时候都不删** —— 被替换的只有那份"对着材料自我介绍"的整理结果。
         for index in loadedSessions.indices
-            where MeetingAnalysisBuilder.needsMaterialGateRepair(loadedSessions[index]) {
-            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].transcriptSegments)
+            where !loadedSessions[index].transcriptSegments.isEmpty && MeetingAnalysisBuilder.needsMaterialGateRepair(loadedSessions[index]) {
+            let analysis = MeetingAnalysisBuilder.build(from: loadedSessions[index].materialSegments)
             if analysis != loadedSessions[index].analysis {
                 loadedSessions[index].analysis = analysis
                 loadedSessions[index].updatedAt = Date()
@@ -261,7 +274,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func startRecording() {
-        guard !isRecording, !isProcessing else { return }
+        guard !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         // 录音前先当场看一眼两道权限门（纯 preflight，不弹窗）。
         //
@@ -277,7 +290,10 @@ final class MeetingStore: ObservableObject {
 
         // A single recording action captures both system audio and the Mac microphone.
         captureMode = .mixed
-        let draft = storage.createDraftSession(captureMode: .mixed)
+        let draft: MeetingSession
+        do { draft = try storage.createDraftSession(captureMode: .mixed) }
+        catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription; return }
+        isPreparingRecording = true
         sessions.insert(draft, at: 0)
         selectedSessionID = draft.id
         activeSessionID = draft.id
@@ -303,18 +319,38 @@ final class MeetingStore: ObservableObject {
             localTrackURL: trackURLs.local,
             remoteTrackURL: trackURLs.remote
         )
+        recorder.onFailure = { [weak self] message in
+            guard let self, self.activeSessionID == draft.id else { return }
+            self.errorMessage = "录音采集已中断，正在保留已有文件：" + message
+            self.stopRecording()
+        }
         mixedSession = recorder
-        Task {
+        recordingStartTask = Task {
             do {
                 try await recorder.start()
+                try Task.checkCancellation()
+                guard self.activeSessionID == draft.id else { _ = try? await recorder.stop(); return }
                 await MainActor.run {
+                    self.isPreparingRecording = false
                     self.isRecording = true
                     self.statusText = "正在录音"
                     self.updateSessionStatus(draft.id, status: .recording)
                     self.startRecordingLimit(for: draft.id)
+                    self.recordingLevelTask = Task { [weak self] in
+                        while !Task.isCancelled {
+                            guard let self, self.isRecording, self.activeSessionID == draft.id else { return }
+                            let levels = self.mixedSession?.levels
+                            self.microphoneLevel = levels?.local ?? 0
+                            self.systemAudioLevel = levels?.remote ?? 0
+                            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                        }
+                    }
                 }
             } catch {
+                _ = try? await recorder.stop()
                 await MainActor.run {
+                    guard self.activeSessionID == draft.id else { return }
+                    self.isPreparingRecording = false
                     self.failSession(draft.id, message: error.localizedDescription)
                 }
             }
@@ -324,6 +360,9 @@ final class MeetingStore: ObservableObject {
     func stopRecording() {
         guard isRecording, let sessionID = activeSessionID else { return }
         isRecording = false
+        recordingLevelTask?.cancel()
+        microphoneLevel = 0
+        systemAudioLevel = 0
         isProcessing = true
         processingProgress = 0
         processingStage = "正在整理录音..."
@@ -354,6 +393,12 @@ final class MeetingStore: ObservableObject {
                     // 麦克风那一路本来就混着外放出来的对方声音，只按它标"我方"，
                     // 会把对方说的话算成我方，而且读起来完全自然、永远没人发现。
                     dualTracks = try await normalizedTracks(from: recording, in: session)
+                    if dualTracks == nil {
+                        var updated = try storage.session(with: sessionID)
+                        updated.captureWarning = "双路音频不完整，本次使用混合原件转写，无法确认说话人归属。若未授予麦克风权限，本机发言可能缺失。"
+                        try storage.save(updated)
+                        replaceSession(updated)
+                    }
                 case .imported:
                     inputURL = processingInputURL(for: session) ?? sourceURL
                 }
@@ -373,7 +418,7 @@ final class MeetingStore: ObservableObject {
     }
 
     func importAudio(url: URL) {
-        guard !isRecording, !isProcessing else { return }
+        guard !isRecording, !isPreparingRecording, !isProcessing else { return }
 
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
         defer {
@@ -384,7 +429,7 @@ final class MeetingStore: ObservableObject {
 
         var draftID: UUID?
         do {
-            let draft = storage.createDraftSession(captureMode: .imported)
+            let draft = try storage.createDraftSession(captureMode: .imported)
             draftID = draft.id
             sessions.insert(draft, at: 0)
             selectedSessionID = draft.id
@@ -430,6 +475,8 @@ final class MeetingStore: ObservableObject {
             }
         }
     }
+
+    func openMeetingDataFolder() { NSWorkspace.shared.open(storage.dataDirectoryURL) }
 
     func openSelectedSessionFolder() {
         guard let session = selectedSession else { return }
@@ -649,7 +696,7 @@ final class MeetingStore: ObservableObject {
                 // 原始错误串**不再贴给用户**（多半是英文技术串，说了也不知道改什么），
                 // 但必须留下来可查：用户报「连不上」时，先看这一行。
                 Diagnostics.pipeline.error(
-                    "整理模型连接失败：\(String(describing: error), privacy: .public)"
+                    "整理模型连接失败，分类：\(String(describing: SummaryModelFailure.classify(error)), privacy: .private)"
                 )
             }
         }
@@ -778,7 +825,7 @@ final class MeetingStore: ObservableObject {
         segmentID: UUID,
         text: String
     ) -> TranscriptEditor.Outcome {
-        if isProcessing || isRecording {
+        if isProcessing || isRecording || isPreparingRecording {
             return .rejected("正在整理纪要，等它结束再改这一句。")
         }
 
@@ -797,6 +844,7 @@ final class MeetingStore: ObservableObject {
             // 而哪一份被用到取决于走的是哪条路 —— 这种不一致只能靠"改就一起改"避免。
             updated.transcriptText = segments.map(\.text).joined(separator: "\n")
             updated.transcriptEditedAt = Date()
+            updated.analysisStale = true
             updated.updatedAt = Date()
             try storage.save(updated)
             replaceSession(updated)
@@ -904,8 +952,8 @@ final class MeetingStore: ObservableObject {
     }
 
     func regenerateSummary(for session: MeetingSession) {
-        guard session.status == .ready, !isRecording, !isProcessing else { return }
-        guard !session.transcriptSegments.isEmpty else {
+        guard session.status == .ready, !isRecording, !isPreparingRecording, !isProcessing else { return }
+        guard !session.materialSegments.isEmpty else {
             statusText = "这场会议还没有逐字稿，暂时无法整理纪要。"
             return
         }
@@ -941,7 +989,7 @@ final class MeetingStore: ObservableObject {
                 // 表替换会**跳过人工改过的段**（见 `applyingTerminology`）：用户改过的
                 // 那句是他确认过的事实，不能被"猜出来的纠错"再动一次。
                 let corrected = TranscriptCleaner.applyingTerminology(
-                    current.transcriptSegments,
+                    current.materialSegments,
                     table: glossary.replacementTable
                 )
                 let correctedText = corrected.map(\.text).joined(separator: "\n")
@@ -956,11 +1004,21 @@ final class MeetingStore: ObservableObject {
                     updated.transcriptSegments = corrected
                     updated.transcriptText = correctedText
                 }
-                updated.analysis = analysis
+                let preservedPrevious = analysis.isLocalFallback && (!current.analysis.minutesText.isEmpty || current.analysis.hasStructuredFindings)
+                if preservedPrevious {
+                    updated.lastRegenerationError = analysis.summaryError
+                    if didCorrect { updated.analysisStale = true }
+                } else {
+                    updated.analysis = analysis
+                    updated.analysisStale = nil
+                    updated.lastRegenerationError = nil
+                }
                 updated.updatedAt = Date()
                 try storage.save(updated)
                 replaceSession(updated)
-                if analysis.isLocalFallback {
+                if preservedPrevious {
+                    statusText = "重新整理未成功，保留上次结果"
+                } else if analysis.isLocalFallback {
                     statusText = "纪要已更新，使用本地整理兜底"
                 } else if analysis.partialNotice != nil {
                     // 结果不完整也要说出来 —— 不然用户不知道"这次少了一半"，
@@ -978,7 +1036,10 @@ final class MeetingStore: ObservableObject {
             } catch is CancellationError {
                 cancelFinishedSummary(sessionID: session.id, regenerationID: regenerationID)
             } catch {
-                failProcessing(sessionID: session.id, message: error.localizedDescription)
+                guard summaryRegenerationID == regenerationID else { return }
+                cancelFinishedSummary(sessionID: session.id, regenerationID: regenerationID)
+                errorMessage = error.localizedDescription
+                statusText = error.localizedDescription
             }
         }
     }
@@ -993,27 +1054,23 @@ final class MeetingStore: ObservableObject {
             cancelFinishedSummary(sessionID: sessionID, regenerationID: regenerationID)
             return
         }
-        Task { [weak self] in
-            guard let self else { return }
-            await self.transcriber.cancel()
-            await self.transcoder.cancel()
-        }
+        // Cancellation is delivered to this task's process, never a future task's runner.
     }
 
     func retryProcessing(_ session: MeetingSession) {
-        guard !isRecording, !isProcessing else { return }
+        guard !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let inputURL = processingInputURL(for: session) else {
             errorMessage = "找不到这场会议的音频文件。"
             statusText = errorMessage ?? ""
             return
         }
 
-        var resetSession = session
+        var resetSession: MeetingSession
+        do { resetSession = try storage.session(with: session.id) }
+        catch { errorMessage = error.localizedDescription; return }
+        resetSession.processingRetainsPreviousResults = !resetSession.transcriptText.isEmpty || !resetSession.transcriptSegments.isEmpty
         resetSession.status = .processing
         resetSession.updatedAt = Date()
-        resetSession.transcriptText = ""
-        resetSession.transcriptSegments = []
-        resetSession.analysis = .empty
         resetSession.inputAudioFileName = inputURL.lastPathComponent
         resetSession.errorMessage = nil
         resetSession.processingProgress = 0
@@ -1039,9 +1096,15 @@ final class MeetingStore: ObservableObject {
             processingTask = Task { [weak self] in
                 guard let self else { return }
                 do {
+                    var preparedURL = inputURL
+                    if preparedURL.pathExtension.lowercased() != "wav" {
+                        preparedURL = storage.inputURL(for: resetSession, preferredFileName: "input.wav")
+                        try await transcoder.convertToWav(inputURL: inputURL, outputURL: preparedURL)
+                    }
+                    try Task.checkCancellation()
                     try await process(
                         sessionID: resetSession.id,
-                        inputURL: inputURL,
+                        inputURL: preparedURL,
                         resume: false,
                         dualTracks: resolvedDualTracks(for: resetSession)
                     )
@@ -1058,28 +1121,31 @@ final class MeetingStore: ObservableObject {
     }
 
     func deleteSession(_ session: MeetingSession) {
-        if activeSessionID == session.id {
-            processingTask?.cancel()
-            recordingLimitTask?.cancel()
-            Task {
-                await transcriber.cancel()
-                await transcoder.cancel()
-            }
-            activeSessionID = nil
-            summaryRegenerationID = nil
-            isRecording = false
-            isProcessing = false
+        if activeSessionID == session.id && (isRecording || isPreparingRecording) {
+            errorMessage = "请先结束录音，确认文件已保存后再删除这场会议。"
+            return
         }
+        if activeSessionID == session.id && isProcessing {
+            let pending = processingTask
+            pending?.cancel()
+            statusText = "正在停止处理，完成后删除…"
+            Task { [weak self] in
+                await pending?.value
+                self?.removeSessionFiles(session)
+            }
+            return
+        }
+        removeSessionFiles(session)
+    }
+
+    private func removeSessionFiles(_ session: MeetingSession) {
         do {
             try storage.delete(session)
             sessions.removeAll { $0.id == session.id }
-            if selectedSessionID == session.id {
-                selectedSessionID = sessions.first?.id
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-            statusText = error.localizedDescription
-        }
+            editingSegments.removeValue(forKey: session.id)
+            for segment in session.transcriptSegments { transcriptDrafts.removeValue(forKey: segment.id) }
+            normalizeSelection()
+        } catch { errorMessage = error.localizedDescription; statusText = error.localizedDescription }
     }
 
     /// 处理一场会议：转写 → 清洗 → 整理。
@@ -1104,12 +1170,15 @@ final class MeetingStore: ObservableObject {
         let totalChunks = Self.chunkCount(for: duration)
         var session = try storage.session(with: sessionID)
         let startedAt = session.processingStartedAt ?? Date()
-        var completedChunks = resume ? min(session.processingCompletedChunks ?? 0, totalChunks) : 0
-        var nextOffset = resume
+        let canResume = resume && session.processingRetainsPreviousResults != true && dualTracks == nil
+        var completedChunks = canResume ? min(session.processingCompletedChunks ?? 0, totalChunks) : 0
+        var nextOffset = canResume
             ? min(max(session.processingNextOffset ?? Double(completedChunks) * Self.chunkDuration, 0), duration)
             : 0
-        var segments = resume ? session.transcriptSegments : []
+        var segments = canResume ? session.transcriptSegments : []
 
+        try Task.checkCancellation()
+        guard activeSessionID == sessionID else { throw CancellationError() }
         session.status = .processing
         session.updatedAt = Date()
         session.inputAudioFileName = inputURL.lastPathComponent
@@ -1157,6 +1226,12 @@ final class MeetingStore: ObservableObject {
             )
             completedChunks = totalChunks
             nextOffset = duration
+        } else if !(try await isAudible(inputURL, probe: AudioLevelProbe(), threshold: 0)) {
+            // Imported/mixed fallback audio needs the same guard. For the single track,
+            // skip only digital silence; low-volume speech must never be discarded.
+            segments = []
+            completedChunks = totalChunks
+            nextOffset = duration
         } else {
             while completedChunks < totalChunks {
                 try Task.checkCancellation()
@@ -1190,6 +1265,7 @@ final class MeetingStore: ObservableObject {
                     initialPrompt: initialPrompt
                 )
 
+                try Task.checkCancellation()
                 let ownedSegments = Self.ownedSegments(
                     chunkTranscript.segments,
                     index: completedChunks,
@@ -1202,8 +1278,10 @@ final class MeetingStore: ObservableObject {
                 session = try storage.session(with: sessionID)
                 session.status = .processing
                 session.updatedAt = Date()
-                session.transcriptSegments = segments
-                session.transcriptText = segments.map(\.text).joined(separator: "\n")
+                if session.processingRetainsPreviousResults != true {
+                    session.transcriptSegments = segments
+                    session.transcriptText = segments.map(\.text).joined(separator: "\n")
+                }
                 session.duration = duration
                 session.inputAudioFileName = inputURL.lastPathComponent
                 session.whisperCLIPath = cliURL.path
@@ -1256,12 +1334,17 @@ final class MeetingStore: ObservableObject {
         let analysis = try await buildAnalysis(from: cleanedSegments)
         try Task.checkCancellation()
 
+        guard activeSessionID == sessionID else { throw CancellationError() }
         session = try storage.session(with: sessionID)
         session.status = .ready
         session.updatedAt = Date()
         session.transcriptSegments = cleanedSegments
         session.transcriptText = cleanedSegments.map(\.text).joined(separator: "\n")
         session.analysis = analysis
+        session.analysisStale = nil
+        session.lastRegenerationError = nil
+        session.processingRetainsPreviousResults = nil
+        session.transcriptEditedAt = nil
         session.inputAudioFileName = inputURL.lastPathComponent
         session.whisperCLIPath = cliURL.path
         session.whisperModelPath = modelURL.path
@@ -1294,9 +1377,14 @@ final class MeetingStore: ObservableObject {
     }
 
     private func replaceSession(_ session: MeetingSession) {
-        sessions.removeAll { $0.id == session.id }
-        sessions.insert(session, at: 0)
-        sessions.sort { $0.createdAt > $1.createdAt }
+        if let index = sessions.firstIndex(where: { $0.id == session.id }),
+           sessions[index].createdAt == session.createdAt {
+            sessions[index] = session
+        } else {
+            sessions.removeAll { $0.id == session.id }
+            let index = sessions.firstIndex { $0.createdAt < session.createdAt } ?? sessions.endIndex
+            sessions.insert(session, at: index)
+        }
         normalizeSelection()
     }
 
@@ -1341,6 +1429,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func failSession(_ sessionID: UUID, message: String) {
+        guard activeSessionID == sessionID else { return }
         if var session = try? storage.session(with: sessionID) {
             session.status = .failed
             session.errorMessage = message
@@ -1363,6 +1452,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func failProcessing(sessionID: UUID, message: String) {
+        guard activeSessionID == sessionID else { return }
         if var session = try? storage.session(with: sessionID) {
             session.status = .failed
             session.errorMessage = message
@@ -1385,6 +1475,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func cancelFinishedProcessing(sessionID: UUID) {
+        guard activeSessionID == sessionID else { return }
         if var session = try? storage.session(with: sessionID) {
             session.status = .failed
             session.errorMessage = "已取消转写，已保留已经完成的内容，可以重新处理。"
@@ -1419,7 +1510,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func resumePendingProcessing() {
-        guard !isRecording, !isProcessing else { return }
+        guard !isRecording, !isPreparingRecording, !isProcessing else { return }
         guard let session = sessions.first(where: { $0.status == .processing }) else { return }
         guard let inputURL = processingInputURL(for: session) else {
             failProcessing(sessionID: session.id, message: "找不到待恢复的音频文件。")
@@ -1482,7 +1573,8 @@ final class MeetingStore: ObservableObject {
         nextOffset: TimeInterval,
         startedAt: Date
     ) {
-        guard var session = try? storage.session(with: sessionID) else { return }
+        guard activeSessionID == sessionID, !Task.isCancelled,
+              var session = try? storage.session(with: sessionID) else { return }
         session.status = .processing
         session.updatedAt = Date()
         session.processingProgress = progress
@@ -1582,24 +1674,11 @@ final class MeetingStore: ObservableObject {
             in: session
         ) else {
             // 只有一路 → 不做说话人标注（"两路都拿到才算数"，见 DualTrackInput）。
-            // 但**必须把没用上的中间文件删掉**：`local.caf` / `remote.caf` 是中间产物，
-            // 留在会话目录里既占地方，又长得像"其实录到了两路"的证据。
-            // 2026-09-14 实测就留下过一个 1.9 MB 的 `remote.caf`（本地路缺失时提前返回，
-            // 系统声那一路还没来得及归一化）。
-            discardCaptureFiles(in: session)
+            // 保留失败的原始轨道供恢复；完整混合录音用于回退转写。
             Diagnostics.audio.notice("双声道不可用：只有一路，已退回单路且不标说话人")
             return nil
         }
         return DualTrackInput(local: local, remote: remote)
-    }
-
-    /// 兜底删掉双声道的中间文件（`.caf`）。正常路径上它们在归一化后就删了。
-    private func discardCaptureFiles(in session: MeetingSession) {
-        let urls = DualTrackPaths.captureURLs(in: storage.folderURL(for: session))
-        for url in [urls.local, urls.remote] where FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.removeItem(at: url)
-            Diagnostics.audio.notice("清掉没用上的中间文件 \(url.lastPathComponent, privacy: .public)")
-        }
     }
 
     private func normalizedTrack(
@@ -1658,6 +1737,8 @@ final class MeetingStore: ObservableObject {
                 initialPrompt: initialPrompt,
                 startedAt: startedAt,
                 label: entry.speaker.displayName,
+                speaker: entry.speaker,
+                previousSegments: bySpeaker.values.flatMap { $0 },
                 trackIndex: index,
                 trackCount: plan.count
             )
@@ -1677,11 +1758,11 @@ final class MeetingStore: ObservableObject {
     ///
     /// 探针**读不动时按"有声音"处理**：一个文件读不出来，不该被当成"对方没说话"，
     /// 那会把整整一半的发言静默丢掉。宁可让 whisper 去转一段静音。
-    private func isAudible(_ url: URL, probe: AudioLevelProbe) async throws -> Bool {
+    private func isAudible(_ url: URL, probe: AudioLevelProbe, threshold: Float = AudioLevelProbe.silenceThreshold) async throws -> Bool {
         do {
             // 扫一遍整段音频是纯计算、可能几百毫秒，扔到主线程外。
             return try await Task.detached(priority: .utility) {
-                try probe.hasAudibleSignal(at: url)
+                try probe.hasAudibleSignal(at: url, threshold: threshold)
             }.value
         } catch is CancellationError {
             throw CancellationError()
@@ -1707,6 +1788,8 @@ final class MeetingStore: ObservableObject {
         initialPrompt: String,
         startedAt: Date,
         label: String,
+        speaker: TranscriptSpeaker,
+        previousSegments: [TranscriptSegment],
         trackIndex: Int,
         trackCount: Int
     ) async throws -> [TranscriptSegment] {
@@ -1726,7 +1809,7 @@ final class MeetingStore: ObservableObject {
                 .appendingPathComponent(
                     String(
                         format: "chunk-%@-%04d",
-                        trackIndex == 0 ? "local" : "remote",
+                        speaker == .local ? "local" : "remote",
                         index + 1
                     )
                 )
@@ -1756,20 +1839,21 @@ final class MeetingStore: ObservableObject {
                 duration: window.length,
                 initialPrompt: initialPrompt
             )
-            segments = Self.mergeSegments(
-                existing: segments,
-                incoming: Self.ownedSegments(chunkTranscript.segments, index: index, in: window)
-            )
-
-            // 每块落地一次（与单路循环同样的理由：中途崩了不该整场重来）。
-            if var saved = try? storage.session(with: sessionID) {
-                saved.transcriptSegments = segments
-                saved.transcriptText = segments.map(\.text).joined(separator: "\n")
-                saved.duration = duration
-                saved.processingChunkStartedAt = Date()
-                try? storage.save(saved)
-                replaceSession(saved)
+            try Task.checkCancellation()
+            let tagged = Self.ownedSegments(chunkTranscript.segments, index: index, in: window).map { segment in
+                var copy = segment; copy.speaker = speaker; return copy
             }
+            segments = Self.mergeSegments(existing: segments, incoming: tagged)
+
+            var saved = try storage.session(with: sessionID)
+            if saved.processingRetainsPreviousResults != true {
+                saved.transcriptSegments = (previousSegments + segments).sorted { $0.start < $1.start }
+                saved.transcriptText = saved.transcriptSegments.map(\.text).joined(separator: "\n")
+            }
+            saved.duration = max(saved.duration ?? 0, duration)
+            saved.processingChunkStartedAt = Date()
+            try storage.save(saved)
+            replaceSession(saved)
         }
         return segments
     }
@@ -1793,10 +1877,7 @@ final class MeetingStore: ObservableObject {
         return ChunkWindow(coreStart: coreStart, coreEnd: coreEnd, start: start, end: end)
     }
 
-    /// 这一块「拥有」哪些段：只有起点落在核心区间里的才算。
-    ///
-    /// 重叠区里被前后两块重复转出来的部分归**前一块**（第一块例外 —— 它没有前一块，
-    /// 拿的是 `start` 到 `coreEnd` 之间的全部）。
+    /// 保留跨越核心区间的完整句，重叠文本在合并时去重。
     static func ownedSegments(
         _ segments: [TranscriptSegment],
         index: Int,
@@ -1806,7 +1887,7 @@ final class MeetingStore: ObservableObject {
             if index == 0 {
                 return segment.start < window.coreEnd
             }
-            return segment.start >= window.coreStart && segment.start < window.coreEnd
+            return segment.end > window.coreStart && segment.start < window.coreEnd
         }
     }
 
@@ -1980,201 +2061,6 @@ final class MeetingStore: ObservableObject {
     }
 }
 
-struct SessionStorage {
-    private let rootURL: URL
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
-
-    init(rootURL: URL? = nil) {
-        let base = rootURL ?? Self.defaultRootURL()
-        self.rootURL = base
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        decoder.dateDecodingStrategy = .iso8601
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-    }
-
-    func loadSessions() -> [MeetingSession] {
-        guard let items = try? FileManager.default.contentsOfDirectory(
-            at: rootURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        return items.compactMap { folderURL in
-            loadSession(from: folderURL)
-        }
-        .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    func createDraftSession(captureMode: CaptureMode) -> MeetingSession {
-        let createdAt = Date()
-        let id = UUID()
-        let folderName = Self.folderName(for: createdAt, id: id)
-        let session = MeetingSession(
-            id: id,
-            folderName: folderName,
-            title: Self.defaultTitle(for: createdAt),
-            createdAt: createdAt,
-            updatedAt: createdAt,
-            captureMode: captureMode,
-            status: .recording,
-            sourceFileName: Self.sourceFileName(for: captureMode),
-            inputAudioFileName: nil,
-            transcriptText: "",
-            transcriptSegments: [],
-            analysis: .empty,
-            whisperCLIPath: "",
-            whisperModelPath: "",
-            duration: nil,
-            errorMessage: nil
-        )
-
-        do {
-            try FileManager.default.createDirectory(at: folderURL(for: session), withIntermediateDirectories: true)
-            try save(session)
-        } catch {
-            // If the save fails, return the in-memory session and let the caller surface the error.
-        }
-
-        return session
-    }
-
-    func session(with id: UUID) throws -> MeetingSession {
-        let folderURLs = try FileManager.default.contentsOfDirectory(
-            at: rootURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
-        for folderURL in folderURLs {
-            guard let session = loadSession(from: folderURL), session.id == id else { continue }
-            return session
-        }
-        throw PipelineError.transcriptionFailed("找不到会话。")
-    }
-
-    func save(_ session: MeetingSession) throws {
-        try FileManager.default.createDirectory(at: folderURL(for: session), withIntermediateDirectories: true)
-        let data = try encoder.encode(session)
-        try data.write(to: sessionFileURL(for: session), options: [.atomic])
-    }
-
-    func delete(_ session: MeetingSession) throws {
-        let folderURL = self.folderURL(for: session)
-        if FileManager.default.fileExists(atPath: folderURL.path) {
-            try FileManager.default.removeItem(at: folderURL)
-        }
-    }
-
-    func folderURL(for session: MeetingSession) -> URL {
-        rootURL.appendingPathComponent(session.folderName, isDirectory: true)
-    }
-
-    func sourceURL(for session: MeetingSession, preferredFileName: String) -> URL {
-        folderURL(for: session).appendingPathComponent(preferredFileName)
-    }
-
-    func inputURL(for session: MeetingSession, preferredFileName: String) -> URL {
-        folderURL(for: session).appendingPathComponent(preferredFileName)
-    }
-
-    func playbackURL(for session: MeetingSession) -> URL? {
-        let candidates: [String]
-        if session.captureMode == .imported {
-            // 导入会议要优先播放用户原始音频。
-            // `input.wav` 是给 whisper 准备的 16 kHz 单声道中间文件，音质差、也更容易被
-            // 后续重处理覆盖；如果它先被播放器拿到，一旦系统播放器不认这份中间 WAV，
-            // 用户明明导入了原音频，底栏也会显示成“暂无可播放音频”。
-            candidates = [session.sourceFileName, session.inputAudioFileName, "input.wav"].compactMap { $0 }
-        } else {
-            candidates = [session.inputAudioFileName, "input.wav", session.sourceFileName].compactMap { $0 }
-        }
-
-        var seen = Set<String>()
-        for name in candidates where !name.isEmpty && seen.insert(name).inserted {
-            let url = sourceURL(for: session, preferredFileName: name)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
-    }
-
-    func copyImportedAudio(url: URL, into session: MeetingSession) throws -> URL {
-        let destination = sourceURL(for: session, preferredFileName: url.lastPathComponent)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.copyItem(at: url, to: destination)
-        var updated = session
-        updated.sourceFileName = destination.lastPathComponent
-        try save(updated)
-        return destination
-    }
-
-    private func loadSession(from folderURL: URL) -> MeetingSession? {
-        let fileURL = folderURL.appendingPathComponent("session.json")
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return try? decoder.decode(MeetingSession.self, from: data)
-    }
-
-    private func sessionFileURL(for session: MeetingSession) -> URL {
-        folderURL(for: session).appendingPathComponent("session.json")
-    }
-
-    /// 数据根。默认是 `~/Library/Application Support/MeetingScribe`。
-    ///
-    /// **可以用环境变量 `MS_DATA_ROOT` 覆盖，指向一个隔离目录。**
-    ///
-    /// 这条覆盖不是给用户用的，是给**界面验证**用的：要截一张"会话列表里有内容"
-    /// 或"速览页有结论和要点"的图，就得先有一场那样的会 —— 而往用户真实的
-    /// 数据根里塞夹具，代价已经被证明过一次（见 `docs/未解决问题与正确做法.md`：
-    /// 真实数据根被整目录级移除，无备份可恢复）。有了这个开关，夹具永远活在
-    /// 临时目录里，真实根**一次都不被写**。
-    ///
-    /// 取不到、或取到空串时静默回落 —— 一个拼错的环境变量不该让 App 起不来。
-    private static func defaultRootURL() -> URL {
-        let fallback = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!
-            .appendingPathComponent("MeetingScribe", isDirectory: true)
-
-        guard let override = ProcessInfo.processInfo.environment["MS_DATA_ROOT"],
-              !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return fallback }
-        return URL(fileURLWithPath: override, isDirectory: true)
-    }
-
-    private static func folderName(for date: Date, id: UUID) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd_HHmmss"
-        let stamp = formatter.string(from: date)
-        return "\(stamp)_\(id.uuidString.prefix(8))"
-    }
-
-    private static func defaultTitle(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.timeZone = .current
-        formatter.dateFormat = "MM-dd HH:mm"
-        return "会议 \(formatter.string(from: date))"
-    }
-
-    private static func sourceFileName(for captureMode: CaptureMode) -> String {
-        switch captureMode {
-        case .microphone:
-            return "source.wav"
-        case .mixed:
-            return "source.mov"
-        case .imported:
-            return "source"
-        }
-    }
-}
 
 enum MeetingAnalysisBuilder {
     static func title(for session: MeetingSession, segments: [TranscriptSegment]) -> String {
