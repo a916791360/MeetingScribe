@@ -43,7 +43,7 @@
 下载后可自行校验完整性（每个版本的 SHA-256 写在该版本 Release 的说明里）：
 
 ```bash
-shasum -a 256 MeetingScribe-<版本>-macOS.zip
+shasum -a 256 MeetingScribe-0.11.6-macOS.zip
 ```
 
 ## 运行
