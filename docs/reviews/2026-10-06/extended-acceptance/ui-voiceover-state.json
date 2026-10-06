@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "voiceover_toggle": ["off", "on", "off"],
+  "ax_labels_checked": true,
+  "keyboard_save_checked": true,
+  "caption_panel_setting_readback": true,
+  "spoken_output_text_capture": false,
+  "manual_hearing_confirmation": false,
+  "status": "partial_pass"
+}

@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "input_device": "MacBook Air麦克风（内建）",
+  "previous_input_device": "外置麦克风",
+  "switched_back_to_previous_device": true,
+  "duration_seconds": 15.559,
+  "status": "ready",
+  "capture_warning_present": false,
+  "system_audio_detected": true,
+  "microphone_detected": true,
+  "source_and_tracks_audio_only": true,
+  "original_user_data_unchanged": true,
+  "media": {
+    "remote.caf": {
+      "bytes": 997132,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "remote.wav": {
+      "bytes": 500614,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "source.wav": {
+      "bytes": 501984,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    },
+    "local.caf": {
+      "bytes": 2991420,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "48000"
+      ]
+    },
+    "local.wav": {
+      "bytes": 501984,
+      "stream_types": [
+        "audio"
+      ],
+      "sample_rates": [
+        "16000"
+      ]
+    }
+  }
+}
