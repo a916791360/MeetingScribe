@@ -48,3 +48,17 @@ Status: resolved
 Area: tests
 
 The new timing assertion did not compile because an unparenthesized try appeared after >=. Replaced it with XCTAssertGreaterThanOrEqual and a captured pre-confirmation Date. The final focused and full warnings-as-errors test runs passed.
+
+
+## [ERR-20261006-006] Source archive verification compatibility
+
+**Logged**: 2026-10-06
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+System Python tarfile lacks the newer extractall(filter=...) argument.
+
+### Resolution
+Verify paths of the task-produced Git archive before extracting with the supported API. Regenerate the source delivery against the final local commit and verify the full baseline patch produces that exact tree. The failure affected delivery verification only, not the installed App or data.
