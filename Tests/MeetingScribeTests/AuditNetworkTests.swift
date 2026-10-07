@@ -49,20 +49,28 @@ final class AuditNetworkTests: XCTestCase {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         process.arguments = ["python3", repo.appendingPathComponent("Tests/Fixtures/summary-server.py").path, root.path]
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let diagnosticURL = root.appendingPathComponent("startup.log")
+        FileManager.default.createFile(atPath: diagnosticURL.path, contents: nil)
+        let diagnostic = try FileHandle(forWritingTo: diagnosticURL)
+        process.standardError = diagnostic
+        defer { try? diagnostic.close() }
         try process.run()
-        for _ in 0..<200 {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while ContinuousClock.now < deadline {
             let portURL = root.appendingPathComponent("ports.json")
             if let data = try? Data(contentsOf: portURL),
                let ports = try? JSONDecoder().decode([String: Int].self, from: data),
                let origin = ports["origin"], let recipient = ports["recipient"] {
                 return Server(process: process, root: root, origin: origin, recipient: recipient, exited: exited)
             }
+            if !process.isRunning { break }
             try await Task.sleep(for: .milliseconds(10))
         }
         if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         await Task.detached { Self.waitForFixtureExit(exited) }.value
-        throw NSError(domain: "ReviewFixture", code: 1)
+        let details = (try? String(contentsOf: diagnosticURL, encoding: .utf8)) ?? "No startup diagnostics"
+        try? FileManager.default.removeItem(at: root)
+        throw NSError(domain: "ReviewFixture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Loopback fixture startup failed: \(details)"])
     }
 
     private static func waitForFixtureExit(_ exited: DispatchSemaphore) {
