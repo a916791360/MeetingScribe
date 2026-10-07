@@ -1,0 +1,138 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[1/7] Write swift-version--58304C5D6DBC2206.txt
+[3/35] Compiling MeetingScribe KeychainStore.swift
+[4/35] Compiling MeetingScribe MeetingAnalysisWorker.swift
+[5/35] Compiling MeetingScribe MeetingApplicationDelegate.swift
+[6/37] Compiling MeetingScribe SummaryEngine.swift
+[7/37] Compiling MeetingScribe SummaryModelDiscovery.swift
+[8/37] Compiling MeetingScribe TranscriptCleaner.swift
+[9/37] Compiling MeetingScribe TranscriptEditor.swift
+[10/37] Compiling MeetingScribe TranscriptMaterial.swift
+[11/37] Compiling MeetingScribe TranscriptMerger.swift
+[12/37] Compiling MeetingScribe TranscriptionCheckpoint.swift
+[13/37] Compiling MeetingScribe WhisperPipeline.swift
+[14/37] Compiling MeetingScribe WindowConfiguration.swift
+[15/37] Compiling MeetingScribe AppTheme.swift
+[16/37] Compiling MeetingScribe AudioOnlyRecordingAssembler.swift
+[17/37] Compiling MeetingScribe AudioPlayback.swift
+[18/37] Compiling MeetingScribe MeetingExport.swift
+[19/37] Compiling MeetingScribe MeetingModels.swift
+[20/37] Compiling MeetingScribe MeetingScribeApp.swift
+[21/37] Compiling MeetingScribe SafeDiagnostics.swift
+[22/37] Compiling MeetingScribe SessionRepository.swift
+[23/37] Compiling MeetingScribe SessionStorage.swift
+[24/37] Compiling MeetingScribe AudioTrackRecorder.swift
+[25/37] Compiling MeetingScribe Diagnostics.swift
+[26/37] Compiling MeetingScribe Glossary.swift
+[27/37] Compiling MeetingScribe MeetingSessionLoader.swift
+[28/37] Compiling MeetingScribe MeetingStore.swift
+[29/37] Compiling MeetingScribe MinutesMarkup.swift
+[30/37] Emitting module MeetingScribe
+[31/37] Compiling MeetingScribe WorkbenchContentPlan.swift
+[32/37] Compiling MeetingScribe WorkbenchView.swift
+[32/37] Write Objects.LinkFileList
+[33/37] Linking MeetingScribe
+[34/37] Applying MeetingScribe
+[36/78] Compiling MeetingScribeTests TranscriptEditorTests.swift
+[37/78] Compiling MeetingScribeTests TranscriptMaterialTests.swift
+[38/78] Compiling MeetingScribeTests TranscriptMergerTests.swift
+[39/78] Compiling MeetingScribeTests TranscriptPageTests.swift
+[40/82] Compiling MeetingScribeTests MeetingExportTests.swift
+[41/82] Compiling MeetingScribeTests MinutesMarkupTests.swift
+[42/82] Compiling MeetingScribeTests MixedRecordingSessionConcurrencyTests.swift
+[43/82] Compiling MeetingScribeTests OverviewBulletTests.swift
+[44/82] Compiling MeetingScribeTests ProcessingChunkWindowTests.swift
+[45/82] Compiling MeetingScribeTests ProcessingProgressEstimatorTests.swift
+[46/82] Compiling MeetingScribeTests QualityEvalTests.swift
+[47/82] Compiling MeetingScribeTests SummaryDirectiveParityTests.swift
+[48/82] Compiling MeetingScribeTests TranscriptPlayheadTests.swift
+[49/82] Compiling MeetingScribeTests TranscriptSpeakerTests.swift
+[50/82] Compiling MeetingScribeTests WhisperJSONDecodingTests.swift
+[51/82] Compiling MeetingScribeTests WorkbenchContentPlanTests.swift
+[52/82] Compiling MeetingScribeTests SummaryEngineAdmissionTests.swift
+[53/82] Compiling MeetingScribeTests SummaryEngineBudgetTests.swift
+[54/82] Compiling MeetingScribeTests SummaryLifecycleTests.swift
+[55/82] Compiling MeetingScribeTests SummaryModelDiscoveryTests.swift
+[56/82] Compiling MeetingScribeTests AppAppearanceTests.swift
+[57/82] Compiling MeetingScribeTests AudioOnlyRecordingAssemblerTests.swift
+[58/82] Compiling MeetingScribeTests AudioTrackPipelineTests.swift
+[59/82] Compiling MeetingScribeTests AudioTrackRecorderTests.swift
+[60/82] Compiling MeetingScribeTests AuditClosureTests.swift
+[61/82] Emitting module MeetingScribeTests
+[62/82] Compiling MeetingScribeTests GlossaryTests.swift
+[63/82] Compiling MeetingScribeTests LayoutTokenTests.swift
+[64/82] Compiling MeetingScribeTests LocalActionDeadlineTests.swift
+[65/82] Compiling MeetingScribeTests MeetingAnalysisModelLabelTests.swift
+[66/82] Compiling MeetingScribeTests MeetingAnalysisV2Tests.swift
+[67/82] Compiling MeetingScribeTests SummaryModelStateTests.swift
+[68/82] Compiling MeetingScribeTests SummaryPageSplitTests.swift
+[69/82] Compiling MeetingScribeTests TranscriptCleanerTests.swift
+[70/82] Compiling MeetingScribeTests TranscriptEditPersistenceTests.swift
+[71/82] Compiling MeetingScribeTests AuditDataSafetyTests.swift
+[72/82] Compiling MeetingScribeTests AuditDeliveryTests.swift
+[73/82] Compiling MeetingScribeTests AuditNetworkTests.swift
+[74/82] Compiling MeetingScribeTests AuditRecordingPipelineTests.swift
+[75/82] Compiling MeetingScribeTests BackgroundEditingTests.swift
+[76/82] Compiling MeetingScribeTests BackgroundLifecycleTests.swift
+[77/82] Compiling MeetingScribeTests CaptureReadinessTests.swift
+[78/82] Compiling MeetingScribeTests CheckpointRepositoryTests.swift
+[79/82] Compiling MeetingScribeTests DualTrackPathsTests.swift
+[80/82] Compiling MeetingScribeTests ExportWiringTests.swift
+[81/84] Compiling MeetingScribePackageTests runner.swift
+[82/84] Emitting module MeetingScribePackageTests
+[82/84] Write Objects.LinkFileList
+[83/84] Linking MeetingScribePackageTests
+Build complete! (8.16s)
+Test Suite 'Selected tests' started at 2026-10-07 11:10:46.624.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-07 11:10:46.626.
+Test Suite 'AppAppearanceTests' started at 2026-10-07 11:10:46.626.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' passed (0.002 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' passed (0.000 seconds).
+Test Suite 'AppAppearanceTests' passed at 2026-10-07 11:10:46.629.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'LayoutTokenTests' started at 2026-10-07 11:10:46.629.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' passed (0.000 seconds).
+Test Suite 'LayoutTokenTests' passed at 2026-10-07 11:10:46.630.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'WorkbenchContentPlanTests' started at 2026-10-07 11:10:46.630.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' passed (0.000 seconds).
+Test Suite 'WorkbenchContentPlanTests' passed at 2026-10-07 11:10:46.631.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-07 11:10:46.631.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'Selected tests' passed at 2026-10-07 11:10:46.631.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.004 (0.007) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

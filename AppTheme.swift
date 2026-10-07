@@ -70,6 +70,8 @@ enum AppTheme {
     /// 内容面边缘，仅用发丝线定界，不给导航添加阴影或外框。
     static let contentEdge = dynamic(light: (0.882, 0.890, 0.906), dark: (0.216, 0.235, 0.278))
     static let sidebarWidth: CGFloat = 280
+    /// 原生窗口按钮与内容面之间的连续底层，兼作空白拖动区。
+    static let windowChromeHeight: CGFloat = 28
 
     /// 局部辅助区域的底色（设置、提示与控件）。
     static let paper = dynamic(light: (0.972, 0.979, 0.993), dark: (0.086, 0.094, 0.114))

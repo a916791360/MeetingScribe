@@ -1,0 +1,58 @@
+{
+  "before": {
+    "fullSizeContentView": true,
+    "buttonsEnabled": [
+      true,
+      true,
+      true
+    ],
+    "frame": [
+      205,
+      156,
+      1060,
+      692
+    ],
+    "dragRegions": [
+      {
+        "class": "DragView",
+        "height": 40,
+        "width": 1060,
+        "windowRect": "{{0, 652}, {1060, 40}}"
+      }
+    ],
+    "separatorRemoved": true,
+    "buttonsPresent": [
+      true,
+      true,
+      true
+    ]
+  },
+  "after": {
+    "fullSizeContentView": true,
+    "buttonsEnabled": [
+      true,
+      true,
+      true
+    ],
+    "frame": [
+      205,
+      156,
+      1060,
+      692
+    ],
+    "dragRegions": [
+      {
+        "class": "DragView",
+        "height": 40,
+        "width": 1060,
+        "windowRect": "{{0, 652}, {1060, 40}}"
+      }
+    ],
+    "separatorRemoved": true,
+    "buttonsPresent": [
+      true,
+      true,
+      true
+    ]
+  }
+}

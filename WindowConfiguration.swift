@@ -19,19 +19,20 @@ struct WindowConfigurationView: NSViewRepresentable {
     private func configure(_ window: NSWindow?) {
         guard let window else { return }
 
-        // 原生标题栏只保留窗口控制和拖动区域；会议标题属于右侧内容面。
+        // 内容底层延伸到窗口顶部，原生窗口控制继续由 AppKit 承载。
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.backgroundColor = NSColor(AppTheme.windowCanvas)
         window.setFrameAutosaveName("MeetingScribeMainWindow")
-        window.styleMask.insert([.titled, .closable, .miniaturizable, .resizable])
+        window.styleMask.insert([.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])
         window.standardWindowButton(.zoomButton)?.isHidden = false
         window.standardWindowButton(.zoomButton)?.isEnabled = true
         window.contentMinSize = NSSize(width: 1060, height: 660)
         window.isRestorable = true
         window.collectionBehavior.insert(.fullScreenPrimary)
 
-        guard !window.isZoomed,
+        guard !window.isZoomed, !window.styleMask.contains(.fullScreen),
               let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame else {
             return
         }
@@ -62,6 +63,20 @@ struct WindowConfigurationView: NSViewRepresentable {
 
         if frame != window.frame {
             window.setFrame(frame, display: false)
+        }
+    }
+}
+
+/// 只让顶部空白区域拖动窗口，正文选择、列表和按钮仍处理自己的鼠标事件。
+struct WindowDragRegion: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragView: NSView {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
         }
     }
 }

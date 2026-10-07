@@ -1,4 +1,4 @@
-MeetingScribe 0.12.0 —— 安装与首次使用
+MeetingScribe 0.12.1 —— 安装与首次使用
 =====================================
 
 系统要求：Apple Silicon（M 系列芯片），macOS 15 或更新版本。

@@ -48,29 +48,21 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        HStack(spacing: 0) {
-            if isSidebarVisible {
-                WorkbenchSidebarView()
-                    .frame(width: AppTheme.sidebarWidth)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("会议列表")
-            }
-            WorkbenchDetailView(isSidebarVisible: $isSidebarVisible)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("会议内容")
-                .background(AppTheme.contentSurface)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
-                        .strokeBorder(AppTheme.contentEdge, lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
-                .padding(.leading, isSidebarVisible ? 0 : AppTheme.space3)
-                .padding([.top, .trailing, .bottom], AppTheme.space3)
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: AppTheme.windowChromeHeight)
+                .accessibilityHidden(true)
+            workspace
         }
         .frame(minWidth: 1060, minHeight: 660)
         .background(AppTheme.windowCanvas)
+        .overlay(alignment: .top) {
+            WindowDragRegion()
+                .frame(maxWidth: .infinity)
+                .frame(height: AppTheme.windowChromeHeight + AppTheme.space3)
+                .accessibilityHidden(true)
+        }
+        .ignoresSafeArea(.container, edges: .top)
         .fileImporter(
             isPresented: $store.importAudioPresented,
             allowedContentTypes: [.audio],
@@ -97,12 +89,33 @@ struct ContentView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
-        // 启动时先看一眼两道录音权限（纯 preflight，不会弹窗）。
         .task { store.refreshCapturePermissions() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                store.refreshCapturePermissions()
+            if phase == .active { store.refreshCapturePermissions() }
+        }
+    }
+
+    private var workspace: some View {
+        HStack(spacing: 0) {
+            if isSidebarVisible {
+                WorkbenchSidebarView()
+                    .frame(width: AppTheme.sidebarWidth)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("会议列表")
             }
+            WorkbenchDetailView(isSidebarVisible: $isSidebarVisible)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("会议内容")
+                .background(AppTheme.contentSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                        .strokeBorder(AppTheme.contentEdge, lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .padding(.leading, isSidebarVisible ? 0 : AppTheme.space3)
+                .padding([.top, .trailing, .bottom], AppTheme.space3)
         }
     }
 
@@ -123,7 +136,7 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 窗口交通灯仍由原生标题栏承载；列表直接铺在窗口底层。
+            // 顶部已经为原生窗口控制留白；列表直接铺在窗口底层。
             VStack(alignment: .leading, spacing: AppTheme.space3) {
                 Text("MeetingScribe")
                     .font(.system(size: 22, weight: .semibold, design: .default))
