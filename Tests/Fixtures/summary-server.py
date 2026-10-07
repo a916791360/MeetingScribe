@@ -3,6 +3,7 @@
 import http.server
 import json
 import pathlib
+import socketserver
 import sys
 import threading
 
@@ -10,6 +11,14 @@ root = pathlib.Path(sys.argv[1])
 root.mkdir(parents=True, exist_ok=True)
 lock = threading.Lock()
 marker = "REVIEW_SYNTHETIC_CREDENTIAL_NOT_A_REAL_KEY"
+
+class LoopbackServer(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind performs reverse DNS even for 127.0.0.1.
+        # This synthetic fixture needs only the bound port, never DNS.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -80,8 +89,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass  # The response-limit test intentionally cancels reading.
 
-origin = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-recipient = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+print("Loopback fixture: binding origin", file=sys.stderr, flush=True)
+origin = LoopbackServer(("127.0.0.1", 0), Handler)
+print("Loopback fixture: binding recipient", file=sys.stderr, flush=True)
+recipient = LoopbackServer(("127.0.0.1", 0), Handler)
 threading.Thread(target=recipient.serve_forever, daemon=True).start()
 (root / "ports.json").write_text(json.dumps({"origin": origin.server_port, "recipient": recipient.server_port}))
+print("Loopback fixture: ready", file=sys.stderr, flush=True)
 origin.serve_forever()

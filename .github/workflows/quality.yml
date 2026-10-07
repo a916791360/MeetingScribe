@@ -39,6 +39,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: 固定网络测试夹具的 Python 环境
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - name: 选最新 Xcode（swift-tools-version 要求 6.1+）
         run: |
           latest=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
