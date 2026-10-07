@@ -2,7 +2,7 @@
 
 本地优先的 macOS 会议录音与转写 App。
 
-当前开发版本：`0.12.0`（内容卡片与导航层级调整，本地构建）
+当前版本：[`0.12.0`](https://github.com/a916791360/MeetingScribe/releases/tag/v0.12.0)（内容卡片与导航层级调整，包含此前审查修复）
 
 ## 目标
 
@@ -44,7 +44,11 @@
 
 不想编译的话，到 [Releases](https://github.com/a916791360/MeetingScribe/releases/latest)
 下载 `MeetingScribe-<版本>-macOS.zip`，解压后把 `MeetingScribe.app` 拖进「应用程序」。
-**包内自带转写引擎和模型，不需要另外安装任何东西。**
+**安装包支持 Apple Silicon（M 系列芯片）与 macOS 15+，不支持 Intel Mac 或 Windows。包内自带转写引擎和模型，无需安装 Xcode、Python 或 whisper.cpp。**
+
+如果下载页面显示 404，请确认你的 GitHub 账号有仓库访问权限。
+录制会议需要麦克风、屏幕与系统音频录制权限；导入已有音频可以直接在本机转写。
+默认本地保守整理无需 API Key，但材料不充分时可能不生成速览或纪要；需要大模型整理时，在设置中配置 Ollama 或云端接口。
 
 首次打开会被 macOS Gatekeeper 拦下（本 App 未做 Apple 公证），**这不是文件损坏**——
 按下面「分发给别人安装」第 2 条，在「系统设置 → 隐私与安全性 → 安全性」里放行一次即可，
@@ -197,7 +201,7 @@ cmake -B build && cmake --build build -j --config Release
 `Contents/Resources/Licenses/`，来源见 [ThirdPartyLicenses](Packaging/ThirdPartyLicenses/SOURCES.md)。
 自定义转写运行时若含其他组件，打包者需补齐其许可与版本来源。
 
-本地审查版 0.11.9 使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
+0.12.0 安装包沿用 0.11.9 审查时固定的运行时，使用 [runtime-lock.json](Packaging/runtime-lock.json) 固定的
 whisper.cpp v1.9.4 提交和官方 small 模型 SHA-256。使用已有模型构建，不修改已安装 App：
 
 ```bash
@@ -234,7 +238,7 @@ App 内 `Contents/Resources/RuntimeProvenance.plist` 记录源码、模型、构
 
 完整审查、回归结果与验收边界见 [总报告](docs/reviews/2026-10-06/final-review-and-upgrade.md)
 及 [0.11.6追加报告](docs/reviews/2026-10-06/lifecycle/review-and-upgrade.md)。
-本轮未公开发版，正式分发仍需Developer ID和Apple公证。
+这些修复已包含在 0.12.0 安装包中；首次打开步骤见上面的下载安装说明。
 
 ### 0.11.3 审查收尾
 

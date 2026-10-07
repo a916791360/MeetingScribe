@@ -1,0 +1,16 @@
+{
+  "exit_code": 0,
+  "json_parsed": true,
+  "segments": 1,
+  "transcript_characters": 66,
+  "keywords_recognized": {
+    "安装": true,
+    "会议": true,
+    "左侧": true,
+    "右侧": true,
+    "转写": true
+  },
+  "mode": "CPU",
+  "resources_from": "extracted release ZIP",
+  "external_runtime_required": false
+}
