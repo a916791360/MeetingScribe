@@ -23,12 +23,7 @@ enum MeetingResultTab: String, CaseIterable, Identifiable {
 
 extension MeetingSession {
     var displayStatusTitle: String { isRecordingPreparationCancelled ? "已取消录音准备" : status.title }
-    /// 会议元信息压成一行**纯文本**。
-    ///
-    /// 为什么是纯文本：窗口副标题（`navigationSubtitle`）只吃 `Text`，
-    /// 渲染不了自定义视图，所以那一行不能再摆 Label + SF Symbol。
-    /// 反过来说，这刚好让「会议头」整块从正文里消失——
-    /// 它原本占掉正文顶部一整行，只为了重复标题栏里已经有的信息。
+    /// 内容卡片标题下的会议元信息，与进行中状态共用一行文本。
     var metaLine: String { metaLine(includingStatus: true) }
 
     /// `includingStatus: false` 专给「进行中」的副标题用。
@@ -48,24 +43,34 @@ extension MeetingSession {
 
 struct ContentView: View {
     @EnvironmentObject private var store: MeetingStore
+    @AppStorage("workbenchSidebarVisible") private var isSidebarVisible = true
     /// 应用重新回到前台时刷新权限 —— 用户很可能刚去系统设置里点过授权。
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        NavigationSplitView {
-            WorkbenchSidebarView()
-        } detail: {
-            if store.isLoadingSessions {
-                ProgressView("正在读取会议记录…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("正在读取会议记录，请稍候")
-            } else {
-                WorkbenchDetailView()
+        HStack(spacing: 0) {
+            if isSidebarVisible {
+                WorkbenchSidebarView()
+                    .frame(width: AppTheme.sidebarWidth)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("会议列表")
             }
+            WorkbenchDetailView(isSidebarVisible: $isSidebarVisible)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("会议内容")
+                .background(AppTheme.contentSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                        .strokeBorder(AppTheme.contentEdge, lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .padding(.leading, isSidebarVisible ? 0 : AppTheme.space3)
+                .padding([.top, .trailing, .bottom], AppTheme.space3)
         }
-        .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1060, minHeight: 660)
-        .background(AppTheme.paper)
+        .background(AppTheme.windowCanvas)
         .fileImporter(
             isPresented: $store.importAudioPresented,
             allowedContentTypes: [.audio],
@@ -118,7 +123,7 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 交通灯区域由原生 NavigationSplitView + 标题栏统一让位，这里不再手写占位。
+            // 窗口交通灯仍由原生标题栏承载；列表直接铺在窗口底层。
             VStack(alignment: .leading, spacing: AppTheme.space3) {
                 Text("MeetingScribe")
                     .font(.system(size: 22, weight: .semibold, design: .default))
@@ -134,7 +139,10 @@ struct WorkbenchSidebarView: View {
             .padding(.top, AppTheme.space4)
             .padding(.bottom, AppTheme.space5)
 
-            if store.sessions.isEmpty {
+            if store.isLoadingSessions {
+                ProgressView("正在读取…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.sessions.isEmpty {
                 Spacer(minLength: 0)
                 WorkbenchSidebarEmptyState()
                     .padding(.horizontal, AppTheme.space4)
@@ -165,8 +173,8 @@ struct WorkbenchSidebarView: View {
                 }
             }
         }
-        .frame(minWidth: 274, idealWidth: 288, maxWidth: 330)
-        .background(AppTheme.paper)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.windowCanvas)
     }
 
 }
@@ -415,10 +423,28 @@ struct WorkbenchSidebarSection<Content: View>: View {
 
 struct WorkbenchDetailView: View {
     @EnvironmentObject private var store: MeetingStore
+    @Binding var isSidebarVisible: Bool
 
     var body: some View {
+        VStack(spacing: 0) {
+            workspaceHeader
+            Rectangle()
+                .fill(AppTheme.contentEdge)
+                .frame(height: 1)
+                .accessibilityHidden(true)
+            workspaceContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(AppTheme.contentSurface)
+    }
+
+    private var workspaceContent: some View {
         Group {
-            if let session = store.workspaceSession {
+            if store.isLoadingSessions {
+                ProgressView("正在读取会议记录…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("正在读取会议记录，请稍候")
+            } else if let session = store.workspaceSession {
                 WorkbenchSessionWorkspace(session: session)
             } else {
                 WorkbenchEmptyState()
@@ -442,10 +468,39 @@ struct WorkbenchDetailView: View {
                 }
             }
         }
-        .background(AppTheme.paper)
-        .navigationTitle(store.workspaceSession?.title ?? "会议")
-        .navigationSubtitle(navigationSubtitleText)
-        .toolbar { workbenchToolbar }
+        .background(AppTheme.contentSurface)
+    }
+
+    private var workspaceHeader: some View {
+        HStack(spacing: AppTheme.space4) {
+            Button {
+                isSidebarVisible.toggle()
+            } label: {
+                Image(systemName: "sidebar.left")
+            }
+            .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
+            .help(isSidebarVisible ? "收起会议列表（⌃⌘S）" : "展开会议列表（⌃⌘S）")
+            .accessibilityLabel(isSidebarVisible ? "收起会议列表" : "展开会议列表")
+            .keyboardShortcut("s", modifiers: [.control, .command])
+
+            VStack(alignment: .leading, spacing: AppTheme.space1) {
+                Text(store.workspaceSession?.title ?? "会议")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+                    .help(store.workspaceSession?.title ?? "会议")
+                    .accessibilityAddTraits(.isHeader)
+                workspaceSubtitleText
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            workbenchActions
+        }
+        .padding(.horizontal, AppTheme.space6)
+        .padding(.vertical, AppTheme.space4)
     }
 
     /// 顶部提示条的**唯一**一处排版口径（宽度 620 / 居中 / 上留一档气口）。
@@ -465,16 +520,10 @@ struct WorkbenchDetailView: View {
             .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    /// 副标题原来只放一句「准备就绪」，一整条宽度只承载四个字，信息密度太低。
-    /// 现在由会议元信息接管（日期 · 时长 · 状态 · 整理模型），也就是原来正文顶部那一行，
-    /// 所以正文少了一整行、标题栏的副标题位才真正被用起来。
-    ///
-    /// 录音 / 转写 / 整理进行中时把实时状态顶到最前——这时候进度比元信息更该被看见；
-    /// 终态（已完成 / 失败）本来就写在元信息里，不会丢。
-    private var navigationSubtitleText: Text {
+    /// 内容面副标题优先显示实时状态，其余时间显示会议日期、时长和模型。
+    private var workspaceSubtitleText: Text {
+        if store.isLoadingSessions { return Text("正在读取会议记录…") }
         guard let session = store.workspaceSession else {
-            // 空态副标题原来是 `store.statusText`（初始值就是「准备就绪」四个字）——
-            // 一整条宽度换不来任何信息（§六 记录项 ⑤）。改成交代"这一屏现在能做什么"。
             return Text("还没有会议 · 可以直接开始录音，或者导入一段已有音频")
         }
         if store.isSavingSessions || store.isDeletingSessions || store.isPreparingRecording || store.isRecording || store.isProcessing {
@@ -485,72 +534,45 @@ struct WorkbenchDetailView: View {
         return Text(session.metaLine)
     }
 
-    // 全局操作注册到原生标题栏，和侧边栏开关同一行，不再自绘第二条横栏。
-    // 三个动作按角色分层，而不是三个同样轻重的裸字形（**顺序即此**）：
-    //   主操作 → 开始录音 / 结束并转写 / 停止处理 / 重新处理（实底主色，排在最左）
-    //   次要 → 导入音频（无填充底盘）
-    //   全局 → 设置（方形图标钮，齿轮是通用符号，不给文字）
-    //
-    // 为什么没有会话时整条撤掉：空态正文里已经有一对很大的「开始录音 / 导入音频」，
-    // 标题栏再摆一遍同样的两个动作，同一屏就有四处入口在做两件事；而且此刻选中的
-    // 是"什么都没有"，工具栏却在喊"开始录音"，权重给错了对象。
-    // 设置是 app 级动作、不针对某场会议，跟着一起收走，改由 app 菜单的「设置…（⌘,）」
-    // 承担——那本来就是 macOS 上设置该在的地方。
-    @ToolbarContentBuilder
-    private var workbenchToolbar: some ToolbarContent {
+    // 全局操作随标题放在内容卡片内；空态使用正文中的主要入口。
+    @ViewBuilder
+    private var workbenchActions: some View {
         if let session = store.workspaceSession {
-            // ⚠️ 三个动作装在**同一个** ToolbarItem 里，而不是三个并列的 ToolbarItem。
-            //
-            // 为什么：macOS 会把同一 placement 的相邻 toolbar item 收成「一组」，组内间距
-            // 由系统拍板。实测这组间距只有 **1pt** —— 像素核验：导入音频胶囊右沿 x=2430、
-            // 开始录音左沿 x=2433，中间只隔 2px@2x（1pt）；开始录音与齿轮之间同样 1pt。
-            // 三颗胶囊因此糊成一条，深色下更像同一个控件被切了三刀（用户原话：
-            // 「很怪，不规范，贴一起了，尤其深夜模式下，还有重叠的地方」）。
-            // 装进一个间距自控的 HStack 之后，间距不再受工具栏分组启发式摆布。
-            //
-            // 8pt 是 macOS 工具栏项目之间的标准间距，三颗因此既分开、又仍读成一排。
-            //
-            // **顺序：主操作在左、导入在右（v0.6.2 按用户要求调换）**。
-            // 原来是「导入音频 · 开始录音 · 设置」，主操作被夹在中间；
-            // 现在主操作紧挨窗口左侧一侧，视线从侧边栏扫过来第一眼就是它，
-            // 低频的「导入音频」退到靠设置那一侧。主次仍由填充色区分，不由左右区分。
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: AppTheme.space2) {
-                    Button {
-                        performPrimaryAction(for: session)
-                    } label: {
-                        Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
-                    }
-                    .labelStyle(.titleAndIcon)
-                    // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
-                    .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
-                    .help(primaryTitle(for: session))
-                    .accessibilityLabel(primaryTitle(for: session))
-                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions)
-
-                    Button {
-                        store.importAudioPresented = true
-                    } label: {
-                        Label("导入音频", systemImage: "square.and.arrow.down")
-                    }
-                    .labelStyle(.titleAndIcon)
-                    // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
-                    .buttonStyle(WorkbenchToolbarButtonStyle())
-                    .help("导入一段已有音频")
-                    .accessibilityLabel("导入音频")
-                    .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
-
-                    Button {
-                        store.showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
-                    .help("设置")
-                    .accessibilityLabel("设置")
+            HStack(spacing: AppTheme.space2) {
+                Button {
+                    performPrimaryAction(for: session)
+                } label: {
+                    Label(primaryTitle(for: session), systemImage: primaryIcon(for: session))
                 }
-                .accessibilityElement(children: .contain)
+                .labelStyle(.titleAndIcon)
+                // 实底 + 着色：整条里唯一的高权重，录制/处理中整体转为危险色。
+                .buttonStyle(WorkbenchToolbarButtonStyle(tint: primaryTint))
+                .help(primaryTitle(for: session))
+                .accessibilityLabel(primaryTitle(for: session))
+                .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions)
+
+                Button {
+                    store.importAudioPresented = true
+                } label: {
+                    Label("导入音频", systemImage: "square.and.arrow.down")
+                }
+                .labelStyle(.titleAndIcon)
+                // 与主操作共用一套底盘（实底 / 无描边 / 胶囊），主次只由填充色区分。
+                .buttonStyle(WorkbenchToolbarButtonStyle())
+                .help("导入一段已有音频")
+                .accessibilityLabel("导入音频")
+                .disabled(store.isLoadingSessions || store.isDeletingSessions || store.isSavingSessions || store.isRecording || store.isPreparingRecording || store.isProcessing)
+
+                Button {
+                    store.showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(WorkbenchToolbarButtonStyle(iconOnly: true))
+                .help("设置")
+                .accessibilityLabel("设置")
             }
+            .accessibilityElement(children: .contain)
         }
     }
 
@@ -735,7 +757,7 @@ struct WorkbenchSessionWorkspace: View {
                 }
             }
         }
-        .background(AppTheme.paper)
+        .background(AppTheme.contentSurface)
         .onAppear {
             audioPlayer.load(url: store.audioURL(for: session))
         }

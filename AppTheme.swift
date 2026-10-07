@@ -1,28 +1,8 @@
 import SwiftUI
 import AppKit
 
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: modern-minimal · macrostructure: Workbench · theme: Cobalt · motion: cut
- * chrome: 原生分段控件 —— 结果页控制条不再铺液态玻璃。
- *         玻璃的质感来自折射「背后有变化的内容」，而这条控制条背后是纯色纸面，
- *         没有东西可折射，玻璃只剩一块发灰的底，比不做更脏（第五轮用户原话「不精致、没质感」）。
- *         现在回到 macOS 原生的纪律：容器只包住真正需要边界的东西（三个 Tab），
- *         右侧图标不要底板，质感交给排印、2pt 内衬和 1pt 发丝线。
- *
- * theme: Cobalt · 双外观（浅色 / 深色）。
- *
- * **这次改动的判据只有一条：色板必须跟着系统外观走。** 原来 15 个颜色全是写死的浅色值，
- * 系统切到深夜模式后，窗口标题栏、sheet 页头这些由 macOS 自己画的 chrome 变深了，
- * 而应用自己画的纸面、文字、线还停在浅色 —— 于是一屏里两套语言打架：
- * sheet 页头是深底配深墨字（几乎看不见），标题栏是深底配浅色按钮。这就是「没适配」的真身。
- *
- * 做法：每个 token 用 `NSColor(name:dynamicProvider:)` 包成**随外观解析**的动态色，
- * SwiftUI 在绘制时按当前 `NSAppearance` 取值，运行时切换外观也会自动跟上。
- *
- * **浅色档的值一个字节都没动** —— 把现有数值原样搬进 `light:` 参数，所以浅色模式
- * 与改动前逐像素一致（唯一的例外是三处调用点，见 WorkbenchView 注释）。
- * 新增的 `controlSurface` / `segmentSelected` / `accentFill` / `dangerFill` 四个 token
- * 在浅色档同样取现有值，属于「给已有颜色补个名字」，不产生视觉变化。
- */
+// 窗口底层承载导航；统一内容面承载标题、正文和播放器。
+// 所有表面随 NSAppearance 切换，深色模式保持同样的层级关系。
 
 /// 界面外观。三档，与 macOS「外观」偏好一一对应。
 ///
@@ -83,7 +63,15 @@ enum AppTheme {
     // 所以 `paperSoft` 在浅色档比 `paper` 亮一点、在深色档也比 `paper` 亮一点 ——
     // 一样的方向，两种外观下都读成「抬起来的一层」。
 
-    /// 页面底。最外层的纸面。
+    /// 窗口底层：侧栏与内容卡片外侧的中性灰。
+    static let windowCanvas = dynamic(light: (0.945, 0.949, 0.957), dark: (0.078, 0.086, 0.102))
+    /// 主内容面：浅色为白色，深色为比底层明亮一档的表面。
+    static let contentSurface = dynamic(light: (1, 1, 1), dark: (0.125, 0.137, 0.161))
+    /// 内容面边缘，仅用发丝线定界，不给导航添加阴影或外框。
+    static let contentEdge = dynamic(light: (0.882, 0.890, 0.906), dark: (0.216, 0.235, 0.278))
+    static let sidebarWidth: CGFloat = 280
+
+    /// 局部辅助区域的底色（设置、提示与控件）。
     static let paper = dynamic(light: (0.972, 0.979, 0.993), dark: (0.086, 0.094, 0.114))
     /// 抬升面：面板、分组卡、卡片。
     static let paperSoft = dynamic(light: (0.988, 0.991, 0.997), dark: (0.153, 0.168, 0.204))

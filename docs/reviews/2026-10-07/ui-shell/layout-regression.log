@@ -1,0 +1,64 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Emitting module MeetingScribe
+[4/7] Compiling MeetingScribe WorkbenchView.swift
+[4/9] Write Objects.LinkFileList
+[5/9] Linking MeetingScribe
+[6/9] Applying MeetingScribe
+[8/10] Emitting module MeetingScribeTests
+[8/10] Write Objects.LinkFileList
+[9/10] Linking MeetingScribePackageTests
+Build complete! (4.58s)
+Test Suite 'Selected tests' started at 2026-10-07 09:12:34.249.
+Test Suite 'MeetingScribePackageTests.xctest' started at 2026-10-07 09:12:34.250.
+Test Suite 'AppAppearanceTests' started at 2026-10-07 09:12:34.250.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testCaseOrderMatchesPickerOrder]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testEveryCaseHasUserFacingCopy]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testNSAppearanceMapping]' passed (0.001 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValueRoundTrip]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' started.
+Test Case '-[MeetingScribeTests.AppAppearanceTests testRawValuesAreStablePersistenceContract]' passed (0.000 seconds).
+Test Suite 'AppAppearanceTests' passed at 2026-10-07 09:12:34.253.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'LayoutTokenTests' started at 2026-10-07 09:12:34.253.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testDocumentRowsFillTheStructuralColumn]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProseLineLeavesThePanelItsPadding]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testProsePanelSpansTheStructuralColumnExactly]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' started.
+Test Case '-[MeetingScribeTests.LayoutTokenTests testStructuralColumnStaysInsideTheComfortableReadingBand]' passed (0.000 seconds).
+Test Suite 'LayoutTokenTests' passed at 2026-10-07 09:12:34.254.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'WorkbenchContentPlanTests' started at 2026-10-07 09:12:34.254.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testChecklistsLiveOnlyOnTheOverviewTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testDeclaredOrderMatchesEachBlocksTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testEveryBlockIsDeclaredExactlyOnce]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testNarrativeLivesOnlyOnTheMinutesTab]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOrderLookupMatchesTheDeclaredArrays]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testOriginalTabHasNoBlocks]' passed (0.000 seconds).
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' started.
+Test Case '-[MeetingScribeTests.WorkbenchContentPlanTests testTwoPagesShareNoContentBlock]' passed (0.000 seconds).
+Test Suite 'WorkbenchContentPlanTests' passed at 2026-10-07 09:12:34.254.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'MeetingScribePackageTests.xctest' passed at 2026-10-07 09:12:34.254.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'Selected tests' passed at 2026-10-07 09:12:34.254.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

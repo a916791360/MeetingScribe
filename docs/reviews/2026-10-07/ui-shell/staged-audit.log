@@ -1,0 +1,4 @@
+=== 分发前审计 ===
+产物：/Applications/.MeetingScribe-acceptance-rvlsle2n/MeetingScribe.app
+Locked runtime provenance and input hashes verified
+✓ 通过：字符串/配置扫描、运行时签名、许可及开发路径检查通过
